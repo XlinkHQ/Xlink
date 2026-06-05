@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3.13 -m venv .venv)",
+      "Bash(.venv/bin/python -m pip install --quiet --upgrade pip)",
+      "Bash(.venv/bin/python -m pip install -q fastapi uvicorn[standard] pydantic pydantic-settings sqlalchemy[asyncio] redis argon2-cffi pyjwt structlog orjson python-multipart email-validator pytest pytest-asyncio httpx aiosqlite fakeredis)",
+      "Bash(python3.14 -m venv .venv)",
+      "Bash(.venv/bin/python -m pip install -q fastapi anyio uvicorn[standard] pydantic pydantic-settings sqlalchemy[asyncio] redis argon2-cffi pyjwt structlog orjson python-multipart email-validator pytest pytest-asyncio httpx aiosqlite fakeredis ruff)",
+      "Bash(.venv/bin/python -m compileall -q app alembic)",
+      "Bash(.venv/bin/python -m pytest -p no:cacheprovider -q)",
+      "Bash(.venv/bin/python -)",
+      "Bash(.venv/bin/python -m pytest -p no:cacheprovider -q app/tests/test_rate_limit.py)",
+      "Bash(.venv/bin/python -c \"import time;print\\(time.time\\(\\)\\)\")",
+      "Bash(.venv/bin/python -m pytest -p no:cacheprovider --durations=12)",
+      "Bash(XLINK_TEST_DATABASE_URL=postgresql+asyncpg://audit:auditpass@localhost:55432/auditdb .venv/bin/python -m pytest app/tests/test_pg_concurrency.py -p no:cacheprovider -q)",
+      "Bash(grep -vE 'request_|^\\\\s*$')",
+      "Bash(.venv/bin/python -m pytest app/tests/test_pg_concurrency.py -p no:cacheprovider -q)",
+      "Bash(XLINK_JWT_SECRET_KEY=audit-secret-key-32-chars-minimum-9xZ XLINK_ENV=testing .venv/bin/python -c ' *)",
+      "Bash(.venv/bin/ruff check *)",
+      "Bash(.venv/bin/python -m pytest app/providers/xray/tests/test_xray_transport.py app/subscription/tests/test_transport_rendering.py -p no:cacheprovider)",
+      "Bash(.venv/bin/python -m pytest app/subscription/tests -p no:cacheprovider -q)",
+      "Bash(.venv/bin/python chaos_audit.py)",
+      "Bash(.venv/bin/python -m pytest app/traffic/tests -p no:cacheprovider)",
+      "Bash(.venv/bin/python scripts/create_admin.py --email admin@xlink.local --username admin --password 'Admin-XLink-2026')",
+      "Bash(python3 -c 'import socket;s=socket.socket\\(\\);s.settimeout\\(1\\) *)",
+      "Bash(XLINK_JWT_SECRET_KEY=\"local-dev-jwt-secret-key-32chars-minimum-xx\" XLINK_DATABASE_URL_OVERRIDE=\"sqlite+aiosqlite:///./xlink_local.db\" .venv/bin/alembic upgrade head)",
+      "Bash(curl -s -o /dev/null -w \"backend_8000: %{http_code}\\\\n\" http://localhost:8000/api/v1/health/live)",
+      "Bash(curl -s -o /dev/null -w \"frontend_3000: %{http_code}\\\\n\" http://localhost:3000)",
+      "Bash(npm run *)",
+      "Bash(npx tsc *)",
+      "Bash(.venv/bin/python -c \"import app.api.v1.router; print\\('OK'\\)\")"
+    ]
+  }
+}

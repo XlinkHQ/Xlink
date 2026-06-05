@@ -1,0 +1,84 @@
+Date : 2026-06-04 20:55:23
+Directory : /Users/parsa/Desktop/Xlink
+Total : 40 files,  1455 codes, 0 comments, 379 blanks, all 1834 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| Python             |         38 |      1,449 |          0 |        379 |      1,828 |
+| TOML               |          1 |          4 |          0 |          0 |          4 |
+| JSON with Comments |          1 |          2 |          0 |          0 |          2 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                   | files      | code       | comment    | blank      | total      |
++------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                      |         40 |      1,455 |          0 |        379 |      1,834 |
+| . (Files)                                                              |          3 |        369 |          0 |         69 |        438 |
+| .claude                                                                |          1 |          2 |          0 |          0 |          2 |
+| alembic                                                                |          1 |         57 |          0 |          8 |         65 |
+| alembic/versions                                                       |          1 |         57 |          0 |          8 |         65 |
+| app                                                                    |         35 |      1,027 |          0 |        302 |      1,329 |
+| app/backup                                                             |         10 |        352 |          0 |         97 |        449 |
+| app/backup (Files)                                                     |          7 |        223 |          0 |         56 |        279 |
+| app/backup/tests                                                       |          3 |        129 |          0 |         41 |        170 |
+| app/domain                                                             |          2 |         34 |          0 |         11 |         45 |
+| app/gitops                                                             |         10 |        309 |          0 |         89 |        398 |
+| app/gitops (Files)                                                     |          7 |        233 |          0 |         55 |        288 |
+| app/gitops/tests                                                       |          3 |         76 |          0 |         34 |        110 |
+| app/monitoring                                                         |          5 |        130 |          0 |         30 |        160 |
+| app/monitoring (Files)                                                 |          2 |          8 |          0 |          0 |          8 |
+| app/monitoring/tests                                                   |          3 |        122 |          0 |         30 |        152 |
+| app/provider_sdk                                                       |          8 |        202 |          0 |         75 |        277 |
+| app/provider_sdk (Files)                                               |          6 |        111 |          0 |         38 |        149 |
+| app/provider_sdk/tests                                                 |          2 |         91 |          0 |         37 |        128 |
++------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                               | language           | code       | comment    | blank      | total      |
++------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| /Users/parsa/Desktop/Xlink/.claude/settings.json                       | JSON with Comments |          2 |          0 |          0 |          2 |
+| /Users/parsa/Desktop/Xlink/alembic/versions/0006_gitops_records.py     | Python             |         57 |          0 |          8 |         65 |
+| /Users/parsa/Desktop/Xlink/app/backup/__init__.py                      | Python             |          4 |          0 |          3 |          7 |
+| /Users/parsa/Desktop/Xlink/app/backup/exporter.py                      | Python             |         57 |          0 |         11 |         68 |
+| /Users/parsa/Desktop/Xlink/app/backup/importer.py                      | Python             |         50 |          0 |          8 |         58 |
+| /Users/parsa/Desktop/Xlink/app/backup/models.py                        | Python             |         30 |          0 |          7 |         37 |
+| /Users/parsa/Desktop/Xlink/app/backup/schemas.py                       | Python             |         19 |          0 |         10 |         29 |
+| /Users/parsa/Desktop/Xlink/app/backup/service.py                       | Python             |         18 |          0 |          9 |         27 |
+| /Users/parsa/Desktop/Xlink/app/backup/tests/__init__.py                | Python             |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/app/backup/tests/conftest.py                | Python             |         22 |          0 |          9 |         31 |
+| /Users/parsa/Desktop/Xlink/app/backup/tests/test_backup.py             | Python             |        106 |          0 |         31 |        137 |
+| /Users/parsa/Desktop/Xlink/app/backup/validator.py                     | Python             |         45 |          0 |          8 |         53 |
+| /Users/parsa/Desktop/Xlink/app/domain/__init__.py                      | Python             |          3 |          0 |          0 |          3 |
+| /Users/parsa/Desktop/Xlink/app/domain/gitops.py                        | Python             |         31 |          0 |         11 |         42 |
+| /Users/parsa/Desktop/Xlink/app/gitops/__init__.py                      | Python             |          3 |          0 |          3 |          6 |
+| /Users/parsa/Desktop/Xlink/app/gitops/diff.py                          | Python             |         24 |          0 |          6 |         30 |
+| /Users/parsa/Desktop/Xlink/app/gitops/models.py                        | Python             |         25 |          0 |          9 |         34 |
+| /Users/parsa/Desktop/Xlink/app/gitops/repository.py                    | Python             |         44 |          0 |          7 |         51 |
+| /Users/parsa/Desktop/Xlink/app/gitops/schemas.py                       | Python             |         17 |          0 |          7 |         24 |
+| /Users/parsa/Desktop/Xlink/app/gitops/service.py                       | Python             |         76 |          0 |         11 |         87 |
+| /Users/parsa/Desktop/Xlink/app/gitops/snapshot.py                      | Python             |         44 |          0 |         12 |         56 |
+| /Users/parsa/Desktop/Xlink/app/gitops/tests/__init__.py                | Python             |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/app/gitops/tests/conftest.py                | Python             |         22 |          0 |          9 |         31 |
+| /Users/parsa/Desktop/Xlink/app/gitops/tests/test_gitops.py             | Python             |         53 |          0 |         24 |         77 |
+| /Users/parsa/Desktop/Xlink/app/monitoring/exporters.py                 | Python             |          3 |          0 |          0 |          3 |
+| /Users/parsa/Desktop/Xlink/app/monitoring/metrics.py                   | Python             |          5 |          0 |          0 |          5 |
+| /Users/parsa/Desktop/Xlink/app/monitoring/tests/__init__.py            | Python             |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/app/monitoring/tests/conftest.py            | Python             |         25 |          0 |          9 |         34 |
+| /Users/parsa/Desktop/Xlink/app/monitoring/tests/test_monitoring.py     | Python             |         96 |          0 |         20 |        116 |
+| /Users/parsa/Desktop/Xlink/app/provider_sdk/__init__.py                | Python             |          4 |          0 |          3 |          7 |
+| /Users/parsa/Desktop/Xlink/app/provider_sdk/loader.py                  | Python             |         17 |          0 |          6 |         23 |
+| /Users/parsa/Desktop/Xlink/app/provider_sdk/manifest.py                | Python             |         10 |          0 |          6 |         16 |
+| /Users/parsa/Desktop/Xlink/app/provider_sdk/schemas.py                 | Python             |         11 |          0 |          9 |         20 |
+| /Users/parsa/Desktop/Xlink/app/provider_sdk/service.py                 | Python             |         30 |          0 |          7 |         37 |
+| /Users/parsa/Desktop/Xlink/app/provider_sdk/tests/__init__.py          | Python             |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/app/provider_sdk/tests/test_provider_sdk.py | Python             |         90 |          0 |         36 |        126 |
+| /Users/parsa/Desktop/Xlink/app/provider_sdk/validator.py               | Python             |         39 |          0 |          7 |         46 |
+| /Users/parsa/Desktop/Xlink/load_audit.py                               | Python             |        124 |          0 |         29 |        153 |
+| /Users/parsa/Desktop/Xlink/pyproject.toml                              | TOML               |          4 |          0 |          0 |          4 |
+| /Users/parsa/Desktop/Xlink/scale_audit.py                              | Python             |        241 |          0 |         40 |        281 |
+| Total                                                                  |                    |      1,455 |          0 |        379 |      1,834 |
++------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+

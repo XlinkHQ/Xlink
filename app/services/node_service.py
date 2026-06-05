@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy.orm.exc import StaleDataError
+
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.pagination import decode_cursor, encode_cursor
+from app.domain.node import Node, NodeStatus
+from app.repositories.node import NodeRepository
+from app.schemas.node import NodeCreate, NodeUpdate
+from app.schemas.pagination import CursorParams
+
+DEFAULT_OFFLINE_AFTER_SECONDS = 90
+
+
+class NodeService:
+    def __init__(self, repo: NodeRepository) -> None:
+        self._repo = repo
+
+    async def create(self, data: NodeCreate) -> Node:
+        node = Node(
+            name=data.name,
+            slug=data.slug,
+            host=data.host,
+            port=data.port,
+            max_users=data.max_users,
+            node_metadata=data.metadata,
+            status=NodeStatus.OFFLINE,
+        )
+        return await self._repo.create_node(node)
+
+    async def get(self, node_id: uuid.UUID) -> Node:
+        node = await self._repo.get(node_id)
+        if node is None:
+            raise NotFoundError("Node not found.", code="node_not_found")
+        return node
+
+    async def update(self, node_id: uuid.UUID, data: NodeUpdate) -> Node:
+        node = await self.get(node_id)
+        if data.expected_version is not None and data.expected_version != node.version:
+            raise ConflictError("Node was modified concurrently.", code="version_conflict")
+
+        if data.name is not None:
+            node.name = data.name
+        if data.host is not None:
+            node.host = data.host
+        if data.port is not None:
+            node.port = data.port
+        if data.max_users is not None:
+            node.max_users = data.max_users
+        if data.metadata is not None:
+            node.node_metadata = data.metadata
+
+        return await self._flush(node)
+
+    async def set_status(self, node_id: uuid.UUID, status: NodeStatus) -> Node:
+        node = await self.get(node_id)
+        node.status = status
+        return await self._flush(node)
+
+    async def disable(self, node_id: uuid.UUID) -> Node:
+        return await self.set_status(node_id, NodeStatus.DISABLED)
+
+    async def heartbeat(
+        self,
+        node_id: uuid.UUID,
+        current_users: int,
+        status: NodeStatus | None = None,
+    ) -> Node:
+        node = await self.get(node_id)
+        node.current_users = current_users
+        node.last_seen_at = datetime.now(UTC)
+        if status is not None:
+            node.status = status
+        elif node.status is NodeStatus.OFFLINE:
+            node.status = NodeStatus.ACTIVE
+        return await self._flush(node)
+
+    async def list_nodes_keyset(
+        self,
+        params: CursorParams,
+        *,
+        status: NodeStatus | None = None,
+    ) -> tuple[list[Node], str | None]:
+        cursor = None
+        if params.cursor is not None:
+            try:
+                cursor = decode_cursor(params.cursor)
+            except ValueError as exc:
+                raise ValidationError(str(exc), code="invalid_cursor") from exc
+
+        rows = list(
+            await self._repo.list_keyset(limit=params.limit + 1, cursor=cursor, status=status)
+        )
+
+        next_cursor = None
+        if len(rows) > params.limit:
+            rows = rows[: params.limit]
+            last = rows[-1]
+            next_cursor = encode_cursor(last.created_at, last.id)
+        return rows, next_cursor
+
+    def is_stale(
+        self, node: Node, *, offline_after_seconds: int = DEFAULT_OFFLINE_AFTER_SECONDS
+    ) -> bool:
+        if node.last_seen_at is None:
+            return node.status is NodeStatus.ACTIVE
+        threshold = datetime.now(UTC) - timedelta(seconds=offline_after_seconds)
+        last_seen = node.last_seen_at
+        if last_seen.tzinfo is None:
+            last_seen = last_seen.replace(tzinfo=UTC)
+        return node.status is NodeStatus.ACTIVE and last_seen < threshold
+
+    async def _flush(self, node: Node) -> Node:
+        try:
+            return await self._repo.save(node)
+        except StaleDataError as exc:
+            raise ConflictError("Node was modified concurrently.", code="version_conflict") from exc

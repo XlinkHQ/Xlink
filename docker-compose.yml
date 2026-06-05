@@ -1,0 +1,76 @@
+name: xlink
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      XLINK_POSTGRES_HOST: postgres
+      XLINK_REDIS_HOST: redis
+    ports:
+      - "${XLINK_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/api/v1/health/live').status==200 else sys.exit(1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runtime
+    env_file: .env
+    environment:
+      XLINK_POSTGRES_HOST: postgres
+      XLINK_REDIS_HOST: redis
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${XLINK_POSTGRES_USER:-xlink}
+      POSTGRES_PASSWORD: ${XLINK_POSTGRES_PASSWORD:-change_me_in_production}
+      POSTGRES_DB: ${XLINK_POSTGRES_DB:-xlink}
+    ports:
+      - "${XLINK_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${XLINK_POSTGRES_USER:-xlink} -d ${XLINK_POSTGRES_DB:-xlink}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "${XLINK_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:

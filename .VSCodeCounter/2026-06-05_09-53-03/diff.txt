@@ -1,0 +1,280 @@
+Date : 2026-06-05 09:53:03
+Directory : /Users/parsa/Desktop/Xlink
+Total : 196 files,  19449 codes, 3327 comments, 3670 blanks, all 26446 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| JSON               |         27 |      6,892 |          0 |          3 |      6,895 |
+| JavaScript         |         50 |      6,102 |      3,041 |      2,684 |     11,827 |
+| PostCSS            |          2 |      3,429 |        120 |        579 |      4,128 |
+| TypeScript JSX     |          3 |      1,260 |          0 |         73 |      1,333 |
+| Python             |         29 |        923 |          5 |        179 |      1,107 |
+| TypeScript         |         11 |        727 |        161 |        127 |      1,015 |
+| XML                |         70 |         79 |          0 |         19 |         98 |
+| JSON with Comments |          2 |         26 |          0 |          1 |         27 |
+| Markdown           |          1 |          9 |          0 |          5 |         14 |
+| TOML               |          1 |          2 |          0 |          0 |          2 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++-----------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                          | files      | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                             |        196 |     19,449 |      3,327 |      3,670 |     26,446 |
+| . (Files)                                                                                     |          2 |          8 |          0 |          1 |          9 |
+| .claude                                                                                       |          1 |          3 |          0 |          0 |          3 |
+| alembic                                                                                       |          1 |         16 |          0 |          8 |         24 |
+| alembic/versions                                                                              |          1 |         16 |          0 |          8 |         24 |
+| app                                                                                           |         28 |        907 |          5 |        171 |      1,083 |
+| app/agent                                                                                     |          7 |        113 |          0 |         18 |        131 |
+| app/agent (Files)                                                                             |          5 |         39 |          0 |          7 |         46 |
+| app/agent/tests                                                                               |          2 |         74 |          0 |         11 |         85 |
+| app/domain                                                                                    |          1 |          1 |          0 |          0 |          1 |
+| app/events                                                                                    |          1 |         19 |          0 |          4 |         23 |
+| app/failover                                                                                  |          2 |         61 |          0 |          5 |         66 |
+| app/providers                                                                                 |          2 |        -31 |          0 |        -14 |        -45 |
+| app/providers/xray                                                                            |          2 |        -31 |          0 |        -14 |        -45 |
+| app/subscription                                                                              |         11 |        593 |          5 |        136 |        734 |
+| app/subscription (Files)                                                                      |          2 |        -62 |          0 |         -3 |        -65 |
+| app/subscription/formats                                                                      |          7 |        337 |          0 |         58 |        395 |
+| app/subscription/tests                                                                        |          2 |        318 |          5 |         81 |        404 |
+| app/tests                                                                                     |          1 |        -10 |          0 |         -2 |        -12 |
+| app/traffic                                                                                   |          3 |        161 |          0 |         24 |        185 |
+| app/traffic (Files)                                                                           |          2 |         18 |          0 |          3 |         21 |
+| app/traffic/tests                                                                             |          1 |        143 |          0 |         21 |        164 |
+| web                                                                                           |        164 |     18,515 |      3,322 |      3,490 |     25,327 |
+| web (Files)                                                                                   |          9 |      6,872 |          5 |         18 |      6,895 |
+| web/.next                                                                                     |         78 |      8,278 |      3,315 |      3,084 |     14,677 |
+| web/.next (Files)                                                                             |          6 |         60 |          0 |          0 |         60 |
+| web/.next/cache                                                                               |          1 |          1 |          0 |          0 |          1 |
+| web/.next/server                                                                              |         19 |      2,812 |      1,625 |      1,555 |      5,992 |
+| web/.next/server (Files)                                                                      |         12 |        271 |         58 |         23 |        352 |
+| web/.next/server/app                                                                          |          2 |        136 |         87 |         83 |        306 |
+| web/.next/server/pages                                                                        |          3 |         90 |         63 |         45 |        198 |
+| web/.next/server/vendor-chunks                                                                |          2 |      2,315 |      1,417 |      1,404 |      5,136 |
+| web/.next/static                                                                              |         46 |      5,202 |      1,536 |      1,452 |      8,190 |
+| web/.next/static/chunks                                                                       |         11 |      3,117 |      1,252 |      1,073 |      5,442 |
+| web/.next/static/chunks (Files)                                                               |          7 |      3,035 |      1,190 |      1,039 |      5,264 |
+| web/.next/static/chunks/app                                                                   |          2 |         56 |         40 |         26 |        122 |
+| web/.next/static/chunks/pages                                                                 |          2 |         26 |         22 |          8 |         56 |
+| web/.next/static/css                                                                          |          1 |      1,888 |        120 |        324 |      2,332 |
+| web/.next/static/css/app                                                                      |          1 |      1,888 |        120 |        324 |      2,332 |
+| web/.next/static/development                                                                  |          2 |          2 |          0 |          0 |          2 |
+| web/.next/static/webpack                                                                      |         32 |        195 |        164 |         55 |        414 |
+| web/.next/static/webpack (Files)                                                              |         19 |        100 |         18 |          0 |        118 |
+| web/.next/static/webpack/app                                                                  |         13 |         95 |        146 |         55 |        296 |
+| web/.next/types                                                                               |          6 |        203 |        154 |         77 |        434 |
+| web/.next/types (Files)                                                                       |          4 |         93 |        134 |         37 |        264 |
+| web/.next/types/app                                                                           |          2 |        110 |         20 |         40 |        170 |
+| web/app                                                                                       |          3 |      1,558 |          0 |        260 |      1,818 |
+| web/components                                                                                |          1 |      1,243 |          0 |         68 |      1,311 |
+| web/lib                                                                                       |          3 |        485 |          2 |         41 |        528 |
+| web/public                                                                                    |         70 |         79 |          0 |         19 |         98 |
+| web/public (Files)                                                                            |          1 |          6 |          0 |          1 |          7 |
+| web/public/routeros-icons                                                                     |         69 |         73 |          0 |         18 |         91 |
++-----------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++-----------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                                                      | language           | code       | comment    | blank      | total      |
++-----------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| /Users/parsa/Desktop/Xlink/.claude/settings.json                                              | JSON with Comments |          3 |          0 |          0 |          3 |
+| /Users/parsa/Desktop/Xlink/alembic/versions/0009_assignment_used_bytes.py                     | Python             |         16 |          0 |          8 |         24 |
+| /Users/parsa/Desktop/Xlink/app/agent/config_sync.py                                           | Python             |         38 |          0 |          2 |         40 |
+| /Users/parsa/Desktop/Xlink/app/agent/healing.py                                               | Python             |          5 |          0 |          2 |          7 |
+| /Users/parsa/Desktop/Xlink/app/agent/reconcile.py                                             | Python             |         33 |          0 |          5 |         38 |
+| /Users/parsa/Desktop/Xlink/app/agent/service.py                                               | Python             |        -10 |          0 |         -1 |        -11 |
+| /Users/parsa/Desktop/Xlink/app/agent/sync.py                                                  | Python             |        -27 |          0 |         -1 |        -28 |
+| /Users/parsa/Desktop/Xlink/app/agent/tests/test_node_agent.py                                 | Python             |        -16 |          0 |         -4 |        -20 |
+| /Users/parsa/Desktop/Xlink/app/agent/tests/test_reconcile_scale.py                            | Python             |         90 |          0 |         15 |        105 |
+| /Users/parsa/Desktop/Xlink/app/domain/client_assignment.py                                    | Python             |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/app/events/bus.py                                                  | Python             |         19 |          0 |          4 |         23 |
+| /Users/parsa/Desktop/Xlink/app/failover/executor.py                                           | Python             |         56 |          0 |          6 |         62 |
+| /Users/parsa/Desktop/Xlink/app/failover/service.py                                            | Python             |          5 |          0 |         -1 |          4 |
+| /Users/parsa/Desktop/Xlink/app/providers/xray/mapper.py                                       | Python             |        -17 |          0 |         -5 |        -22 |
+| /Users/parsa/Desktop/Xlink/app/providers/xray/schemas.py                                      | Python             |        -14 |          0 |         -9 |        -23 |
+| /Users/parsa/Desktop/Xlink/app/subscription/formats/clash.py                                  | Python             |        101 |          0 |         17 |        118 |
+| /Users/parsa/Desktop/Xlink/app/subscription/formats/http_proxy.py                             | Python             |         -3 |          0 |          0 |         -3 |
+| /Users/parsa/Desktop/Xlink/app/subscription/formats/mihomo.py                                 | Python             |          5 |          0 |          4 |          9 |
+| /Users/parsa/Desktop/Xlink/app/subscription/formats/registry.py                               | Python             |         92 |          0 |         15 |        107 |
+| /Users/parsa/Desktop/Xlink/app/subscription/formats/singbox.py                                | Python             |         86 |          0 |         11 |         97 |
+| /Users/parsa/Desktop/Xlink/app/subscription/formats/uri.py                                    | Python             |          2 |          0 |          0 |          2 |
+| /Users/parsa/Desktop/Xlink/app/subscription/formats/wireguard.py                              | Python             |         54 |          0 |         11 |         65 |
+| /Users/parsa/Desktop/Xlink/app/subscription/renderer.py                                       | Python             |        -78 |          0 |         -5 |        -83 |
+| /Users/parsa/Desktop/Xlink/app/subscription/service.py                                        | Python             |         16 |          0 |          2 |         18 |
+| /Users/parsa/Desktop/Xlink/app/subscription/tests/test_format_compatibility.py                | Python             |        162 |          0 |         20 |        182 |
+| /Users/parsa/Desktop/Xlink/app/subscription/tests/test_formats.py                             | Python             |        156 |          5 |         61 |        222 |
+| /Users/parsa/Desktop/Xlink/app/tests/test_providers_xray.py                                   | Python             |        -10 |          0 |         -2 |        -12 |
+| /Users/parsa/Desktop/Xlink/app/traffic/repository.py                                          | Python             |         13 |          0 |          2 |         15 |
+| /Users/parsa/Desktop/Xlink/app/traffic/service.py                                             | Python             |          5 |          0 |          1 |          6 |
+| /Users/parsa/Desktop/Xlink/app/traffic/tests/test_traffic_scale.py                            | Python             |        143 |          0 |         21 |        164 |
+| /Users/parsa/Desktop/Xlink/package-lock.json                                                  | JSON               |          6 |          0 |          1 |          7 |
+| /Users/parsa/Desktop/Xlink/uv.lock                                                            | TOML               |          2 |          0 |          0 |          2 |
+| /Users/parsa/Desktop/Xlink/web/.next/app-build-manifest.json                                  | JSON               |         15 |          0 |          0 |         15 |
+| /Users/parsa/Desktop/Xlink/web/.next/build-manifest.json                                      | JSON               |         31 |          0 |          0 |         31 |
+| /Users/parsa/Desktop/Xlink/web/.next/cache/next-devtools-config.json                          | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/package.json                                             | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/prerender-manifest.json                                  | JSON               |         11 |          0 |          0 |         11 |
+| /Users/parsa/Desktop/Xlink/web/.next/react-loadable-manifest.json                             | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/routes-manifest.json                                     | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/_error.js                                         | JavaScript         |         38 |         27 |         21 |         86 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/app-paths-manifest.json                           | JSON               |          3 |          0 |          0 |          3 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/app/page.js                                       | JavaScript         |        135 |         87 |         83 |        305 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/app/page_client-reference-manifest.js             | JavaScript         |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/interception-route-rewrite-manifest.js            | JavaScript         |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/middleware-build-manifest.js                      | JavaScript         |         32 |          0 |          1 |         33 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/middleware-manifest.json                          | JSON               |          6 |          0 |          0 |          6 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/middleware-react-loadable-manifest.js             | JavaScript         |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/next-font-manifest.js                             | JavaScript         |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/next-font-manifest.json                           | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/pages-manifest.json                               | JSON               |          5 |          0 |          0 |          5 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/pages/_app.js                                     | JavaScript         |         22 |         15 |          9 |         46 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/pages/_document.js                                | JavaScript         |         30 |         21 |         15 |         66 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/pages/_error.js                                   | JavaScript         |         38 |         27 |         21 |         86 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/server-reference-manifest.js                      | JavaScript         |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/server-reference-manifest.json                    | JSON               |          5 |          0 |          0 |          5 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/vendor-chunks/@swc.js                             | JavaScript         |         38 |         32 |         25 |         95 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/vendor-chunks/next.js                             | JavaScript         |      2,277 |      1,385 |      1,379 |      5,041 |
+| /Users/parsa/Desktop/Xlink/web/.next/server/webpack-runtime.js                                | JavaScript         |        177 |         31 |          1 |        209 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/_error.js                                  | JavaScript         |         13 |         11 |          4 |         28 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/app-pages-internals.js                     | JavaScript         |         83 |         53 |         46 |        182 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/app/layout.js                              | JavaScript         |         18 |         14 |          7 |         39 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/app/page.js                                | JavaScript         |         38 |         26 |         19 |         83 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/main-app.js                                | JavaScript         |        857 |        522 |        514 |      1,893 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/main.js                                    | JavaScript         |        764 |        468 |        460 |      1,692 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/pages/_app.js                              | JavaScript         |         13 |         11 |          4 |         28 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/pages/_error.js                            | JavaScript         |         13 |         11 |          4 |         28 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/polyfills.js                               | JavaScript         |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/react-refresh.js                           | JavaScript         |         28 |         21 |         13 |         62 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/chunks/webpack.js                                 | JavaScript         |      1,289 |        115 |          1 |      1,405 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/css/app/layout.css                                | PostCSS            |      1,888 |        120 |        324 |      2,332 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/development/_buildManifest.js                     | JavaScript         |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/development/_ssgManifest.js                       | JavaScript         |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/07ba29c9039c94b4.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/1882f6772babff7c.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/1ce28336f9e9ba6a.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/42fd3fe3654bf422.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/49ee4e09f27b6b9b.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/5ba5afae61e98a5f.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/633457081244afec._.hot-update.json        | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/6daf09591d852d33.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/layout.07ba29c9039c94b4.hot-update.js | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/layout.1882f6772babff7c.hot-update.js | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/layout.42fd3fe3654bf422.hot-update.js | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/layout.49ee4e09f27b6b9b.hot-update.js | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/layout.6daf09591d852d33.hot-update.js | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/layout.edc385a8009c1eca.hot-update.js | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/layout.f298d3198236167c.hot-update.js | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/page.1882f6772babff7c.hot-update.js   | JavaScript         |         11 |         14 |          7 |         32 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/page.42fd3fe3654bf422.hot-update.js   | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/page.49ee4e09f27b6b9b.hot-update.js   | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/page.6daf09591d852d33.hot-update.js   | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/page.edc385a8009c1eca.hot-update.js   | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/app/page.f298d3198236167c.hot-update.js   | JavaScript         |          7 |         11 |          4 |         22 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/edc385a8009c1eca.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/f298d3198236167c.webpack.hot-update.json  | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.07ba29c9039c94b4.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.1882f6772babff7c.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.1ce28336f9e9ba6a.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.42fd3fe3654bf422.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.49ee4e09f27b6b9b.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.5ba5afae61e98a5f.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.6daf09591d852d33.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.edc385a8009c1eca.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/static/webpack/webpack.f298d3198236167c.hot-update.js    | JavaScript         |         10 |          2 |          0 |         12 |
+| /Users/parsa/Desktop/Xlink/web/.next/types/app/layout.ts                                      | TypeScript         |         55 |         10 |         20 |         85 |
+| /Users/parsa/Desktop/Xlink/web/.next/types/app/page.ts                                        | TypeScript         |         55 |         10 |         20 |         85 |
+| /Users/parsa/Desktop/Xlink/web/.next/types/cache-life.d.ts                                    | TypeScript         |         23 |        106 |         13 |        142 |
+| /Users/parsa/Desktop/Xlink/web/.next/types/package.json                                       | JSON               |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/.next/types/routes.d.ts                                        | TypeScript         |         27 |         21 |         11 |         59 |
+| /Users/parsa/Desktop/Xlink/web/.next/types/validator.ts                                       | TypeScript         |         42 |          7 |         13 |         62 |
+| /Users/parsa/Desktop/Xlink/web/README.md                                                      | Markdown           |          9 |          0 |          5 |         14 |
+| /Users/parsa/Desktop/Xlink/web/app/globals.css                                                | PostCSS            |      1,541 |          0 |        255 |      1,796 |
+| /Users/parsa/Desktop/Xlink/web/app/layout.tsx                                                 | TypeScript JSX     |         13 |          0 |          3 |         16 |
+| /Users/parsa/Desktop/Xlink/web/app/page.tsx                                                   | TypeScript JSX     |          4 |          0 |          2 |          6 |
+| /Users/parsa/Desktop/Xlink/web/components/xlink-console.tsx                                   | TypeScript JSX     |      1,243 |          0 |         68 |      1,311 |
+| /Users/parsa/Desktop/Xlink/web/lib/api.ts                                                     | TypeScript         |        181 |          2 |         25 |        208 |
+| /Users/parsa/Desktop/Xlink/web/lib/dashboard-data.ts                                          | TypeScript         |        196 |          0 |          5 |        201 |
+| /Users/parsa/Desktop/Xlink/web/lib/live-sections.ts                                           | TypeScript         |        108 |          0 |         11 |        119 |
+| /Users/parsa/Desktop/Xlink/web/next-env.d.ts                                                  | TypeScript         |          0 |          5 |          2 |          7 |
+| /Users/parsa/Desktop/Xlink/web/next.config.ts                                                 | TypeScript         |         14 |          0 |          4 |         18 |
+| /Users/parsa/Desktop/Xlink/web/package-lock.json                                              | JSON               |      6,761 |          0 |          1 |      6,762 |
+| /Users/parsa/Desktop/Xlink/web/package.json                                                   | JSON               |         32 |          0 |          1 |         33 |
+| /Users/parsa/Desktop/Xlink/web/postcss.config.js                                              | JavaScript         |          6 |          0 |          1 |          7 |
+| /Users/parsa/Desktop/Xlink/web/public/favicon.svg                                             | XML                |          6 |          0 |          1 |          7 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-10.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-11.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-12.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-13.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-14.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-15.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-16.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-17.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-18.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-19.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-20.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-21.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-22.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-23.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-24.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-25.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-26.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-27.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-28.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-29.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-30.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-31.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-32.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-33.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-34.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-35.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-36.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-37.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-38.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-39.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-40.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-41.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-42.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-43.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-44.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-45.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-46.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-47.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-48.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-49.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-50.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-51.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-52.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-53.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-54.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-55.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-56.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-57.svg                              | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-7.svg                               | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-8.svg                               | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/icon-9.svg                               | XML                |          1 |          0 |          0 |          1 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-about.svg                          | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-check.svg                          | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-chevron-small.svg                  | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-disable.svg                        | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-docs.svg                           | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-dots.svg                           | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-empty.svg                          | XML                |          5 |          0 |          1 |          6 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-enable.svg                         | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-exit.svg                           | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-help.svg                           | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-pin.svg                            | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-reboot.svg                         | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-redo.svg                           | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-remove.svg                         | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-reset.svg                          | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-safe.svg                           | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-sync.svg                           | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/public/routeros-icons/xlink-undo.svg                           | XML                |          1 |          0 |          1 |          2 |
+| /Users/parsa/Desktop/Xlink/web/tailwind.config.ts                                             | TypeScript         |         26 |          0 |          3 |         29 |
+| /Users/parsa/Desktop/Xlink/web/tsconfig.json                                                  | JSON with Comments |         23 |          0 |          1 |         24 |
+| /Users/parsa/Desktop/Xlink/web/tsconfig.tsbuildinfo                                           | JSON               |          1 |          0 |          0 |          1 |
+| Total                                                                                         |                    |     19,449 |      3,327 |      3,670 |     26,446 |
++-----------------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
