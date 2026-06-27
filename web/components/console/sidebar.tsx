@@ -33,16 +33,21 @@ export function Sidebar({
     <aside className={cn("warp-sb", open && "is-open")}>
       <div className="warp-sb-inner">
         <ul className="warp-sb-nav">
-          <button
-            type="button"
-            className="warp-sb-search"
-            onClick={onSearch}
-            title="Search"
-          >
-            <SearchIcon className="warp-sb-search-ico" size={16} aria-hidden />
-            <span>Search</span>
-            <kbd>⌘K</kbd>
-          </button>
+          <div className="warp-sb-head">
+            <div className="warp-sb-head-id">
+              <span className="warp-sb-head-avatar">{initials}</span>
+              <span className="warp-sb-head-name">{profileName}</span>
+            </div>
+            <button
+              type="button"
+              className="warp-sb-head-search"
+              onClick={onSearch}
+              title="Search  ⌘K"
+              aria-label="Search"
+            >
+              <SearchIcon size={16} aria-hidden />
+            </button>
+          </div>
           {NAV_GROUPS.map((group, groupIndex) => {
             const groupKey = group.title ?? `root-${groupIndex}`;
             const isCollapsed = Boolean(collapsedGroups[groupKey]);
@@ -103,13 +108,6 @@ export function Sidebar({
         </ul>
 
         <div className="warp-sb-footer">
-          <div className="warp-sb-profile" title={profileName}>
-            <span className="warp-sb-avatar">{initials}</span>
-            <span className="warp-sb-profile-copy">
-              <span className="warp-sb-profile-name">{profileName}</span>
-              <span className="warp-sb-profile-meta">Profile</span>
-            </span>
-          </div>
           <div className="warp-tab-dark-light">
             <button
               type="button"
