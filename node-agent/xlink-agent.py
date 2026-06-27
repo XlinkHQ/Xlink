@@ -352,9 +352,12 @@ def build_wireguard_config(clients: list[dict]) -> str:
         "sysctl -w net.ipv4.conf.all.rp_filter=0; "
         "sysctl -w net.ipv4.conf.%i.rp_filter=0; "
         "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 2>/dev/null; "
+        "modprobe xt_string 2>/dev/null; "
         "iptables -t nat -A POSTROUTING -o $WAN -j MASQUERADE; "
         "iptables -A FORWARD -i %i -j ACCEPT; "
-        "iptables -A FORWARD -o %i -j ACCEPT"
+        "iptables -A FORWARD -o %i -j ACCEPT; "
+        "iptables -I FORWARD -i %i -p udp --dport 53 -m string --algo bm --hex-string '|00001c0001|' -j DROP 2>/dev/null; "
+        "iptables -I FORWARD -i %i -p tcp --dport 53 -m string --algo bm --hex-string '|00001c0001|' -j DROP 2>/dev/null"
     )
     post_down = (
         "WAN=$(ip route list default | awk '{print $5; exit}'); "
