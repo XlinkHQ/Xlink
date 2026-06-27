@@ -40,6 +40,24 @@ class ProfileService:
         self._validate_provider_kind(data.provider_kind)
         await self._validate_node(data.node_id)
 
+        if data.provider_kind == ProviderKind.WIREGUARD:
+            from sqlalchemy import func, select
+
+            existing = await self._repo.session.scalar(
+                select(func.count())
+                .select_from(Profile)
+                .where(
+                    Profile.node_id == data.node_id,
+                    Profile.provider_kind == ProviderKind.WIREGUARD,
+                )
+            )
+            if existing:
+                raise ConflictError(
+                    "This node already has a WireGuard profile. A node runs one "
+                    "WireGuard interface, so only one profile per node is allowed.",
+                    code="wireguard_profile_exists",
+                )
+
         profile = Profile(
             name=data.name,
             slug=data.slug,
