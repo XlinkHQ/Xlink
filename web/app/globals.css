@@ -6563,3 +6563,15 @@ i, em { font-style: italic; }
 .warp-tb-rowdot[data-tone="orange"] { background: var(--st-sand); }
 .warp-tb-rowdot[data-tone="gray"] { background: var(--st-stone); }
 .warp-tb-row > .warp-tb-cell:first-child { flex: none; width: 22px; display: flex; align-items: center; justify-content: center; }
+
+.warp-tb-icochip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 4px; flex: none;
+  background: rgba(111,118,130,0.12); color: var(--st-stone);
+}
+.warp-tb-icochip[data-tone="green"] { background: rgba(51,176,116,0.12); color: var(--st-green); }
+.warp-tb-icochip[data-tone="red"]   { background: rgba(190,90,75,0.12);  color: var(--st-red); }
+.warp-tb-icochip[data-tone="blue"]  { background: rgba(84,114,228,0.12);  color: var(--st-blue); }
+.warp-tb-icochip[data-tone="orange"]{ background: rgba(142,118,93,0.12);  color: var(--st-sand); }
+.warp-tb-icochip[data-tone="gray"]  { background: rgba(111,118,130,0.12); color: var(--st-stone); }
+.warp-tb-row > .warp-tb-cell:first-child { flex: none; width: 36px; overflow: visible; }

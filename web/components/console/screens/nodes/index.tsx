@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Server } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
@@ -155,7 +155,9 @@ export function NodesScreen() {
                 },
               ]}
               cells={[
-                <span className="warp-tb-rowdot" data-tone={statusTone(n.status)} aria-hidden />,
+                <span className="warp-tb-icochip" data-tone={statusTone(n.status)} aria-hidden>
+                  <Server size={15} />
+                </span>,
                 <span>{n.name}</span>,
                 <span className="warp-tb-mono">{n.host}:{n.port}</span>,
                 <WarpBadge tone={statusTone(n.status)}>{n.status}</WarpBadge>,
