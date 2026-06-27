@@ -704,7 +704,7 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
 /* Light-mode table text colors (exact) */
 :root:not(.xlink-dark) .warp-tb-head > * { color: #5d5d5f; }
 :root:not(.xlink-dark) .warp-tb-cell { color: #5d5d5f; }
-:root:not(.xlink-dark) .warp-tb-cell:nth-child(2) { color: #1b1b1b; }
+:root:not(.xlink-dark) .warp-tb-cell:nth-child(2) { color: #303031; }
 :root:not(.xlink-dark) .warp-tb-icochip { color: #5d5d5f !important; }
 :root:not(.xlink-dark) .warp-tb-row:hover .warp-tb-icochip { background: rgba(0,0,0,0.045); }
 
@@ -5220,6 +5220,8 @@ input.switch:focus-visible {
 .warp-th-btn:hover .warp-th-arrow { opacity: .55; }
 .warp-th-arrow.is-active { opacity: 1; }
 .warp-th-arrow.is-asc { transform: rotate(180deg); }
+:root:not(.xlink-dark) .warp-th-arrow.is-active { color: #303031; }
+:root:not(.xlink-dark) .warp-th-btn.is-active { color: #303031; }
 .warp-thead { background-color: transparent; }
 .warp-thead > th { color: #707070 !important; }
 .xlink-dark .warp-thead { background-color: transparent; }
