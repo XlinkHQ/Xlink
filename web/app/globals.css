@@ -6475,3 +6475,38 @@ input.switch:focus-visible {
 .lin-btn-group > button:first-child { border-top-left-radius: var(--corner); border-bottom-left-radius: var(--corner); }
 .lin-btn-group > button:last-child { border-top-right-radius: var(--corner); border-bottom-right-radius: var(--corner); }
 .lin-btn-group > button:not(:first-child) { border-left: 1px solid var(--hairline); }
+
+/* ── Linear foundation (exact, from am.css) ───────────────────── */
+:root {
+  --speed-highlightFadeIn: 0s;
+  --speed-highlightFadeOut: .15s;
+  --speed-quickTransition: .1s;
+  --speed-regularTransition: .25s;
+  --speed-slowTransition: .35s;
+  --ease-in-quad: cubic-bezier(.55,.085,.68,.53);
+  --ease-in-cubic: cubic-bezier(.55,.055,.675,.19);
+  --ease-out-quad: cubic-bezier(.25,.46,.45,.94);
+  --ease-out-cubic: cubic-bezier(.215,.61,.355,1);
+  --ease-out-quart: cubic-bezier(.165,.84,.44,1);
+  --ease-out-quint: cubic-bezier(.23,1,.32,1);
+  --ease-out-expo: cubic-bezier(.19,1,.22,1);
+  --ease-in-out-cubic: cubic-bezier(.645,.045,.355,1);
+  --ease-in-out-quart: cubic-bezier(.77,0,.175,1);
+  --radius-rounded: 9999px;
+  --control-border-radius: 4px;
+  --scrollbar-width: 12px;
+  --focus-ring-width: 1px;
+}
+h1, h2, h3, h4, h5, h6 {
+  font-weight: var(--weight-medium, 500);
+  line-height: 1.25;
+  margin-top: 0; margin-bottom: 0;
+}
+h1 { font-size: 2em; }
+h2 { font-size: 1.5em; }
+h3 { font-size: 1.25em; }
+h4 { font-size: 1em; }
+h5 { font-size: .875em; }
+h6 { font-size: .75em; }
+strong, b { font-weight: 500; }
+i, em { font-style: italic; }
