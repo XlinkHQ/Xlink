@@ -5180,14 +5180,15 @@ input.switch:focus-visible {
   display: grid;
   grid-template-columns: 28px minmax(160px, 2fr) minmax(120px, 1.4fr) 130px 90px 110px 40px;
   align-items: center;
-  column-gap: 10px;
+  column-gap: 6px;
   min-width: 720px;
-  padding: 0 10px;
+  padding: 0 12px;
+  -webkit-font-smoothing: antialiased;
 }
-.warp-tb-head { height: 34px; }
-.warp-tb-row { height: 48px; }
+.warp-tb-head { height: 36px; }
+.warp-tb-row { height: 40px; user-select: none; }
 .warp-tb-head { background-color: transparent; }
-.warp-tb-head > * { font-weight: 450; font-size: 12px; color: var(--body-muted); }
+.warp-tb-head > * { font-weight: 500; font-size: 0.75rem; color: var(--body-muted); }
 .warp-thead { background-color: transparent; }
 .warp-thead > th { color: #707070 !important; }
 .xlink-dark .warp-thead { background-color: transparent; }
