@@ -1,7 +1,21 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, Server } from "lucide-react";
+import { Plus, Search } from "lucide-react";
+
+/** Linear "Project" glyph (exact) — rounded square with quarter-arc. 16x16. */
+function ProjectIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" role="img" focusable="false" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M2 4C2 2.89543 2.89543 2 4 2H12C13.1046 2 14 2.89543 14 4V12C14 13.1046 13.1046 14 12 14H4C2.89543 14 2 13.1046 2 12V4ZM4 3.5C3.72386 3.5 3.5 3.72386 3.5 4V12C3.5 12.2761 3.72386 12.5 4 12.5H12C12.2761 12.5 12.5 12.2761 12.5 12V4C12.5 3.72386 12.2761 3.5 12 3.5H4Z"
+      />
+      <path d="M5.5 8C5.5 6.61929 6.61929 5.5 8 5.5V8H5.5Z" />
+    </svg>
+  );
+}
 import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
@@ -161,7 +175,7 @@ export function NodesScreen() {
               ]}
               cells={[
                 <span className="warp-tb-icochip" data-tone={statusTone(n.status)} aria-hidden>
-                  <Server size={15} />
+                  <ProjectIcon />
                 </span>,
                 <span>{n.name}</span>,
                 <span className="warp-tb-mono">{n.host}:{n.port}</span>,

@@ -7,7 +7,7 @@ import { NAV_GROUPS, SearchIcon } from "./nav";
 
 const SB_MIN = 200;
 const SB_MAX = 360;
-const SB_DEFAULT = 260;
+const SB_DEFAULT = 244;
 const SB_COLLAPSE_AT = 168;
 
 export function Sidebar({

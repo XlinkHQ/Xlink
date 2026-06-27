@@ -208,7 +208,7 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
 }
 
 :root:not(.xlink-dark) .warp-sb {
-  width: 260px;
+  width: 244px;
   padding: 10px 8px 8px;
   background: #f5f5f5;
   border-right: 0;
@@ -4426,7 +4426,7 @@ input.switch:focus-visible {
 ==============================================================*/
 .warp-sb {
   flex: none;
-  width: 260px;
+  width: 244px;
   height: 100%;
   padding: 1rem;
   overflow-y: auto;
