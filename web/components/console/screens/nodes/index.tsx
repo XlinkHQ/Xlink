@@ -3,16 +3,17 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search } from "lucide-react";
 
-/** Linear "Project" glyph (exact) — rounded square with quarter-arc. 16x16. */
+/** Linear "Project" glyph — rounded square outline with quarter-arc fill (project progress). 16x16. */
 function ProjectIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" role="img" focusable="false" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
       <path
         fillRule="evenodd"
         clipRule="evenodd"
-        d="M2 4C2 2.89543 2.89543 2 4 2H12C13.1046 2 14 2.89543 14 4V12C14 13.1046 13.1046 14 12 14H4C2.89543 14 2 13.1046 2 12V4ZM4 3.5C3.72386 3.5 3.5 3.72386 3.5 4V12C3.5 12.2761 3.72386 12.5 4 12.5H12C12.2761 12.5 12.5 12.2761 12.5 12V4C12.5 3.72386 12.2761 3.5 12 3.5H4Z"
+        d="M3.5 2C2.67157 2 2 2.67157 2 3.5V12.5C2 13.3284 2.67157 14 3.5 14H12.5C13.3284 14 14 13.3284 14 12.5V3.5C14 2.67157 13.3284 2 12.5 2H3.5ZM3.5 3.5H12.5V12.5H3.5V3.5Z"
+        opacity="0.55"
       />
-      <path d="M5.5 8C5.5 6.61929 6.61929 5.5 8 5.5V8H5.5Z" />
+      <path d="M5 5H10.5C10.7761 5 11 5.22386 11 5.5V11H5.5C5.22386 11 5 10.7761 5 10.5V5Z" />
     </svg>
   );
 }
