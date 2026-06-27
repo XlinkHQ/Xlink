@@ -5117,7 +5117,7 @@ input.switch:focus-visible {
 /* Linear "All projects" tab in toolbar */
 .warp-tab {
   display: inline-flex; align-items: center;
-  height: 28px; padding: 0 10px; border-radius: 6px;
+  height: 28px; padding: 0 14px; border-radius: 9999px;
   font-size: 0.8125rem; font-weight: 500; cursor: default;
   color: var(--body-muted);
   border: 1px solid transparent;
