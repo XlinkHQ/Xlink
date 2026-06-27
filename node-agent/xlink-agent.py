@@ -366,15 +366,18 @@ def build_wireguard_config(clients: list[dict]) -> str:
         f"PostUp = {post_up}",
         f"PostDown = {post_down}",
     ]
-    for i, cl in enumerate(clients, start=2):
+    server_ip = addr.split("/")[0].strip()
+    seen_ips: set[str] = set()
+    for cl in clients:
         creds = cl.get("credentials") or {}
         pub = creds.get("public_key")
         if not pub:
             continue
-        addr = str(creds.get("address") or f"10.8.0.{i}")
-        ip = addr.split("/")[0].strip()
-        if not ip or ip == "10.8.0.1":
-            ip = f"10.8.0.{i}"
+        peer_addr = str(creds.get("address") or "").strip()
+        ip = peer_addr.split("/")[0].strip()
+        if not ip or ip == server_ip or ip in seen_ips:
+            continue
+        seen_ips.add(ip)
         lines += ["", "[Peer]", f"PublicKey = {pub}", f"AllowedIPs = {ip}/32"]
     return "\n".join(lines) + "\n"
 
