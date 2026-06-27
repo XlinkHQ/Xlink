@@ -72,7 +72,7 @@ _UA_FORMAT_RULES: list[tuple[re.Pattern[str], SubscriptionFormat]] = [
         SubscriptionFormat.SINGBOX_JSON,
     ),
     (
-        re.compile(r"(?i)^(v2ray|v2box|streisand|nekoray|nekobox|hiddify)"),
+        re.compile(r"(?i)^(v2box|nekoray|nekobox|hiddify)"),
         SubscriptionFormat.BASE64,
     ),
 ]
@@ -170,6 +170,29 @@ def _status_text(user: object, stats: object, cfg: object) -> tuple[str, str]:
     return (cfg.active_status_text, "ok")
 
 
+_VERSIONED_XRAY_CLIENTS: list[tuple[re.Pattern[str], tuple[int, ...]]] = [
+    (re.compile(r"(?i)^v2rayNG/(\d+)\.(\d+)\.(\d+)"), (1, 8, 29)),
+    (re.compile(r"(?i)^v2rayN/(\d+)\.(\d+)"), (6, 40)),
+    (re.compile(r"(?i)^Happ/(\d+)\.(\d+)\.(\d+)"), (1, 63, 1)),
+    (re.compile(r"(?i)^Streisand"), ()),
+]
+
+
+def _versioned_xray_format(user_agent: str) -> SubscriptionFormat | None:
+    """Modern v2rayNG/v2rayN/Happ/Streisand support the richer xray-json feed."""
+    for pattern, minimum in _VERSIONED_XRAY_CLIENTS:
+        m = pattern.match(user_agent)
+        if not m:
+            continue
+        if not minimum:
+            return SubscriptionFormat.XRAY_JSON
+        version = tuple(int(g) for g in m.groups())
+        if version >= minimum:
+            return SubscriptionFormat.XRAY_JSON
+        return None
+    return None
+
+
 def _detect_format(
     user_agent: str,
     format_param: str | None,
@@ -193,6 +216,10 @@ def _detect_format(
     for pattern, fmt in _UA_FORMAT_RULES:
         if pattern.match(user_agent):
             return fmt
+
+    versioned = _versioned_xray_format(user_agent)
+    if versioned is not None:
+        return versioned
     return SubscriptionFormat.BASE64
 
 
