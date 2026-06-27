@@ -4242,33 +4242,26 @@ input.switch:focus-visible {
   background-color: #ffffff !important;
   background-image: none !important;
   color: #303031 !important;
-  border: 2px solid transparent !important;
+  border: 1px solid #e1e1e3 !important;
+  border-radius: 8px !important;
   box-shadow: none !important;
   min-height: 0 !important;
+  height: 38px;
   justify-content: center;
-  padding: 0.85rem 1rem !important;
+  padding: 0 12px !important;
   align-items: center;
-  font-size: 15px !important;
+  font-size: 0.8125rem !important;
   display: flex;
   outline: none;
   width: 100%;
+  margin-bottom: 8px;
   -webkit-text-fill-color: #303031;
-}
-.warp-form-signin input[type="text"] {
-  border-top-right-radius: var(--warp-radius) !important;
-  border-top-left-radius: var(--warp-radius) !important;
-  border-bottom-left-radius: 0 !important;
-  border-bottom-right-radius: 0 !important;
-}
-.warp-form-signin input[type="password"] {
-  border-bottom-right-radius: var(--warp-radius) !important;
-  border-bottom-left-radius: var(--warp-radius) !important;
-  border-top-left-radius: 0 !important;
-  border-top-right-radius: 0 !important;
+  transition: border-color .12s ease, box-shadow .12s ease;
 }
 .warp-form-signin input[type="text"]:focus,
 .warp-form-signin input[type="password"]:focus {
-  border-color: var(--warp-blue) !important;
+  border-color: var(--primary, #5e6ad2) !important;
+  box-shadow: 0 0 0 1px var(--primary, #5e6ad2) !important;
 }
 /* Autofill — keep dark, not browser white/yellow */
 .warp-form-signin input:-webkit-autofill,
@@ -4277,11 +4270,6 @@ input.switch:focus-visible {
   -webkit-text-fill-color: #303031;
   -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
   caret-color: #303031;
-}
-.warp-form-signin input[type="text"]:focus,
-.warp-form-signin input[type="password"]:focus {
-  border-color: var(--warp-blue);
-  transition: all 0.2s ease;
 }
 .warp-form-signin input::placeholder {
   color: #a9a9a9 !important;
@@ -4294,24 +4282,25 @@ input.switch:focus-visible {
 /* SUBMIT */
 .warp-form-signin input[type="submit"] {
   font-family: var(--warp-font);
-  background-color: var(--warp-submit);
-  border-radius: var(--warp-radius);
+  background-color: var(--primary, #5e6ad2);
+  border-radius: 8px;
   justify-content: center;
   align-items: center;
-  padding: 12px 32px;
+  height: 38px;
+  padding: 0 16px;
   font-weight: 500;
   cursor: pointer;
-  font-size: 15px;
-  margin: 10px 0;
+  font-size: 0.8125rem;
+  margin: 4px 0 0;
   display: flex;
   outline: none;
   color: #fff;
   border: none;
   width: 100%;
+  transition: filter .12s ease;
 }
 .warp-form-signin input[type="submit"]:hover {
-  background-color: var(--warp-submit-hover);
-  transition: all 0.2s ease;
+  filter: brightness(1.08);
 }
 .warp-form-signin input[type="submit"]:disabled {
   cursor: default;
