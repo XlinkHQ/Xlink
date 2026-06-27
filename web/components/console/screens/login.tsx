@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { ApiError, login } from "@/lib/api";
 import { getBranding, onBrandingChange } from "@/lib/branding";
@@ -54,37 +55,41 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
   return (
     <div className="warp-page">
       <main className="warp-signin">
-        {/* ALERT */}
-        <div className="warp-alert-warpper">
-          <div className={`warp-alert ${alert === "success" ? "warp-alert-style" : ""}`}>
-            <div>
-              <span className="warp-ico warp-ico-check">
-                <IconCheck />
-              </span>
-              <div>
-                <h4>Successful</h4>
-                <p>Sign in was successful.</p>
+        {alert ? (
+          <div className="warp-alert-warpper">
+            {alert === "success" ? (
+              <div className="warp-alert warp-alert-style" role="status">
+                <div>
+                  <span className="warp-ico warp-ico-check">
+                    <Check size={18} />
+                  </span>
+                  <div>
+                    <h4>Successful</h4>
+                    <p>Sign in was successful.</p>
+                  </div>
+                </div>
+                <button type="button" aria-label="Close" onClick={() => setAlert(null)}>
+                  <span><X size={16} /></span>
+                </button>
               </div>
-            </div>
-            <button type="button" aria-label="Close" onClick={() => setAlert(null)}>
-              <span><IconClose /></span>
-            </button>
-          </div>
-          <div className={`warp-alert ${alert === "error" ? "warp-alert-style" : ""}`}>
-            <div>
-              <span className="warp-ico warp-ico-close">
-                <IconClose />
-              </span>
-              <div>
-                <h4>Unsuccessful</h4>
-                <p>Please check your username and password and try again.</p>
+            ) : (
+              <div className="warp-alert warp-alert-style" role="alert">
+                <div>
+                  <span className="warp-ico warp-ico-close">
+                    <X size={18} />
+                  </span>
+                  <div>
+                    <h4>Unsuccessful</h4>
+                    <p>Please check your username and password and try again.</p>
+                  </div>
+                </div>
+                <button type="button" aria-label="Close" onClick={() => setAlert(null)}>
+                  <span><X size={16} /></span>
+                </button>
               </div>
-            </div>
-            <button type="button" aria-label="Close" onClick={() => setAlert(null)}>
-              <span><IconClose /></span>
-            </button>
+            )}
           </div>
-        </div>
+        ) : null}
 
         {/* FORM */}
         <form className="warp-form-signin" onSubmit={submit} autoCapitalize="off" autoCorrect="off">
@@ -137,20 +142,5 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
         <div className="warp-indicator" />
       </div>
     </div>
-  );
-}
-
-function IconCheck() {
-  return (
-    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-function IconClose() {
-  return (
-    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
   );
 }
