@@ -115,7 +115,7 @@ export function NodesScreen() {
           </>
         }
       >
-        <WarpHead cols={["#", "Name", "Host", "Status", "Users", "Last Seen"]} actions />
+        <WarpHead cols={["", "Name", "Host", "Status", "Users", "Last Seen"]} actions />
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
@@ -155,11 +155,11 @@ export function NodesScreen() {
                 },
               ]}
               cells={[
-                i + 1,
-                <span className="font-medium">{n.name}</span>,
+                <span className="warp-tb-rowdot" data-tone={statusTone(n.status)} aria-hidden />,
+                <span>{n.name}</span>,
                 <span className="warp-tb-mono">{n.host}:{n.port}</span>,
                 <WarpBadge tone={statusTone(n.status)}>{n.status}</WarpBadge>,
-                <WarpBadge tone={n.current_users > 0 ? "blue" : "gray"}>{n.current_users}</WarpBadge>,
+                <span>{n.current_users}</span>,
                 relativeTime(n.last_seen_at),
               ]}
             />

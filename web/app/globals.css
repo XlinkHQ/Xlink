@@ -5188,7 +5188,8 @@ input.switch:focus-visible {
 .xlink-dark .warp-thead > th { color: #707070 !important; }
 .warp-tb-row { cursor: pointer; border-top: 0; transition: background-color 0.12s ease; }
 .warp-tb-row:hover { background-color: rgba(0,0,0,0.03); }
-.warp-tb-cell { flex: 1 1 0; min-width: 0; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; color: #707070; }
+.warp-tb-cell { flex: 1 1 0; min-width: 0; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.8125rem; color: var(--body-muted); }
+.warp-tb-cell:nth-child(2) { color: var(--body-color); }
 .warp-tb-cell.actions { display: flex; align-items: center; gap: 16px; }
 .warp-tb-cell:has(.warp-tb-traffic) { overflow: visible; }
 /* Let an open row dropdown escape the cell/row clipping. */
@@ -6544,3 +6545,14 @@ i, em { font-style: italic; }
 }
 .xlink-dark .warp-sb-acct-kbd kbd { background: rgba(255,255,255,0.08); }
 .warp-sb-acct-kbd span { font-size: 11px; }
+
+.warp-tb-rowdot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 9999px;
+  flex: none; background: var(--st-stone);
+}
+.warp-tb-rowdot[data-tone="green"] { background: var(--st-green); }
+.warp-tb-rowdot[data-tone="red"] { background: var(--st-red); }
+.warp-tb-rowdot[data-tone="blue"] { background: var(--st-blue); }
+.warp-tb-rowdot[data-tone="orange"] { background: var(--st-sand); }
+.warp-tb-rowdot[data-tone="gray"] { background: var(--st-stone); }
+.warp-tb-row > .warp-tb-cell:first-child { flex: none; width: 22px; display: flex; align-items: center; justify-content: center; }
