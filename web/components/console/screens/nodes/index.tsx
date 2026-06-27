@@ -74,7 +74,11 @@ export function NodesScreen() {
   return (
     <div className="w-full">
       <div className="warp-page-head">
-        <h1 className="warp-page-title">Nodes</h1>
+        <h1 className="warp-page-title">
+          <span className="warp-crumb-root">Network</span>
+          <span className="warp-crumb-sep">›</span>
+          <span className="warp-crumb-leaf">Nodes</span>
+        </h1>
         <div className="warp-page-stats">
           <span><b>{nodes.length}</b> nodes</span>
           <span className="warp-page-dot" />
