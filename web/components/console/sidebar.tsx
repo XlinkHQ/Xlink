@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { setTheme, useTheme } from "@/lib/theme";
 import { LogoutIcon, MoonIcon, NAV_GROUPS, SearchIcon, SunIcon } from "./nav";
+
+const SB_MIN = 200;
+const SB_MAX = 360;
+const SB_DEFAULT = 244;
+const SB_COLLAPSE_AT = 168;
 
 export function Sidebar({
   active,
@@ -22,6 +27,51 @@ export function Sidebar({
 }) {
   const theme = useTheme();
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [width, setWidth] = useState(SB_DEFAULT);
+  const [collapsed, setCollapsed] = useState(false);
+  const dragging = useRef(false);
+
+  useEffect(() => {
+    const w = Number(localStorage.getItem("xlink-sb-width"));
+    if (w >= SB_MIN && w <= SB_MAX) setWidth(w);
+    setCollapsed(localStorage.getItem("xlink-sb-collapsed") === "1");
+  }, []);
+
+  const onDragStart = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    const move = (ev: PointerEvent) => {
+      if (!dragging.current) return;
+      const w = ev.clientX;
+      if (w < SB_COLLAPSE_AT) {
+        setCollapsed(true);
+        localStorage.setItem("xlink-sb-collapsed", "1");
+        dragging.current = false;
+        cleanup();
+        return;
+      }
+      const clamped = Math.max(SB_MIN, Math.min(SB_MAX, w));
+      setWidth(clamped);
+      localStorage.setItem("xlink-sb-width", String(clamped));
+    };
+    const up = () => { dragging.current = false; cleanup(); };
+    const cleanup = () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+  }, []);
+
+  const reopen = () => {
+    setCollapsed(false);
+    localStorage.setItem("xlink-sb-collapsed", "0");
+  };
+
   const profileName = identity || "xlink.local";
   const initials = profileName
     .split(/[.\s@_-]+/)
@@ -29,8 +79,30 @@ export function Sidebar({
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("") || "XL";
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        className="warp-sb-reopen"
+        onClick={reopen}
+        title="Open sidebar"
+        aria-label="Open sidebar"
+      >
+        <SearchIcon size={16} aria-hidden />
+      </button>
+    );
+  }
+
   return (
-    <aside className={cn("warp-sb", open && "is-open")}>
+    <aside className={cn("warp-sb", open && "is-open")} style={{ width }}>
+      <div
+        className="warp-sb-resize"
+        onPointerDown={onDragStart}
+        role="separator"
+        aria-orientation="vertical"
+        title="Drag to resize · drag left to hide"
+      />
       <div className="warp-sb-inner">
         <ul className="warp-sb-nav">
           <div className="warp-sb-head">

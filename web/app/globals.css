@@ -6419,3 +6419,19 @@ input.switch:focus-visible {
 }
 .warp-page-stats b { color: var(--body-color); font-weight: 500; }
 .warp-page-dot { width: 3px; height: 3px; border-radius: 999px; background: var(--body-muted); opacity: .5; }
+
+.warp-sb { position: relative; }
+.warp-sb-resize {
+  position: absolute; top: 0; right: -3px; bottom: 0; width: 6px;
+  cursor: col-resize; z-index: 20; background: transparent;
+  transition: background-color .15s;
+}
+.warp-sb-resize:hover, .warp-sb-resize:active { background: var(--primary); opacity: .25; }
+.warp-sb-reopen {
+  position: fixed; left: 10px; top: 12px; z-index: 40;
+  width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--hairline);
+  display: grid; place-items: center; cursor: pointer;
+  background: var(--white); color: var(--body-muted);
+  box-shadow: var(--shadow-sm); transition: background-color .12s, color .12s;
+}
+.warp-sb-reopen:hover { color: var(--body-color); background: var(--bg-whitesmoke); }
