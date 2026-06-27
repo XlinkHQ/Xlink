@@ -5131,6 +5131,23 @@ input.switch:focus-visible {
   background: rgba(255,255,255,0.06);
   border-color: rgba(255,255,255,0.12);
 }
+/* Linear toolbar icon group — 3 buttons inside a rounded box */
+.warp-tb-iconbox {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 2px; border-radius: 9999px;
+  border: 1px solid var(--hairline);
+  background: var(--white);
+}
+.xlink-dark .warp-tb-iconbox { background: transparent; border-color: rgba(255,255,255,0.10); }
+.warp-tb-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 9999px;
+  border: none; background: transparent; cursor: pointer;
+  color: var(--body-muted);
+  transition: background-color .1s ease, color .1s ease;
+}
+.warp-tb-ico:hover { background: rgba(0,0,0,0.06); color: var(--body-color); }
+.xlink-dark .warp-tb-ico:hover { background: rgba(255,255,255,0.08); color: #fff; }
 /* WarpProxy: action row, then a dedicated search row (no divider line). */
 .warp-tb-divider { display: none; }
 .warp-tb-searchbar { padding: 0 1rem 1rem; }
