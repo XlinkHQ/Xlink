@@ -101,6 +101,7 @@ export function NodesScreen() {
       <WarpTableCard
         toolbar={
           <>
+            <span className="warp-tab is-active" aria-current="page">All nodes</span>
             <span className="warp-tb-spacer" />
             <span className="warp-tb-search-wrap" style={{ maxWidth: 220, flex: "none" }}>
               <Search size={13} style={{ position: "absolute", left: 14, color: "var(--body-muted)", pointerEvents: "none" }} />
@@ -112,7 +113,6 @@ export function NodesScreen() {
               />
             </span>
             <WarpMenu
-              label="General Actions"
               items={[
                 { label: "Refresh", icon: "refresh", onClick: () => refresh() },
                 {

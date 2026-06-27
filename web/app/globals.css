@@ -5114,6 +5114,23 @@ input.switch:focus-visible {
   padding: 1rem;
 }
 .warp-tb-toolbar .warp-tb-spacer { margin-left: auto; }
+/* Linear "All projects" tab in toolbar */
+.warp-tab {
+  display: inline-flex; align-items: center;
+  height: 28px; padding: 0 10px; border-radius: 6px;
+  font-size: 0.8125rem; font-weight: 500; cursor: default;
+  color: var(--body-muted);
+  border: 1px solid transparent;
+}
+.warp-tab.is-active {
+  color: var(--body-color);
+  background: rgba(0,0,0,0.04);
+  border-color: var(--hairline);
+}
+.xlink-dark .warp-tab.is-active {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.12);
+}
 /* WarpProxy: action row, then a dedicated search row (no divider line). */
 .warp-tb-divider { display: none; }
 .warp-tb-searchbar { padding: 0 1rem 1rem; }
