@@ -195,16 +195,16 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
 }
 
 :root:not(.xlink-dark) .xlink-main-shell {
-  margin: 6px 6px 14px 0;
+  margin: 8px 8px 8px 0;
   overflow: hidden;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #e0e0e0;
   border-radius: 12px;
-  background: #ffffff;
+  background: #fcfcfd;
   box-shadow: none;
 }
 
 :root:not(.xlink-dark) .xlink-main-shell main {
-  background: #ffffff;
+  background: #fcfcfd;
 }
 
 :root:not(.xlink-dark) .warp-sb {
@@ -275,19 +275,19 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  height: 30px;
-  margin: 10px 0 3px;
-  padding: 0 5px 0 12px;
+  height: 28px;
+  margin: 12px 0 2px;
+  padding: 0 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
-  color: #9b9ba1;
+  color: #8a8d94;
   cursor: pointer;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 0.6875rem;
   font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 :root:not(.xlink-dark) .warp-sb-group-title:hover {
@@ -317,30 +317,27 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
 }
 
 :root:not(.xlink-dark) .warp-sb-item {
-  min-height: 28px;
+  height: 28px;
   margin-bottom: 1px;
   padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: #5b5b5d;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.006em;
+  border: 0;
+  border-radius: 5px;
+  color: #5a5d63;
+  font-size: 0.8125rem;
+  font-weight: 450;
   gap: 8px;
-  line-height: 1.4375;
-  transition: background-color 0.12s ease, color 0.12s ease;
+  line-height: 1;
+  transition: background-color var(--speed-quickTransition, .1s) ease, color var(--speed-quickTransition, .1s) ease;
 }
 
 :root:not(.xlink-dark) .warp-sb-item:hover {
-  background: rgba(35, 37, 42, 0.06);
-  border-color: transparent;
-  color: #23252a;
+  background: rgba(0, 0, 0, 0.045);
+  color: #303031;
 }
 
 :root:not(.xlink-dark) .warp-sb-active {
-  background: rgba(35, 37, 42, 0.08) !important;
-  border-color: transparent;
-  color: #23252a;
+  background: rgba(0, 0, 0, 0.065) !important;
+  color: #303031;
   box-shadow: none;
 }
 
@@ -364,7 +361,7 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
 
 :root:not(.xlink-dark) .warp-sb-item:hover .warp-sb-ico,
 :root:not(.xlink-dark) .warp-sb-active .warp-sb-ico {
-  color: #23252a;
+  color: #303031;
 }
 
 :root:not(.xlink-dark) .warp-sb-footer {
@@ -6510,3 +6507,12 @@ h5 { font-size: .875em; }
 h6 { font-size: .75em; }
 strong, b { font-weight: 500; }
 i, em { font-style: italic; }
+
+.xlink-dark .xlink-main-shell {
+  margin: 8px 8px 8px 0;
+  overflow: hidden;
+  border: 1px solid #1c1e21;
+  border-radius: 12px;
+  background: #0f0f11;
+}
+.xlink-dark .xlink-main-shell main { background: #0f0f11; }
