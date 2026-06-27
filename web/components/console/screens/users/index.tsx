@@ -401,7 +401,7 @@ export function UsersScreen() {
                       onClick={(e) => e.stopPropagation()}
                       onChange={() => toggleSel(u.id)}
                     />
-                    {idx + 1}
+                    <span className="warp-tb-idnum">{idx + 1}</span>
                   </span>
                 </span>
                 <span className="warp-tb-cell font-medium">{u.username}</span>
@@ -437,7 +437,7 @@ export function UsersScreen() {
                 <span className="warp-tb-cell">
                   {(() => {
                     const rel = relativeExpiry(u.expire_at);
-                    if (!rel) return <span className="text-fg-muted">∞</span>;
+                    if (!rel) return <span className="text-fg-muted">Never</span>;
                     return <span className={rel.urgent ? "text-danger" : "text-fg-muted"}>{rel.text}</span>;
                   })()}
                 </span>
