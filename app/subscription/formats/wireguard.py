@@ -30,9 +30,8 @@ def _peer_block(config: ProviderConfig) -> str:
     preshared = str(setting(config, "presharedKey", ""))
     if preshared:
         lines.insert(2, f"PresharedKey = {preshared}")
-    keepalive = setting(config, "persistentKeepalive")
-    if keepalive:
-        lines.append(f"PersistentKeepalive = {int(keepalive)}")
+    keepalive = setting(config, "persistentKeepalive") or 25
+    lines.append(f"PersistentKeepalive = {int(keepalive)}")
     return "\n".join(lines)
 
 
@@ -61,4 +60,5 @@ def render_one(config: ProviderConfig) -> str:
 
 
 def render(configs: tuple[ProviderConfig, ...]) -> str:
-    return "\n".join(render_one(config) for config in configs)
+    blocks = [render_one(c) for c in configs if c.protocol == PROTOCOL]
+    return "\n".join(blocks)
