@@ -51,7 +51,7 @@
   --font-lg: 16px;
   --font-xl: 18px;
   --font-2xl: 24px;
-  --line-height: 1.5;
+  --line-height: 1.4375;
   --white: #ffffff; /* surface */
   --bg-whitesmoke: #f3f3f4; /* subtle */
   --bg-bright: #f7f7f8; /* muted */
@@ -162,7 +162,7 @@ body {
   font-family: var(--warp-font);
   font-size: 14px;
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.4375;
   letter-spacing: -0.011em;
   font-feature-settings: "cv01", "cv03", "cv04", "ss03";
   text-rendering: optimizeLegibility;
@@ -304,9 +304,9 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
 }
 
 :root:not(.xlink-dark) .warp-sb-item {
-  min-height: 32px;
+  min-height: 28px;
   margin-bottom: 1px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid transparent;
   border-radius: 6px;
   color: #5b5b5d;
@@ -314,7 +314,7 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
   font-weight: 500;
   letter-spacing: -0.006em;
   gap: 8px;
-  line-height: 1;
+  line-height: 1.4375;
   transition: background-color 0.12s ease, color 0.12s ease;
 }
 
