@@ -6,6 +6,7 @@ import { ApiError, restartPanel } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
 import { ApiKeysScreen } from "./api-keys";
 import { AuditLogScreen } from "./audit-log";
+import { BrandingSettingsScreen } from "./branding-settings";
 import { BackupScreen } from "./panels";
 import { SecuritySettingsScreen } from "./security-settings";
 import { SubscriptionSettingsScreen } from "./subscription-settings";
@@ -25,6 +26,7 @@ export function useRegisterSave(fn: () => Promise<void> | void, busy = false): v
 
 const TABS: Array<{ key: string; label: string; Comp: () => React.JSX.Element }> = [
   { key: "subscription", label: "Subscription", Comp: SubscriptionSettingsScreen },
+  { key: "branding", label: "Branding", Comp: BrandingSettingsScreen },
   { key: "security", label: "Security", Comp: SecuritySettingsScreen },
   { key: "backup", label: "Backup", Comp: BackupScreen },
   { key: "apikeys", label: "API Keys", Comp: ApiKeysScreen },
@@ -66,7 +68,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <div className="warp-set-topbar">
         {saveReg ? (
           <button

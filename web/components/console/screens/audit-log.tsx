@@ -45,10 +45,10 @@ export function AuditLogScreen() {
         </span>
       </div>
 
-      <div className="w-full overflow-hidden rounded-xl border border-hairline bg-canvas">
+      <div className="-mx-4 w-[calc(100%+2rem)] overflow-x-auto">
         <table className="w-full table-fixed border-collapse text-sm">
           <thead>
-            <tr className="warp-thead border-b border-hairline text-left">
+            <tr className="warp-thead text-left">
               <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">When</th>
               <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Admin</th>
               <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Action</th>
@@ -64,7 +64,7 @@ export function AuditLogScreen() {
               <tr><td colSpan={6} className="px-4 py-8 text-center text-fg-muted">{actor ? "No audit entries for this admin." : "No audit entries yet."}</td></tr>
             ) : (
               entries.map((e) => (
-                <tr key={e.id} className="border-t border-hairline hover:bg-muted">
+                <tr key={e.id} className="hover:bg-muted">
                   <td className="px-4 py-2.5 text-fg-muted" title={new Date(e.created_at).toLocaleString()}>{relTime(e.created_at)}</td>
                   <td className="truncate px-4 py-2.5 font-medium text-fg">{e.actor_username || "—"}</td>
                   <td className="px-4 py-2.5 capitalize">{e.action}</td>

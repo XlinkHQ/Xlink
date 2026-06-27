@@ -45,7 +45,6 @@ export function ConsoleV2() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [identity, setIdentity] = useState("xlink.local");
   const [navOpen, setNavOpen] = useState(false);
-  const [commandOpen, setCommandOpen] = useState(false);
   const theme = useTheme();
 
   useEffect(() => {
@@ -97,11 +96,11 @@ export function ConsoleV2() {
 
   return (
     <div
-      className={`xlink-app-shell flex h-screen w-full overflow-hidden bg-canvas font-sans text-fg ${theme === "dark" ? "xlink-dark" : ""}`}
+      className={`flex h-screen w-full overflow-hidden bg-canvas font-sans text-fg ${theme === "dark" ? "xlink-dark" : ""}`}
     >
       <Toaster />
       <DialogHost />
-      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} onSelect={setActive} />
+      <CommandPalette onSelect={setActive} />
       {navOpen ? (
         <button
           type="button"
@@ -113,8 +112,6 @@ export function ConsoleV2() {
       <Sidebar
         active={active}
         open={navOpen}
-        identity={identity}
-        onSearch={() => setCommandOpen(true)}
         onSelect={(k) => {
           setActive(k);
           setNavOpen(false);
@@ -125,7 +122,7 @@ export function ConsoleV2() {
           setAuthed(false);
         }}
       />
-      <div className="xlink-main-shell relative z-10 flex min-w-0 flex-1 flex-col">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <header className="warp-mobilebar">
           <button
             type="button"
@@ -138,22 +135,22 @@ export function ConsoleV2() {
           <span className="warp-mobilebar-title">{active}</span>
         </header>
         <main className="min-h-0 flex-1 overflow-auto overscroll-none bg-canvas">
-          <div className="mx-auto w-full max-w-[1600px] p-2 sm:p-3">
-            {active === "Overview" ? (
-              <DashboardScreen />
-            ) : active === "Admins" ? (
-              <AdminsScreen />
-            ) : active === "Nodes" ? (
-              <NodesScreen />
-            ) : active === "Profiles" ? (
-              <ProfilesScreen />
-            ) : active === "Groups" ? (
-              <GroupsScreen />
-            ) : active === "Users" ? (
-              <UsersScreen />
-            ) : (
-              <SettingsScreen />
-            )}
+          <div className="w-full p-4 sm:p-6">
+          {active === "Overview" ? (
+            <DashboardScreen />
+          ) : active === "Admins" ? (
+            <AdminsScreen />
+          ) : active === "Nodes" ? (
+            <NodesScreen />
+          ) : active === "Profiles" ? (
+            <ProfilesScreen />
+          ) : active === "Groups" ? (
+            <GroupsScreen />
+          ) : active === "Users" ? (
+            <UsersScreen />
+          ) : (
+            <SettingsScreen />
+          )}
           </div>
         </main>
       </div>
