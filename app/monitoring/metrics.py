@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+from typing import Any
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,24 +22,26 @@ _SUMMARY_KEYS = (
 )
 
 
-def snapshot_from_summary(
+async def snapshot_from_summary(
     summary: dict[str, float], providers: ProviderRegistry
 ) -> MetricsSnapshot:
     metrics = [Metric(key, float(summary.get(key, 0.0))) for key in _SUMMARY_KEYS]
-    metrics.extend(
-        [
-            Metric("scheduler_decisions", 0.0),
-            Metric("failover_operations", 0.0),
-            Metric("subscription_generations", 0.0),
-            Metric("gateway_errors", 0.0),
-        ]
-    )
-    for provider in providers.metadata():
+    provs = list(providers.all())
+
+    async def _check(provider: Any) -> bool:
+        try:
+            return await provider.health_check()
+        except Exception:
+            return False
+
+    results = await asyncio.gather(*[_check(p) for p in provs]) if provs else []
+    for provider, healthy in zip(provs, results):
+        meta = provider.metadata
         metrics.append(
             Metric(
                 "provider_health",
-                1.0,
-                {"provider": provider.name, "kind": provider.kind.value},
+                1.0 if healthy else 0.0,
+                {"provider": meta.name, "kind": meta.kind.value},
             )
         )
     return MetricsSnapshot(metrics=tuple(metrics))
@@ -49,7 +54,7 @@ class MetricsCollector:
 
     async def collect(self) -> MetricsSnapshot:
         summary = await self.collect_summary()
-        return snapshot_from_summary(summary, self._providers)
+        return await snapshot_from_summary(summary, self._providers)
 
     async def collect_summary(self) -> dict[str, float]:
         return {

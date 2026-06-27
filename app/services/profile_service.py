@@ -110,9 +110,19 @@ class ProfileService:
             ClientAssignment.status == AssignmentStatus.ACTIVE,
         )
         active_assignments = (await self._repo.session.execute(stmt)).scalars().all()
+        # Batch-load nodes once instead of one query per assignment (N+1).
+        node_ids = {a.node_id for a in active_assignments}
+        nodes_by_id = {}
+        if node_ids:
+            from app.domain.node import Node
+
+            node_rows = (
+                await self._repo.session.execute(select(Node).where(Node.id.in_(node_ids)))
+            ).scalars().all()
+            nodes_by_id = {n.id: n for n in node_rows}
         for assignment in active_assignments:
             assignment.status = AssignmentStatus.DISABLED
-            node = await self._nodes.get(assignment.node_id)
+            node = nodes_by_id.get(assignment.node_id)
             if node is not None:
                 node.current_users = max(0, node.current_users - 1)
         await self._repo.session.flush()

@@ -58,11 +58,18 @@ class InboundHostRepository:
         if not rows:
             return {}
 
-        universal = [h for h in rows if h.is_universal]
+        # Build per-profile index + universal list in a single pass (was O(n*m)).
+        universal: list[dict[str, Any]] = []
+        by_profile: dict[uuid.UUID, list[dict[str, Any]]] = {}
+        for h in rows:
+            ov = h.to_override()
+            if h.is_universal:
+                universal.append(ov)
+            else:
+                by_profile.setdefault(h.profile_id, []).append(ov)
         result: dict[uuid.UUID, list[dict[str, Any]]] = {}
         for pid in profile_ids:
-            own = [h for h in rows if h.profile_id == pid and not h.is_universal]
-            hosts = own + universal
+            hosts = by_profile.get(pid, []) + universal
             if hosts:
-                result[pid] = [h.to_override() for h in hosts]
+                result[pid] = hosts
         return result

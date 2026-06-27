@@ -77,6 +77,9 @@ class HysteriaProvider(Provider):
             record: dict[str, str] = {"password": existing["password"]}
             if "obfs_password" in existing:
                 record["obfs_password"] = existing["obfs_password"]
+            elif spec.attributes.get("obfs"):
+                # obfs newly enabled on update — generate the missing password
+                record["obfs_password"] = secrets.token_urlsafe(16)
         else:
             record = {"password": secrets.token_urlsafe(24)}
             if spec.attributes.get("obfs"):

@@ -181,6 +181,19 @@ class ClientAssignmentService:
     ) -> dict[str, int]:
         target = set(target_profile_ids)
         existing = await self._repo.list_by_group(group_id)
+        # Batch-load all target profiles once instead of per-user-per-id (N+1).
+        profiles_by_id: dict[uuid.UUID, object] = {}
+        if target:
+            from sqlalchemy import select as _select
+
+            from app.domain.profile import Profile as _Profile
+
+            rows = (
+                await self._repo.session.execute(
+                    _select(_Profile).where(_Profile.id.in_(target))
+                )
+            ).scalars().all()
+            profiles_by_id = {p.id: p for p in rows}
         by_user: dict[uuid.UUID, dict[uuid.UUID, ClientAssignment]] = {}
         for a in existing:
             by_user.setdefault(a.user_id, {})[a.profile_id] = a
@@ -193,7 +206,7 @@ class ClientAssignmentService:
                     await self.delete(assignment.id)
                     removed += 1
             for profile_id in target - set(owned.keys()):
-                profile = await self._profiles.get(profile_id)
+                profile = profiles_by_id.get(profile_id)
                 if profile is None:
                     continue
                 try:
