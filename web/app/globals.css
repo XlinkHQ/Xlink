@@ -5118,7 +5118,7 @@ input.switch:focus-visible {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 1rem;
+  padding: 1rem 1rem 1rem 6px;
 }
 .warp-tb-toolbar .warp-tb-spacer { margin-left: auto; }
 /* Linear "All projects" tab in toolbar */
@@ -5131,7 +5131,7 @@ input.switch:focus-visible {
 }
 .warp-tab.is-active {
   color: var(--body-color);
-  background: rgba(0,0,0,0.04);
+  background: #efeff0;
   border-color: var(--hairline);
 }
 .xlink-dark .warp-tab.is-active {
