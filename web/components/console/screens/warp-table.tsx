@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Menu, MoreHorizontal, Plus, Trash } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/lib/icons";
+import { useTheme } from "@/lib/theme";
 
 export type WarpMenuItem = {
   label: string;
@@ -14,6 +15,7 @@ export type WarpMenuItem = {
 };
 
 export function WarpMenu({ items, label }: { items: WarpMenuItem[]; label?: string }) {
+  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -67,7 +69,7 @@ export function WarpMenu({ items, label }: { items: WarpMenuItem[]; label?: stri
       )}
       {open && typeof document !== "undefined"
         ? createPortal(
-            <div className={document.querySelector(".xlink-dark") ? "xlink-dark" : undefined}>
+            <div className={theme === "dark" ? "xlink-dark" : undefined}>
               <button
                 type="button"
                 aria-hidden
