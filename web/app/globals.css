@@ -5189,9 +5189,9 @@ input.switch:focus-visible {
 .warp-tb-cell.actions .warp-tb-del:hover { color: #ef4444; }
 
 .warp-tb-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 0.25rem 0.5rem; border-radius: var(--corner-lg);
-  line-height: 0.8rem; font-size: 0.75rem; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 25px; padding: 0 8px; border-radius: 9999px;
+  font-size: 12px; font-weight: 500;
   margin-right: 4px;
 }
 .warp-tb-badge.green  { border: 1px solid var(--st-green-bd); background-color: var(--st-green-bg); color: var(--st-green); }
@@ -6435,3 +6435,30 @@ input.switch:focus-visible {
   box-shadow: var(--shadow-sm); transition: background-color .12s, color .12s;
 }
 .warp-sb-reopen:hover { color: var(--body-color); background: var(--bg-whitesmoke); }
+
+/* Linear settings-list: rows with divider, not separate boxes */
+.lin-list {
+  border: 1px solid var(--hairline);
+  border-radius: var(--corner-lg);
+  background: var(--white);
+  overflow: hidden;
+}
+.lin-list > * { position: relative; }
+.lin-list > *:not(:last-child)::after {
+  content: ""; position: absolute; bottom: 0; left: 14px; right: 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.lin-list-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 14px; min-height: 48px;
+}
+.lin-card + .lin-card { margin-top: 12px; }
+
+/* Linear button group: segmented, divider between */
+.lin-btn-group { display: inline-flex; }
+.lin-btn-group > button {
+  border-radius: 0; border-width: 0; box-shadow: none;
+}
+.lin-btn-group > button:first-child { border-top-left-radius: var(--corner); border-bottom-left-radius: var(--corner); }
+.lin-btn-group > button:last-child { border-top-right-radius: var(--corner); border-bottom-right-radius: var(--corner); }
+.lin-btn-group > button:not(:first-child) { border-left: 1px solid var(--hairline); }
