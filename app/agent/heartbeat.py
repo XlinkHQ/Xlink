@@ -1,21 +1,17 @@
 from __future__ import annotations
 
-import hashlib
 import hmac
 import uuid
 from datetime import UTC, datetime
 
 from app.core.exceptions import AuthenticationError, NotFoundError
+from app.core.security import hash_token as hash_agent_token
 from app.domain.node import Node, NodeStatus
 from app.events.bus import EventBus
 from app.events.models import NodeOffline, NodeRecovered
 from app.repositories.node import NodeRepository
 
 _TOKEN_HASH_KEY = "agent_token_hash"
-
-
-def hash_agent_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class NodeHeartbeatService:

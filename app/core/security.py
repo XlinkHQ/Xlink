@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -13,6 +14,11 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 
 from app.core.config import Settings, get_settings
 from app.core.exceptions import AuthenticationError
+
+
+def hash_token(token: str) -> str:
+    """SHA-256 hex digest of an opaque token (API keys, agent tokens, etc.)."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class TokenType(StrEnum):

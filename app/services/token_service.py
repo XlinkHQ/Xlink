@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import hashlib
+import hmac
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.core.config import Settings
 from app.core.exceptions import AuthenticationError
@@ -11,6 +11,7 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    hash_token as _hash_token,
 )
 from app.domain.refresh_token import RefreshToken
 from app.domain.user import User
@@ -18,8 +19,7 @@ from app.repositories.refresh_token import RefreshTokenRepository
 from app.schemas.auth import TokenPair
 
 
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+_REUSE_GRACE_SECONDS = 10
 
 
 class TokenService:
@@ -81,12 +81,25 @@ class TokenService:
 
         if record is None:
             existing = await self._repo.get_by_jti(jti)
-            if existing is not None and existing.token_hash == token_hash:
+            if existing is not None and hmac.compare_digest(existing.token_hash, token_hash):
+                revoked_at = existing.updated_at
+                if revoked_at is not None and revoked_at.tzinfo is None:
+                    revoked_at = revoked_at.replace(tzinfo=UTC)
+                grace_cutoff = datetime.now(UTC) - timedelta(seconds=_REUSE_GRACE_SECONDS)
+                if revoked_at is not None and revoked_at >= grace_cutoff:
+                    if existing.grace_used:
+                        await self._repo.revoke_all_for_user(existing.user_id)
+                        raise AuthenticationError(
+                            "Refresh token already replayed during grace period.",
+                            code="token_reuse",
+                        )
+                    await self._repo.mark_grace_used(existing.jti)
+                    return existing
                 await self._repo.revoke_all_for_user(existing.user_id)
                 raise AuthenticationError("Refresh token reuse detected.", code="token_reuse")
             raise AuthenticationError("Unknown refresh token.", code="token_invalid")
 
-        if record.token_hash != token_hash:
+        if not hmac.compare_digest(record.token_hash, token_hash):
             await self._repo.revoke_all_for_user(record.user_id)
             raise AuthenticationError("Refresh token mismatch.", code="token_invalid")
 
