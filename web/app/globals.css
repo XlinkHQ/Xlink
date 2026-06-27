@@ -5609,3 +5609,9 @@ input.switch:focus-visible {
 @media (min-width: 769px) {
   .warp-mobilebar { display: none; }
 }
+
+.xlink-dark .warp-alert { background-color: #0b0b0b; border: 1px solid rgba(255,255,255,0.12); color: #fff; }
+.xlink-dark .warp-ico-close { background-color: rgba(239,68,68,0.18); }
+.xlink-dark .warp-ico-check { background-color: rgba(31,136,61,0.20); }
+.xlink-dark .warp-code-preview { background: #0b0b0b; border-color: rgba(255,255,255,0.12); }
+.xlink-dark .warp-confirm-input:focus { background: #161616; }

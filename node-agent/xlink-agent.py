@@ -346,11 +346,25 @@ def build_wireguard_config(clients: list[dict]) -> str:
     if not priv:
         raise RuntimeError("wireguard: no private key in settings or XLINK_WG_PRIVATE_KEY")
     addr = str(s0.get("address") or "10.8.0.1/24").strip()
+    wan = "$(ip route list default | awk '{print $5; exit}')"
+    post_up = (
+        "sysctl -w net.ipv4.ip_forward=1; "
+        f"iptables -t nat -A POSTROUTING -o {wan} -j MASQUERADE; "
+        "iptables -A FORWARD -i %i -j ACCEPT; "
+        "iptables -A FORWARD -o %i -j ACCEPT"
+    )
+    post_down = (
+        f"iptables -t nat -D POSTROUTING -o {wan} -j MASQUERADE; "
+        "iptables -D FORWARD -i %i -j ACCEPT; "
+        "iptables -D FORWARD -o %i -j ACCEPT"
+    )
     lines = [
         "[Interface]",
         f"ListenPort = {port}",
         f"PrivateKey = {priv}",
         f"Address = {addr}",
+        f"PostUp = {post_up}",
+        f"PostDown = {post_down}",
     ]
     for i, cl in enumerate(clients, start=2):
         creds = cl.get("credentials") or {}
