@@ -44,13 +44,26 @@
   --space-sm: 8px;
   --space-md: 16px;
   --space-lg: 20px;
-  --font-xs: 12px;
-  --font-base: 13px;
-  --font-sm: 12px;
-  --font-md: 14px;
-  --font-lg: 16px;
-  --font-xl: 18px;
-  --font-2xl: 24px;
+  /* font scale — exact Linear (am.css): micro 11 · mini 12 · small 13 · regular 15 · large 18 · title3 20 · title2 24 · title1 36 */
+  --font-micro: 0.6875rem;   /* 11 */
+  --font-mini: 0.75rem;      /* 12 */
+  --font-xs: 0.75rem;        /* 12 */
+  --font-small: 0.8125rem;   /* 13 — UI base */
+  --font-base: 0.8125rem;    /* 13 */
+  --font-sm: 0.75rem;        /* 12 */
+  --font-md: 0.8125rem;      /* 13 */
+  --font-regular: 0.9375rem; /* 15 */
+  --font-lg: 1.125rem;       /* 18 */
+  --font-xl: 1.125rem;       /* 18 */
+  --font-title3: 1.25rem;    /* 20 */
+  --font-2xl: 1.5rem;        /* 24 */
+  /* weights — Linear: light 300 · normal 450 · medium 500 (no bold per project rule) */
+  --weight-normal: 450;
+  --weight-medium: 500;
+  /* easing — Linear */
+  --ease-out-quint: cubic-bezier(.23, 1, .32, 1);
+  --ease-out-cubic: cubic-bezier(.215, .61, .355, 1);
+  --ease-in-out-cubic: cubic-bezier(.645, .045, .355, 1);
   --line-height: 1.4375;
   --white: #fcfcfd; /* surface — Linear bg-base */
   --bg-whitesmoke: #f5f5f5; /* subtle — Linear sidebar */
@@ -161,7 +174,7 @@ body {
   color: var(--body-color);
   font-family: var(--warp-font);
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 450;
   line-height: 1.4375;
   letter-spacing: -0.011em;
   font-feature-settings: "cv01", "cv03", "cv04", "ss03";
