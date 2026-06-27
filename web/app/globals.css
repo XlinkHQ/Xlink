@@ -5206,6 +5206,20 @@ input.switch:focus-visible {
 .warp-tb-row { height: 48px; user-select: none; border-radius: 8px; }
 .warp-tb-head { background-color: transparent; }
 .warp-tb-head > * { font-weight: 500; font-size: 0.75rem; color: var(--body-muted); }
+/* Sortable header buttons (Linear-style, arrow reveals on hover) */
+.warp-th-btn {
+  display: inline-flex; align-items: center; gap: 2px;
+  height: 24px; padding: 0 6px; margin: 0 -6px; border-radius: 6px;
+  border: none; background: transparent; cursor: pointer;
+  font: inherit; color: inherit;
+  transition: background-color .1s ease;
+}
+.warp-th-btn:hover { background: rgba(0,0,0,0.05); }
+.xlink-dark .warp-th-btn:hover { background: rgba(255,255,255,0.07); }
+.warp-th-arrow { opacity: 0; transition: opacity .1s ease, transform .12s ease; flex: none; }
+.warp-th-btn:hover .warp-th-arrow { opacity: .55; }
+.warp-th-arrow.is-active { opacity: 1; }
+.warp-th-arrow.is-asc { transform: rotate(180deg); }
 .warp-thead { background-color: transparent; }
 .warp-thead > th { color: #707070 !important; }
 .xlink-dark .warp-thead { background-color: transparent; }

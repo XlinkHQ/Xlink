@@ -76,6 +76,16 @@ export function NodesScreen() {
   const [detail, setDetail] = useState<NodeRead | null>(null);
   const [search, setSearch] = useState("");
   const [statsOpen, setStatsOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<number | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const onSort = (i: number) => {
+    if (sortKey === i) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(i);
+      setSortDir("asc");
+    }
+  };
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["nodes"] });
   const act = async (fn: () => Promise<unknown>, ok?: string) => {
@@ -96,6 +106,25 @@ export function NodesScreen() {
     : nodes;
   const online = nodes.filter((n) => isNodeOnline(n.status)).length;
   const totalUsers = nodes.reduce((s, n) => s + n.current_users, 0);
+
+  const sortVal = (n: NodeRead, key: number): string | number => {
+    switch (key) {
+      case 1: return n.name.toLowerCase();
+      case 2: return `${n.host}:${n.port}`.toLowerCase();
+      case 3: return n.status.toLowerCase();
+      case 4: return n.current_users;
+      case 5: return n.last_seen_at ? new Date(n.last_seen_at).getTime() : 0;
+      default: return n.name.toLowerCase();
+    }
+  };
+  const sorted = sortKey == null
+    ? filtered
+    : [...filtered].sort((a, b) => {
+        const av = sortVal(a, sortKey);
+        const bv = sortVal(b, sortKey);
+        const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+        return sortDir === "asc" ? cmp : -cmp;
+      });
 
   return (
     <div className="w-full">
@@ -173,15 +202,21 @@ export function NodesScreen() {
           </>
         }
       >
-        <WarpHead cols={["", "Name", "Host", "Status", "Users", "Last Seen"]} actions />
+        <WarpHead
+          cols={["", "Name", "Host", "Status", "Users", "Last Seen"]}
+          actions
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={onSort}
+        />
         {query.isLoading ? (
           <WarpSkeleton />
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <WarpEmpty icon="fa-server">
             {search ? "No matches." : "No nodes yet."}
           </WarpEmpty>
         ) : (
-          filtered.map((n, i) => (
+          sorted.map((n, i) => (
             <WarpRow
               key={n.id}
               onClick={() => setDetail(n)}

@@ -159,14 +159,63 @@ export function WarpButton({
   );
 }
 
-export function WarpHead({ cols, actions }: { cols: ReactNode[]; actions?: boolean }) {
+function SortArrow({ dir }: { dir?: "asc" | "desc" }) {
+  return (
+    <svg
+      className={`warp-th-arrow${dir ? " is-active" : ""}${dir === "asc" ? " is-asc" : ""}`}
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      role="img"
+      focusable="false"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="currentColor"
+    >
+      <path d="M11.5361 10.2745C11.8024 10.0029 11.8249 9.56807 11.5762 9.26961C11.3275 8.97139 10.8961 8.91526 10.5811 9.12801L10.5195 9.17391L8.00001 11.2735L5.48048 9.17391L5.41895 9.12801C5.10388 8.91526 4.67252 8.97139 4.42384 9.26961C4.17512 9.56807 4.19758 10.0029 4.46387 10.2745L4.51954 10.3263L7.51954 12.8263C7.79767 13.058 8.20234 13.058 8.48048 12.8263L11.4805 10.3263L11.5361 10.2745Z" />
+      <path d="M8.75 12.25C8.75 12.6642 8.41421 13 8 13C7.58579 13 7.25 12.6642 7.25 12.25L7.25 3.75C7.25 3.33579 7.58579 3 8 3C8.41421 3 8.75 3.33579 8.75 3.75V12.25Z" />
+    </svg>
+  );
+}
+
+export function WarpHead({
+  cols,
+  actions,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  cols: ReactNode[];
+  actions?: boolean;
+  sortKey?: number | null;
+  sortDir?: "asc" | "desc";
+  onSort?: (index: number) => void;
+}) {
   return (
     <div className="warp-tb-head">
-      {cols.map((c, i) => (
-        <span key={i} className="warp-tb-cell">
-          {c}
-        </span>
-      ))}
+      {cols.map((c, i) => {
+        const sortable = Boolean(onSort) && c != null && c !== "";
+        const active = sortKey === i;
+        if (!sortable) {
+          return (
+            <span key={i} className="warp-tb-cell">
+              {c}
+            </span>
+          );
+        }
+        return (
+          <span key={i} className="warp-tb-cell">
+            <button
+              type="button"
+              className={`warp-th-btn${active ? " is-active" : ""}`}
+              onClick={() => onSort?.(i)}
+            >
+              <span>{c}</span>
+              <SortArrow dir={active ? sortDir : undefined} />
+            </button>
+          </span>
+        );
+      })}
       {actions ? <span className="warp-tb-cell warp-tb-cell-actions" /> : null}
     </div>
   );
