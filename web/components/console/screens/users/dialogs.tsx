@@ -196,6 +196,8 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
   const toggleProfile = (id: string) =>
     setProfileIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const [limitGib, setLimitGib] = useState("");
+  const [reset, setReset] = useState("no_reset");
+  const [devices, setDevices] = useState("");
   const [expireStrategy, setExpireStrategy] = useState<"never" | "fixed_date" | "start_on_first_use">(
     "never",
   );
@@ -211,6 +213,8 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
         username: username.trim(),
         full_name: note.trim() || null,
         data_limit_bytes: limitGib ? Math.round(Number(limitGib) * 1024 ** 3) : null,
+        data_reset_strategy: reset,
+        device_limit: devices ? Number(devices) : null,
         expire_strategy: expireStrategy,
         expire_at:
           expireStrategy === "fixed_date" && expire
@@ -289,7 +293,12 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
           <Button
             type="submit"
             variant="primary"
-            disabled={busy || !/^[a-zA-Z0-9_]{3,64}$/.test(username.trim())}
+            disabled={
+              busy ||
+              !/^[a-zA-Z0-9_]{3,64}$/.test(username.trim()) ||
+              (expireStrategy === "fixed_date" && !expire) ||
+              (expireStrategy === "start_on_first_use" && (!usageDays || Number(usageDays) < 1))
+            }
           >
             {busy ? "Creating…" : "Create"}
           </Button>
@@ -301,6 +310,17 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
       </Field>
       <Field label="Data limit (GiB)">
         <Input type="number" min="0" step="0.1" value={limitGib} onChange={(e) => setLimitGib(e.target.value)} placeholder="unlimited" />
+      </Field>
+      <Field label="Auto-reset usage">
+        <Select value={reset} onChange={(e) => setReset(e.target.value)}>
+          <option value="no_reset">No reset</option>
+          <option value="day">Daily</option>
+          <option value="week">Weekly</option>
+          <option value="month">Monthly</option>
+        </Select>
+      </Field>
+      <Field label="Device limit">
+        <Input type="number" min="0" value={devices} onChange={(e) => setDevices(e.target.value)} placeholder="unlimited" />
       </Field>
       <Field label="Expiration">
         <Select
@@ -322,8 +342,8 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
           <Input type="number" min="1" value={usageDays} onChange={(e) => setUsageDays(e.target.value)} placeholder="e.g. 30" />
         </Field>
       ) : null}
-      <Field label="Note (optional)">
-        <Input value={note} onChange={(e) => setNote(e.target.value)} autoComplete="off" />
+      <Field label="Full name (optional)">
+        <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={255} autoComplete="off" />
       </Field>
       <Field label="Services" hint="pick one or more — grants their inbounds on create">
         <div className="flex flex-wrap gap-1.5">

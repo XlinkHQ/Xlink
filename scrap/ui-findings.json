@@ -1,0 +1,498 @@
+[
+  {
+    "title": "Broken indentation in console main content area",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/console.tsx:139",
+    "severity": "critical",
+    "detail": "The ternary conditional expression for rendering screens is not properly indented. It starts at line 139 directly with `{active === \"Overview\" ? (` without matching indentation from the opening `<div>` on line 138. This breaks the visual code structure and makes it hard to maintain.",
+    "fix": "Add proper indentation (two spaces) to align the ternary expression with the opening div tag: change line 139 from `{active === \"Overview\" ?` to `          {active === \"Overview\" ?` (adding two spaces at the beginning).",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "Stale alerts always rendered in login screen",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/login.tsx:58-86",
+    "severity": "high",
+    "detail": "Both success and error alert containers (lines 59-72 and 73-86) are always rendered in the DOM, even when `alert` is null. They have conditional `className` but are never removed from the tree. This causes accessibility issues (screen readers see hidden alerts) and DOM bloat. The conditional rendering should skip the entire alert element when alert is null.",
+    "fix": "Wrap both alert divs in a conditional: Change `<div className=\"warp-alert-warpper\">` to conditionally render the entire wrapper, or move the conditional to wrap each alert div. Better approach: `{alert ? (<div className=\"warp-alert warp-alert-style\">...) : null}` for each alert type.",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "Missing keys in table header map",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/warp-table.tsx:165-166",
+    "severity": "high",
+    "detail": "The WarpHead component maps over `cols` array using index as key: `cols.map((c, i) => (<span key={i}...`. Index keys are anti-pattern in React because they break list identity if items reorder, causing stale rendered content. This affects all tables using WarpHead (Users, Nodes, Profiles, Groups, Admins).",
+    "fix": "Since cols are usually strings/ReactNodes without stable identifiers, consider either: 1) Use stable unique IDs if available from data, 2) Accept that header cells don't reorder (acceptable for table headers as they're typically static), or 3) Refactor to pass stable keys alongside col values.",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "Missing keys in table row cells map",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/warp-table.tsx:201-204",
+    "severity": "high",
+    "detail": "The WarpRow component maps over `cells` array using index as key: `cells.map((c, i) => (<span key={i}...`. This causes React to incorrectly preserve DOM elements when row content changes, leading to stale state in form inputs or interactive elements within cells. Affects all table rows using WarpRow.",
+    "fix": "Pass stable identifiers with cells data. Change signature to accept both cells and cellKeys, then use: `cells.map((c, i) => (<span key={cellKeys[i]} ... ))` or refactor cells to contain stable id properties.",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "Stale link key in subscription QR modal",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/access.tsx:358-359",
+    "severity": "high",
+    "detail": "In UserSubscription component, links are keyed by `${link}-${i}` (index-based fallback). This causes incorrect re-rendering if link list changes order. More critically, in QrModal at line 435, QR items are keyed by `${it.label}-${it.value}` which is fragile if values contain special characters and duplicates can exist.",
+    "fix": "Generate stable UUIDs for each link at query time, or use a combination of link protocol + index: `key={`${link.split(\"://\")[0]}-${i}`}`. Better: Store links with stable IDs in the data structure.",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "Missing aria-label for accessible table row buttons",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/index.tsx:372-383",
+    "severity": "medium",
+    "detail": "Table rows are marked as `role=\"button\"` with `tabIndex={0}` for keyboard navigation (good), but lack `aria-label` describing what action the button performs. Screen reader users cannot understand the intent. The label should be descriptive like \"View/Edit user {username}\".",
+    "fix": "Add `aria-label={`View details for user ${u.username}`}` to the row div element.",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "Inconsistent dialog/modal structure missing form role",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/ui/dialog.tsx:118-126",
+    "severity": "medium",
+    "detail": "The DialogHost form element uses `role=\"dialog\"` but the overlay div uses `role=\"presentation\"`. When a user clicks the scrim (overlay), the dialog closes. However, the form itself should have `role=\"dialog\"` and be wrapped properly. The overlay should likely have `role=\"none\"` or no role. This is confusing for screen readers.",
+    "fix": "Move `role=\"dialog\"` and `aria-modal=\"true\"` to the form. Change overlay div to `role=\"none\"` instead of `role=\"presentation\"`.",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "Missing accessibility labels on mobile navigation",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/console.tsx:104-110",
+    "severity": "medium",
+    "detail": "When mobile sidebar is open, a scrim button is rendered with `aria-label=\"Close menu\"` but no `type=\"button\"` - this is already correct. However, the scrim button could benefit from `role=\"button\"` or better semantic HTML. More importantly, keyboard users need to be able to close this with Escape key - currently only mouse clicks work on the scrim.",
+    "fix": "Add keydown handler to scrim button to close on Escape: `onKeyDown={(e) => e.key === \"Escape\" && setNavOpen(false)}`.",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "Empty conditional rendering creates unnecessary DOM nodes",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/console.tsx:104-111",
+    "severity": "low",
+    "detail": "The scrim div is conditionally rendered only when navOpen is true, which is good. However, it uses `onClick={() => setNavOpen(false)}` directly on the scrim with `className=\"warp-sb-scrim\"`. This pattern is correct, but there's a missed opportunity: the button inside should receive focus when opened (currently just rendered, not focused).",
+    "fix": "Add `autoFocus` to the scrim button or use useEffect to focus it when navOpen becomes true: `useEffect(() => { scrimRef.current?.focus(); }, [navOpen])`.",
+    "source": "ui-bugs"
+  },
+  {
+    "title": "FontAwesome fa-* icon strings still in use via custom Icon resolver",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/admins/index.tsx:91",
+    "severity": "high",
+    "detail": "WarpEmpty uses icon=\"fa-user-shield\" which is handled by resolveIcon() that maps fa- prefixes to lucide-react. This pattern is brittle and makes icon intent unclear.",
+    "fix": "Replace icon=\"fa-user-shield\" with direct import: <ShieldCheck size={28} /> in WarpEmpty, or update WarpEmpty to accept LucideIcon component directly instead of string.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "FontAwesome fa-server icon string in nodes screen",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/nodes/index.tsx:119",
+    "severity": "high",
+    "detail": "WarpEmpty icon=\"fa-server\" resolves to Box. String-based icon lookup couples component to resolver and obscures intent.",
+    "fix": "Replace icon=\"fa-server\" with direct component: import { Package } from 'lucide-react'; use <Package size={28} /> directly",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "FontAwesome fa-globe icon string in profiles screen",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/profiles/index.tsx:101",
+    "severity": "high",
+    "detail": "WarpEmpty icon=\"fa-globe\" resolves to ServerCog. String lookup pattern same as above.",
+    "fix": "Replace icon=\"fa-globe\" with import { Globe } from 'lucide-react'; use <Globe size={28} /> directly",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "FontAwesome fa-user icon string in users screen",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/index.tsx:221",
+    "severity": "high",
+    "detail": "WarpEmpty icon=\"fa-user\" resolves to User. Continues string-based icon pattern.",
+    "fix": "Replace icon=\"fa-user\" with import { User } from 'lucide-react'; use <User size={28} /> directly",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "FontAwesome fa-layer-group icon string in groups screen",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/groups/index.tsx:101",
+    "severity": "high",
+    "detail": "WarpEmpty icon=\"fa-layer-group\" resolves to Server. String lookup keeps tech debt.",
+    "fix": "Replace icon=\"fa-layer-group\" with import { Layers } from 'lucide-react'; use <Layers size={28} /> directly",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Custom inline SVG CheckIcon duplicated across login and toast",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/login.tsx:143-148",
+    "severity": "medium",
+    "detail": "IconCheck() function (M20 6 9 17l-5-5 path) is a check mark SVG duplicated in login.tsx and toast.tsx. Should use lucide Check component.",
+    "fix": "Replace function with: import { Check } from 'lucide-react'; render <Check size={20} /> instead. Extract to shared util if needed for consistency.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Custom inline SVG CloseIcon duplicated across login and toast",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/login.tsx:150-154",
+    "severity": "medium",
+    "detail": "IconClose() function (M18 6 6 18M6 6l12 12 path) is an X mark SVG duplicated in login.tsx and toast.tsx. Should use lucide X component.",
+    "fix": "Replace function with: import { X } from 'lucide-react'; render <X size={20} /> instead. Remove duplicate definitions.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Custom inline SVG CloseIcon in toast.tsx duplicates login.tsx version",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/ui/toast.tsx:28-33",
+    "severity": "medium",
+    "detail": "IconClose() defined again (identical SVG path). Duplicated from login.tsx.",
+    "fix": "Replace with: import { X } from 'lucide-react'; render <X size={20} />. Remove custom function entirely.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Custom inline SVG CheckIcon in toast.tsx duplicates login.tsx version",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/ui/toast.tsx:21-26",
+    "severity": "medium",
+    "detail": "IconCheck() defined again (identical SVG path). Duplicated from login.tsx.",
+    "fix": "Replace with: import { Check } from 'lucide-react'; render <Check size={20} />. Remove custom function entirely.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Icon size 28 only used in WarpEmpty empty states (inconsistent with button icons)",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/warp-table.tsx:328",
+    "severity": "low",
+    "detail": "WarpEmpty uses size={28} for emphasis while all toolbar buttons use size={14}. Large empty-state icons are appropriate but should be consistent across the design system.",
+    "fix": "Document this as intentional design pattern: size={28} for empty states (emphasis), size={14} for button CTAs, size={16} for nav items.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Icon size 20 used once in console.tsx Menu (should be 16 or 14)",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/console.tsx:122",
+    "severity": "low",
+    "detail": "Menu icon at size={20} is oversized compared to nav icons (16) and button icons (14). Appears to be outlier.",
+    "fix": "Change Menu size={20} to size={16} for consistency with navigation sizing pattern.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Icon size 13 used for search/secondary actions (mixed with 12 and 14)",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/nodes/index.tsx:79",
+    "severity": "low",
+    "detail": "Search icon uses size={13}, row menu icons use size={12}, button icons use size={14}. Inconsistent sizing for similar UI roles.",
+    "fix": "Standardize: secondary/input icons = 13, row actions/tight menu = 12, buttons/CTAs = 14. Document this hierarchy in design system.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Icon size 15 used once for ChevronDown dropdown (should be 14 or 16)",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/groups/dialog.tsx:102",
+    "severity": "low",
+    "detail": "ChevronDown in dialog picker uses size={15}. Odd size; not used elsewhere. Should align to grid (14, 16).",
+    "fix": "Change ChevronDown size={15} to size={14} to match button icon sizing standard.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Icon size 10 used for checkboxes (design system gap)",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:118",
+    "severity": "low",
+    "detail": "Check icons in checkbox selections use size={10}. No design system pattern documented for checkbox icons.",
+    "fix": "Define checkbox icon size in design system. Recommend size={12} for visibility in lists. Change all size={10} Check instances to size={12}.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Inconsistent icon system: WarpEmpty icon prop accepts string but all new lucide usage is component-direct",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/warp-table.tsx:324",
+    "severity": "high",
+    "detail": "WarpEmpty accepts icon?: string and uses <Icon name={icon} size={28} /> (string-based resolver). All new components import lucide components directly. Mixed patterns create maintainability debt.",
+    "fix": "Refactor WarpEmpty to accept icon?: LucideIcon and render directly: type WarpEmpty = { icon?: LucideIcon; ... }. Then update all WarpEmpty calls from icon=\"fa-*\" to icon={ShieldCheck}.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Icon resolver in lib/icons.tsx maps fa- prefixes but creates indirection",
+    "file": "/Users/parsa/Desktop/Xlink/web/lib/icons.tsx:56-58",
+    "severity": "medium",
+    "detail": "resolveIcon() and Icon() component provide a layer of indirection that makes icons harder to trace and refactor. String lookup pattern is legacy.",
+    "fix": "Remove resolveIcon() and Icon() functions entirely. Update all callers to use lucide components directly via imports. Keep ICONS mapping only as reference doc during migration.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Icon mapping in lib/icons.tsx uses incorrect lucide names for some FA icons",
+    "file": "/Users/parsa/Desktop/Xlink/web/lib/icons.tsx:26-54",
+    "severity": "medium",
+    "detail": "Map shows: 'server' -> Box (should be Server), 'layer-group' -> Server (inconsistent naming). Map is confusing and error-prone.",
+    "fix": "Replace entire ICONS mapping with clear lucide imports at top-level, removing the indirect resolver entirely. Use: import { Box, Server, ShieldCheck, User, Users } from 'lucide-react'.",
+    "source": "icon-consistency"
+  },
+  {
+    "title": "Terminal uses hardcoded monospace font stack instead of --font-mono variable",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:1109",
+    "severity": "high",
+    "detail": "The .terminal class uses `font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", monospace;` instead of the standard --font-mono CSS variable which should be \"IBM Plex Mono\".",
+    "fix": "Change to `font-family: var(--font-mono);` for consistency with --font-mono: \"IBM Plex Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", monospace",
+    "source": "font-consistency"
+  },
+  {
+    "title": "output-textarea uses generic monospace instead of --font-mono",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:1646",
+    "severity": "high",
+    "detail": ".output-textarea class has `font-family: monospace;` which defaults to system monospace, not IBM Plex Mono as intended.",
+    "fix": "Change to `font-family: var(--font-mono);`",
+    "source": "font-consistency"
+  },
+  {
+    "title": "output-pre uses generic monospace instead of --font-mono",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:1659",
+    "severity": "high",
+    "detail": ".output-pre class has `font-family: monospace;` which doesn't use the unified IBM Plex Mono font.",
+    "fix": "Change to `font-family: var(--font-mono);`",
+    "source": "font-consistency"
+  },
+  {
+    "title": "warp-json-pre and warp-json-ta have fallback monospace fonts in --font-mono variable usage",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:4465",
+    "severity": "medium",
+    "detail": "Uses `font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);` with incomplete fallbacks (missing Monaco, Consolas, Liberation Mono). The fallback differs from the primary --font-mono definition.",
+    "fix": "Change to `font-family: var(--font-mono);` (remove custom fallbacks to rely on root --font-mono)",
+    "source": "font-consistency"
+  },
+  {
+    "title": "warp-code-pre and warp-code-ta have incomplete monospace fallbacks",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:4518",
+    "severity": "medium",
+    "detail": "Uses `font-family: var(--font-mono, ui-monospace, Menlo, monospace);` with incomplete fallbacks missing Monaco, SFMono-Regular, Consolas, Liberation Mono.",
+    "fix": "Change to `font-family: var(--font-mono);`",
+    "source": "font-consistency"
+  },
+  {
+    "title": "warp-code-lines has incomplete monospace fallbacks",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:4559",
+    "severity": "medium",
+    "detail": "Uses `font-family: var(--font-mono, ui-monospace, Menlo, monospace);` which is incomplete and inconsistent with root --font-mono definition.",
+    "fix": "Change to `font-family: var(--font-mono);`",
+    "source": "font-consistency"
+  },
+  {
+    "title": "Inline font-family in subscription template HTML uses hardcoded sans-serif",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/subscription-settings.tsx:38",
+    "severity": "low",
+    "detail": "Preview HTML fallback uses `font-family:sans-serif` instead of specifying Inter Variable. This is a user-facing preview, so it should ideally demonstrate the unified font system.",
+    "fix": "Change to `font-family:'Inter Variable',system-ui,sans-serif` for consistency",
+    "source": "font-consistency"
+  },
+  {
+    "title": "Custom HTML template starter uses system-ui,sans-serif instead of Inter Variable",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/subscription-settings.tsx:47",
+    "severity": "low",
+    "detail": "Template starter code shows `body{font-family:system-ui,sans-serif;...}` as a reference implementation. Should showcase the unified font stack.",
+    "fix": "Change to `font-family:'Inter Variable',system-ui,sans-serif` to demonstrate best practice",
+    "source": "font-consistency"
+  },
+  {
+    "title": "Button font-size is missing from .btn base definition",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:453",
+    "severity": "medium",
+    "detail": "The .btn class definition at line 453-468 does not explicitly set font-size, relying on inheritance. This can lead to inconsistent button sizes across the app. Body has 14px, but buttons should be explicitly defined.",
+    "fix": "Add `font-size: 14px;` to the .btn class definition (line 463, after font-weight)",
+    "source": "font-consistency"
+  },
+  {
+    "title": "Identity element has 15px font while menu items use --font-base (12px)",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:206-217",
+    "severity": "medium",
+    "detail": ".identity (topbar identity) has `font-size: 15px;` while .menu items use `font-size: var(--font-base)` (12px). Inconsistent sizing for similar UI roles.",
+    "fix": "Consider whether 15px is correct for identity or if it should use a consistent token like --font-md (14px) or justify the difference",
+    "source": "font-consistency"
+  },
+  {
+    "title": "wndw-titlebar-title uses hardcoded 16px instead of font size token",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:890-895",
+    "severity": "low",
+    "detail": ".wndw-titlebar-title uses `font-size: 16px;` which is a hardcoded value. Should use a consistent token like --font-lg (14px) or a new --font-title token.",
+    "fix": "Consider replacing hardcoded 16px with a consistent token (may need --font-lg: 16px token if 16px is intentional)",
+    "source": "font-consistency"
+  },
+  {
+    "title": "breadcrumbs h1 uses hardcoded 16px instead of font size token",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:1221-1225",
+    "severity": "low",
+    "detail": ".breadcrumbs h1 has `font-size: 16px;` hardcoded, inconsistent with the token-based font sizing strategy.",
+    "fix": "Replace with a consistent font size token",
+    "source": "font-consistency"
+  },
+  {
+    "title": "Unused CSS class: .warp-k",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:3989",
+    "severity": "low",
+    "detail": "CSS class '.warp-k' is defined but never referenced in any TSX/TS files in the codebase. Grep across all component files shows zero usage.",
+    "fix": "Safe to delete line 3989: '.warp-k { color: var(--warp-silver); }'. No components use this class.",
+    "source": "dead-code"
+  },
+  {
+    "title": "Unused CSS classes: .warp-chips and .warp-chip",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:4928-4940",
+    "severity": "low",
+    "detail": "CSS classes '.warp-chips' and '.warp-chip' are defined but never used in any component. Searched all TSX/TS files and found no references to these classes.",
+    "fix": "Safe to delete lines 4928-4940 (.warp-chips and .warp-chip styles and their variants). No active components use these classes.",
+    "source": "dead-code"
+  },
+  {
+    "title": "Unused CSS class: .warp-online",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:5125-5135",
+    "severity": "low",
+    "detail": "CSS class '.warp-online' and its variants are defined but never referenced in any TSX/TS files. Only '.warp-ob' prefixed classes are used in actual components.",
+    "fix": "Safe to delete lines 5125-5135. Remove the entire .warp-online class definition and all its pseudo-class variants and dark mode overrides.",
+    "source": "dead-code"
+  },
+  {
+    "title": "Unused export: gibToBytes() in format utility",
+    "file": "/Users/parsa/Desktop/Xlink/web/lib/format.ts:15-17",
+    "severity": "medium",
+    "detail": "The function 'gibToBytes()' is exported but never imported or used anywhere in the codebase. Grep search across all source files shows it's only defined, never called.",
+    "fix": "Safe to delete lines 15-17 (the entire gibToBytes function). The bytes() function is actively used, but gibToBytes is dead code. If GiB conversion is needed in future, create a new function then.",
+    "source": "dead-code"
+  },
+  {
+    "title": "Duplicate relative time formatting functions",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/api-keys.tsx:20-28 and /Users/parsa/Desktop/Xlink/web/components/console/screens/audit-log.tsx:16-23",
+    "severity": "medium",
+    "detail": "Both api-keys.tsx and audit-log.tsx define identical local functions 'relTime()' that format ISO timestamps to relative time strings. A shared utility 'relativeTime()' already exists in nodes/util.ts (line 7) but is not reused here. This is code duplication.",
+    "fix": "Consider consolidating: Import and use 'relativeTime()' from '/components/console/screens/nodes/util.ts' in both files. This reduces duplication and improves maintainability. The local implementations have minor output differences (e.g., date formatting), so test after consolidation.",
+    "source": "dead-code"
+  },
+  {
+    "title": "Inconsistent border-radius across cards and UI elements",
+    "file": "app/globals.css:3939,4000,4188,4346,4388,4403,4511",
+    "severity": "medium",
+    "detail": "Cards and buttons use 10px (hard-coded) instead of CSS token. The design system defines var(--corner): 6px, var(--corner-md): 8px, but legacy .warp-card (3939), .warp-radial-bar (4000), .warp-si-box (4188), .warp-tb-stat (4346), .warp-tb-button (4388), .warp-tb-search (4403), and .warp-code-editor (4511) all override to 10px. Also mixed hardcoded 8px, 9px, 11px, 12px elsewhere. Linear-style design requires unified radius.",
+    "fix": "Standardize on two radii: --corner: 6px (buttons, inputs, small components) and --corner-md: 10px (cards, panels). Update all .warp-* card classes to use var(--corner-md) instead of hardcoded 10px. Remove ad-hoc 8px, 9px, 11px, 12px values. Tailwind already maps to md (via rounded-md).",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Button height inconsistency across UI systems",
+    "file": "app/globals.css:458,3667,4386,4402",
+    "severity": "high",
+    "detail": ".btn uses min-height: 28px (line 458, var(--input-height)), but .warp-form-signin input[type=submit] uses hardcoded 12px padding (line 3667), and .warp-tb-button uses height: 38px (line 4386), while .warp-tb-search uses height: 38px (line 4402). Also React Button component in button.tsx uses h-9 (36px) and h-10 (40px). No unified button sizing across three UI systems (legacy, warp, React).",
+    "fix": "Define --button-height-md: 40px, --button-height-sm: 36px in CSS vars. Update .btn to min-height: var(--button-height-md), .warp-tb-button to height: var(--button-height-md), all inputs to min-height: var(--input-height) (28px is too small). React Button sizes align if h-10 maps to 40px (update tailwind or component).",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Padding inconsistency in buttons and form controls",
+    "file": "app/globals.css:459,3615,3667,4387,4402,4418",
+    "severity": "high",
+    "detail": ".btn uses px-3 (12px) and py-2 implicit (React), .warp-form-signin input uses 0.85rem 1rem (13.6px/16px), .warp-form-signin submit uses 12px 32px, .warp-tb-button uses padding: 0 14px (line 4387), .warp-tb-search uses padding: 0 14px (line 4402), and table rows use padding: 0.7rem 1rem (11.2px/16px). No consistency in X/Y axis padding.",
+    "fix": "Define --input-px: 12px (X) and --input-py: 8px (Y) for default control padding. Update .btn to px-[var(--input-px)] py-[var(--input-py)], .warp-tb-button padding to var(--input-px) var(--input-py), warp input forms to match. Table rows should use consistent padding.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Gap/spacing inconsistency in flexbox layouts",
+    "file": "app/globals.css:457,711,906,1543,3929,4385",
+    "severity": "medium",
+    "detail": "gap uses mix of var(--space-xs) (6px), 8px, 10px, 12px, 14px, 16px hardcoded. .btn gap: var(--space-xxs) (4px) but .warp-grid-2 gap: 0 1.4rem (22.4px), .warp-tb-button gap: 6px. No alignment to design tokens. Should follow 4px/8px/12px/16px scale.",
+    "fix": "Replace all hardcoded gap values: 6px\u2192var(--space-xs), 8px\u2192var(--space-sm), 10px\u2192var(--space-sm), 12px\u2192var(--space), 14px\u2192var(--space-md), 16px\u2192var(--space-md). Define consistent scale in --s-* tokens. Update .warp-grid-2 gap from 1.4rem to var(--space-lg).",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Missing or inconsistent focus states on interactive elements",
+    "file": "components/ui/button.tsx:35,components/ui/input.tsx:5",
+    "severity": "high",
+    "detail": "React Button component (button.tsx line 35) has no focus-visible outline defined in className. Input component (input.tsx line 5) defines focus:border-primary focus:shadow-focus-ring but no explicit focus-visible visual feedback. CSS has --focus-outline but React components don't consistently apply it. Keyboard users cannot see focus rings on many buttons.",
+    "fix": "Add focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:[outline-color:var(--focus-ring)] to Button component. Ensure all interactive elements (buttons, links, inputs) have visible 2px focus ring. Tailwind should map to shadow-focus-ring class with var(--focus-ring) color.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Empty state styling not standardized",
+    "file": "app/globals.css:2194-2205,2369-2412,4053-4056",
+    "severity": "medium",
+    "detail": "Empty states use different structures: .splash (2194) centers content with padding var(--space), .splash-icon uses 44x44 + 8px padding in circular bg, but .warp-log-empty (4036) uses simple centered text with 30px padding. No unified empty state card design. Missing consistent icon placeholder styling.",
+    "fix": "Create unified .empty-state component with: icon wrapper (56x56, bg-muted, rounded-lg), heading (16px, body-color), message (14px, body-muted), optional action button. Apply to all empty tables, logs, dashboards. Use consistent padding (var(--space-lg)).",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Color tokens used ad-hoc instead of CSS variables",
+    "file": "app/globals.css:3573,3610,3653,3674,3702,3742,3751,3766,3770,3813,3843,3864,3867,3878,3889,3938,3959,3965,3968-3973",
+    "severity": "high",
+    "detail": "Login form and warp components use hardcoded #000, #fff, #a9a9a9, #2a2a2a, #f8f8f8, #f4f4f4, #0e52fd, rgb(254 242 242), rgb(240 253 244) instead of design tokens. Root CSS defines colors but login/warp sections bypass them. Makes dark mode harder to maintain and inconsistent theming.",
+    "fix": "Map all hardcoded colors to tokens: #000\u2192var(--body-color), #fff\u2192var(--white), #707070\u2192var(--body-muted), #f8f8f8\u2192var(--bg-bright), #0e52fd\u2192var(--primary), #ef4444\u2192var(--red). Create --status-success, --status-error token for alert backgrounds. Update .warp-page, .warp-signin, .warp-alert, .warp-sb to use variables instead of hardcoded hex.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Table row padding differs from card/button standard",
+    "file": "app/globals.css:2146,4418",
+    "severity": "medium",
+    "detail": "Table cells use padding: var(--space-sm) var(--space-xs) (16px/6px), but table header uses 0 var(--space-xs), and .warp-tb-row uses 0.7rem 1rem (11.2px/16px). No unified row height or vertical padding. Should align with control height system (28px or 40px).",
+    "fix": "Define --table-row-height: 40px (matches button height). Update .table td padding to var(--space-xs) var(--space-sm) (6px/16px horizontal, minimum height 40px). Update .warp-tb-row to match (0.7rem 1rem is 11.2px/16px, change to var(--space-xs) var(--space-sm)).",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Inconsistent badge sizing and padding",
+    "file": "app/globals.css:60,4445,4446",
+    "severity": "medium",
+    "detail": "Status badge uses h-[18px] padding: 0 var(--space-sm) (line 2880), but .warp-tb-badge uses padding: 0.25rem 0.5rem (4px 8px, line 4445) and line-height: 0.8rem (12.8px). React Badge component uses h-[18px] px-2 (line 60). No unified badge size or padding across three systems.",
+    "fix": "Standardize badge to height: 24px, padding: 4px 8px, border-radius: 12px (pill shape). Use var(--corner-md) for radius. Update .status-badge, .warp-tb-badge, React Badge to uniform size. Define --badge-height: 24px CSS variable.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Input field styling split across three implementations",
+    "file": "app/globals.css:1240,1455,3606,components/ui/input.tsx:5",
+    "severity": "high",
+    "detail": "Form inputs defined three ways: CSS .form-row input (line 1240) uses height: 28px, .search-input input (line 1455) uses min-height: 28px, .warp-form-signin input (line 3606) uses height: implicit with padding 0.85rem 1rem (36.8px actual), React Input (input.tsx) uses h-10 (40px). Border-radius mixes var(--corner) (6px) and hardcoded values.",
+    "fix": "Unify input height to 40px (--input-height: 40px). All .form-row input, .warp-form-signin input, React Input use h-10 py-2 px-3. Border-radius: var(--corner-md) (8px). Remove min-height/height conflicts.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Page header/titlebar inconsistent across screens",
+    "file": "app/globals.css:859-868,1175-1182,3560-3577,components/console/screens/settings.tsx:72",
+    "severity": "medium",
+    "detail": ".wndw-titlebar uses min-height: 49px with padding var(--space-xxs) var(--space-sm) (2px 8px, actual ~33px), but .form-titlebar uses min-height: 49px with same padding, and Settings screen has .warp-set-topbar with different padding. No unified page header height, padding, or border treatment.",
+    "fix": "Define --page-header-height: 56px. Use consistently in .wndw-titlebar, .form-titlebar, .warp-set-topbar with padding: var(--space-sm) var(--space-md). Add border-bottom: 1px solid var(--hairline) to all. Ensure h2 font-size: 16px, line-height: 1.2.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Switch/toggle control size mismatch",
+    "file": "app/globals.css:633,634",
+    "severity": "medium",
+    "detail": "input.switch hardcoded to width: 36px height: 20px. No token defined. Misaligned with 40px button height standard. Toggle thumb (::before) uses 16px hardcoded for translateX.",
+    "fix": "Define --toggle-width: 44px, --toggle-height: 24px, --toggle-thumb: 20px. Update input.switch to use vars. Align with Material/Linear toggle proportions. Update thumb translateX to calc(var(--toggle-width) - var(--toggle-thumb) - 2px).",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Checkbox size and styling not standardized",
+    "file": "app/globals.css:2314-2322",
+    "severity": "low",
+    "detail": ".table input[type=checkbox] hardcoded to 14px width/height. Inconsistent with button/input height system. No focus-visible outline defined despite :focus-visible rule on line 2331.",
+    "fix": "Define --checkbox-size: 16px. Update .table input[type=checkbox] to width: var(--checkbox-size), height: var(--checkbox-size). Ensure focus-visible applies shadow-focus-ring color.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Sidebar and menu item spacing inconsistent",
+    "file": "app/globals.css:713-714,1858,3849-3850",
+    "severity": "medium",
+    "detail": "Menu items (.menu .group > a) use min-height: 28px, but .warp-sb-item uses padding: 0.5rem 1rem (8px 16px, implicit ~28px). Sidebar nav gaps vary: .menu .level-1 > li + li margin-top: var(--space-xxxs) (2px) but .warp-sb-group-margin-bottom: 6px (hardcoded).",
+    "fix": "Unify menu item height to 40px (--menu-item-height: 40px). Update .menu .group padding to var(--space-xs) var(--space-sm). Use .warp-sb-item padding: var(--space-xs) var(--space-sm). Gaps between items: var(--space-xxxs) (2px) for nested, var(--space-xs) (6px) for groups.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Dark mode colors not fully mapped to tokens in warp-* components",
+    "file": "app/globals.css:3901-3918,4058-4069",
+    "severity": "medium",
+    "detail": ".xlink-dark .warp-sb and .xlink-dark .warp-card define backgrounds (#0b0b0b, #141414, #000) but don't use design tokens. Root :root .xlink-dark defines --bg-light: #000000 but warp components use hardcoded values instead. Makes future theme adjustments require multiple edits.",
+    "fix": "Update .xlink-dark .warp-card to background-color: var(--white) (already remapped to #0b0b0b in dark), color: var(--body-color). Same for .xlink-dark .warp-sb. Ensure all colors come from root CSS variables, not hardcoded hex in component selectors.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Hover state color mismatch across button variants",
+    "file": "app/globals.css:471,4398,4400,4985-4986",
+    "severity": "medium",
+    "detail": ".btn:hover uses background-color: var(--bg-light), but .warp-tb-button:hover uses #f8f8f8 (hardcoded), .warp-tb-button-primary:hover uses #0e52fd with brightness filter elsewhere. No consistent hover treatment: some use filter: brightness(), others just recolor.",
+    "fix": "Define hover state once: .btn:hover background-color: var(--bg-medium). Apply to all button variants. Avoid brightness filter; use predefined hover color tokens. Create --primary-hover: slightly lighter primary for consistency across all interactive states.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Modal/dialog backdrop color not tokenized",
+    "file": "app/globals.css:1404,1419",
+    "severity": "low",
+    "detail": ".modal-layer and .modal::backdrop both hardcoded to rgba(100, 114, 114, 0.5). Should be a CSS variable to support theme switching and design system auditing.",
+    "fix": "Define --backdrop: rgba(15, 23, 42, 0.4) in :root and --backdrop in .xlink-dark. Update .modal-layer background-color to var(--backdrop). This is already partially done with --bg-dusk but not used here.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Typography scale inconsistent across screens",
+    "file": "app/globals.css:37-40,894,958,1223,4034",
+    "severity": "low",
+    "detail": "Heading sizes hardcoded: .wndw-titlebar-title uses 16px, .splash h2 uses 16px, .breadcrumbs h1 uses 16px, but .warp-log-row span uses 14px. No unified h1/h2/h3 scale tokens defined. Makes design audit harder and heading levels uneven.",
+    "fix": "Define --font-xl: 18px, --font-lg: 16px, --font-md: 14px, --font-base: 12px (already have --font-base, --font-md, --font-sm, --font-lg). Ensure all headings use these tokens. Create h1, h2, h3, h4, h5 CSS rules with consistent line-height and margin.",
+    "source": "saas-polish"
+  },
+  {
+    "title": "Card component missing consistent top-level pattern",
+    "file": "components/console/screens/dashboard.tsx:48,app/globals.css:2637-2763",
+    "severity": "medium",
+    "detail": "Dashboard uses inline .warp-card className pattern (line 48) but settings screens and other panels use different card structures (.stat-card, .dashboard-card, .warp-tb-card). No shared card component. Each screen reinvents card styling, padding, borders.",
+    "fix": "Create unified Card component (React or CSS class) with standard structure: header (optional title, icon, actions), body (content), footer (optional). Define .card base with border: 1px solid var(--hairline), border-radius: var(--corner-md), padding: var(--space-md), background: var(--white). Use across all screens.",
+    "source": "saas-polish"
+  }
+]

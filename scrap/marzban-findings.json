@@ -1,0 +1,533 @@
+[
+  {
+    "title": "Create dialog drops data_limit_reset_strategy and device_limit that the backend and Edit dialog both support",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:298-327",
+    "severity": "high",
+    "detail": "Marzban's create-user dialog exposes data_limit_reset_strategy (no_reset/day/week/month/year) right next to the data limit, and the field is part of UserCreate. In XLink, UserCreate (app/schemas/user.py:25) accepts data_reset_strategy and device_limit, and the EditUserDialog (dialogs.tsx:114-130) shows both 'Auto-reset usage' and 'Device limit'. But the create UserDialog omits both entirely, so a freshly created user can never have an auto-reset cycle or device cap until the admin re-opens Edit. This is an inconsistent, more limited create flow than both Marzban and XLink's own edit flow.",
+    "fix": "Add an 'Auto-reset usage' Select (no_reset/day/week/month bound to data_reset_strategy) and a 'Device limit' number Input to UserDialog, mirroring EditUserDialog lines 114-130, and pass data_reset_strategy + device_limit in the createUser() call at dialogs.tsx:210.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "createUser() does not send data_reset_strategy/device_limit even though they exist in the request type",
+    "area": "flow",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:210-224",
+    "severity": "high",
+    "detail": "The createUser payload only sends username, full_name, data_limit_bytes, expire_strategy, expire_at, on_hold, on_hold_duration_seconds. data_reset_strategy defaults server-side to NO_RESET (schemas/user.py:25) and device_limit stays null. There is no path to set them at creation, unlike Marzban where reset strategy is a first-class create field.",
+    "fix": "Once the UI fields are added, include data_reset_strategy and device_limit in the createUser() object so creation reaches parity with the UserCreate schema.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "No cross-field validation: on-hold without a duration is silently accepted",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/schemas/user.py:16-30",
+    "severity": "high",
+    "detail": "Marzban enforces two model validators: status==on_hold REQUIRES a valid on_hold_expire_duration, and on_hold CANNOT be combined with an explicit expire ('User cannot be on hold with specified expire'). XLink's UserCreate has no validator at all. A client can post on_hold=true with on_hold_duration_seconds=null (the UI even allows submitting 'On first use' with an empty usage-days box at dialogs.tsx:320-324), producing a user that is on-hold forever with no countdown. Likewise expire_at + on_hold can both be set with no error.",
+    "fix": "Add a pydantic model_validator(mode='after') to UserCreate: if the resolved strategy is START_ON_FIRST_USE then on_hold_duration_seconds must be set and > 0 (raise ValidationError otherwise), and reject the combination of on_hold/START_ON_FIRST_USE with a non-null expire_at.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "'On first use' UI allows submit with empty usage-duration",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:289-296,320-324",
+    "severity": "medium",
+    "detail": "The Create button is only disabled by the username regex (line 292). When expireStrategy is 'start_on_first_use', usageDays can be empty and the form still submits; the payload then sends on_hold_duration_seconds=null. Marzban blocks this at validation time. XLink should mirror Marzban by making the duration mandatory for on-hold.",
+    "fix": "Extend the disabled condition at line 292: also disable when expireStrategy==='start_on_first_use' && (!usageDays || Number(usageDays) < 1), and when expireStrategy==='fixed_date' && !expire.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "'note' field has no max-length and is overloaded onto full_name",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:191,325-327",
+    "severity": "medium",
+    "detail": "Marzban has a dedicated 'note' field validated to max 500 chars. XLink labels the field 'Note (optional)' in the UI but maps it to full_name (dialogs.tsx:212 -> full_name), which the schema caps at 255 (schemas/user.py:22). So the UI calls it a note, the backend treats it as a name, and there's a silent 255-char ceiling with no inline feedback or maxLength on the Input. Conceptually muddled compared to Marzban's clean note vs name separation.",
+    "fix": "Either (a) rename the UI label to 'Full name' to match what it actually sets, or (b) add a real note column/field. Minimum: add maxLength={255} to the Input and a hint showing the limit, and stop calling a name field a 'note'.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "No inline username validation feedback; only a silently-disabled button",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:292,299-301",
+    "severity": "medium",
+    "detail": "Username validity is enforced only by disabling the Create button via /^[a-zA-Z0-9_]{3,64}$/. When the username is invalid the button is just dead with no message explaining why; Marzban surfaces the constraint inline. The Field 'hint' is static text, not an error state. This is a non-standard, confusing UX.",
+    "fix": "Track a touched/error state for username and render the rule as an error message under the Input when invalid (e.g. red helper text), instead of relying solely on a disabled button.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "Username max length differs from Marzban (64 vs 32) with no allowed-char parity",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/schemas/user.py:11",
+    "severity": "low",
+    "detail": "XLink USERNAME_PATTERN is ^[a-zA-Z0-9_]{3,64}$. Marzban uses 3-32 and also permits -, @, . Not a bug, but worth a deliberate decision: if subscription links / external tooling assume Marzban-compatible usernames, the 64-char ceiling and stricter charset can diverge. Document or align intentionally.",
+    "fix": "Decide intentionally: keep 64 if longer names are desired, but document the divergence; if Marzban compatibility matters, narrow to 32. Keep the front-end regex (dialogs.tsx:292) and backend pattern in one shared constant to avoid drift.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "Create dialog has no visual sectioning; flat stack of mixed concerns",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:298-365",
+    "severity": "low",
+    "detail": "Marzban groups the create form into logical sections (identity, limits/expiry, proxies/inbounds). XLink renders a flat vertical list: username, data limit, expiration, conditional date/duration, note, services, inbounds \u2014 limits and identity and inbound selection are visually undifferentiated. The Edit dialog at least uses a 2-col grid (dialogs.tsx:100) for the quota block; the create dialog uses none of that.",
+    "fix": "Group the create form like the edit dialog: put Data limit + Auto-reset + Device limit + Expiration in a 2-col grid block, and visually separate the Services/Inbounds selection (e.g. a labeled subsection or divider) from the account/limits fields.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "Per-inbound assignment creation is a fragile client-side fan-out instead of an atomic create",
+    "area": "flow",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:226-270",
+    "severity": "medium",
+    "detail": "Marzban creates the user with proxies+inbounds in a single atomic API call. XLink first POSTs the user, then fires N separate createAssignment calls via Promise.allSettled, and reports partial failure ('User created, but N inbound(s) failed'). This leaves the user in a half-provisioned state with no rollback, and the dedup/group-flattening logic (lines 226-241) lives in the dialog component rather than the backend.",
+    "fix": "Add a backend endpoint (or extend UserCreate) that accepts the chosen group_ids/profile_ids and creates the user plus all assignments in one transaction, so creation is atomic and the fan-out/dedup logic moves out of the React component.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "expire_at is hard-coded to 23:59:59Z; no timezone handling for fixed-date expiry",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:215-218",
+    "severity": "low",
+    "detail": "Fixed-date expiry is computed as new Date(`${expire}T23:59:59Z`) \u2014 always end-of-day in UTC regardless of the admin's locale. Marzban stores expire as a unix timestamp the dashboard derives from the admin's local date. An admin in UTC+8 picking a date gets an expiry that is effectively the morning after in their timezone, which is surprising. Same pattern repeats in EditUserDialog (dialogs.tsx:59).",
+    "fix": "Either compute end-of-day in the browser's local timezone (drop the 'Z' and let Date parse local, then toISOString), or document that expiry is UTC end-of-day. Centralize the date->ISO conversion (dateToIso is duplicated between Edit and Create) into one shared helper.",
+    "source": "create-user-flow"
+  },
+  {
+    "title": "Two competing dialog systems \u2014 unify on the Tailwind Modal",
+    "area": "ui",
+    "severity": "high",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/nodes/dialog.tsx:80; groups/dialog.tsx:59; admins/dialog.tsx; profiles/dialog.tsx:217; profiles/host-dialog.tsx",
+    "detail": "Marzban uses one Modal primitive everywhere, so every dialog has identical width, padding, header, and footer. XLink has two divergent systems: the Tailwind <Modal> (users/dialogs.tsx, subscription-settings.tsx) AND a raw .warp-dlg CSS system (nodes, groups, admins, profiles). They differ in width (32rem=512px vs 420px), header alignment (left, 16px/600 vs centered, 15px/500 with a mobile 'grab' bar shown on desktop), input radius (md/6px vs 10px), input border (1px vs 2px), and footer (right-aligned gap-2 vs space-between). profiles/host-dialog.tsx even mixes both imports.",
+    "fix": "Port nodes/groups/admins/profiles dialogs to the <Modal> + <Field> + <Input>/<Select>/<Button> primitives used in users/dialogs.tsx. Delete the .warp-dlg-* / .warp-dlg-field / .warp-dlg-picker / .warp-dlg-pw CSS blocks (globals.css 5241-5313, 5446-5508) once migrated.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "warp-dlg fields are inline label/input (cramped) instead of stacked",
+    "area": "ui",
+    "severity": "high",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:5277",
+    "detail": "Marzban stacks FormLabel above the input full-width (vertical VStack, gap=3). XLink's .warp-dlg-field is `display:flex; justify-content:space-between` forcing the label and a fixed `flex:0 0 240px; max-width:55%` input onto one row. On the 420px dialog this squeezes inputs to ~240px and truncates long labels/hints. This is why nodes/groups/admins forms look cramped vs the clean stacked users dialog.",
+    "fix": "Replace inline layout with the stacked <Field> pattern from parts.tsx (label on its own line, full-width input). Remove the `flex:0 0 240px; width:240px; max-width:55%` rule (globals.css 5286-5287).",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Inconsistent field vertical spacing across dialogs",
+    "area": "ui",
+    "severity": "medium",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:5279",
+    "detail": "Marzban uses a single consistent field gap (gap=3 \u2248 12px). XLink uses three different values: Modal body `gap-3` (12px, users/dialogs.tsx via modal.tsx:43), .warp-dlg-field `margin-bottom:16px` (nodes/groups/admins), and .warp-dlg-body-flow `gap:14px` (profiles/dialog.tsx:225). Paired-field grids use `gap-3` in some places and `gap-3` grid here but inside a 16px-margin context elsewhere, so rhythm is uneven.",
+    "fix": "Standardize on 12px (gap-3) vertical rhythm for all dialog fields. After migrating warp-dlg dialogs to <Modal>, they inherit modal.tsx's `gap-3`; drop the 14px warp-dlg-body-flow gap and the 16px field margin.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Dialog input border radius/width mismatch with Marzban + with own buttons",
+    "area": "ui",
+    "severity": "medium",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:5289",
+    "detail": "Marzban inputs/buttons are uniformly borderRadius=6px with 1px borders. XLink's shared <Input> uses rounded-md (6px) 1px border (input.tsx) \u2014 matching Marzban \u2014 but .warp-dlg-field inputs use `border-radius:10px; border:2px` and warp buttons use `border-radius:10px` (globals.css 4387). So the two dialog systems disagree with each other and the 2px border looks heavy next to the 1px shared inputs.",
+    "fix": "Standardize on 6px radius / 1px borders for all dialog controls. After migrating warp-dlg dialogs to shared <Input>/<Button>, set .warp-tb-button border-radius from 10px to 6px (globals.css 4387) so toolbar buttons match dialog buttons.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Dialog width too narrow vs Marzban; collapsible sections nested oddly",
+    "area": "ui",
+    "severity": "medium",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/profiles/dialog.tsx:284",
+    "detail": "Marzban uses size=2xl (~672px) and a 2-column Grid (md:repeat(2,1fr), gap=3) so dense forms breathe. XLink's profiles dialog (most field-heavy: network/security/camouflage/mux/advanced/preview sections) renders inside the 420px .warp-dlg, then wraps all sections in a bare `<div>` (line 284) so the section group has no spacing token vs the top-level Fields above it. The 2-col Grid (line 398) inside 420px gives ~190px columns \u2014 tight for SNI/key fields.",
+    "fix": "Move profiles dialog to <Modal width=\"sm:w-[42rem]\"> (\u2248672px to match 2xl). Remove the wrapper <div> at line 284-335 or give it a consistent `space-y-3`. This widens the 2-col Grid columns enough to match Marzban density.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Modal header shows a mobile 'grab bar' on desktop and centers title",
+    "area": "ui",
+    "severity": "medium",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:5260",
+    "detail": "Marzban headers are left-aligned (Text fontWeight=semibold fontSize=lg, pt=6) with no decorative bar. XLink's .warp-dlg-header centers the title (text-align:center) and always renders a .warp-dlg-grab pill (globals.css 5267, JSX `<span className=\"warp-dlg-grab\"/>` in every warp dialog) which is a mobile-sheet affordance shown even on desktop modals. The shared <Modal> header is correctly left-aligned (modal.tsx) \u2014 the two disagree.",
+    "fix": "Drop the centered text and the grab pill in warp dialogs by migrating to <Modal> (left-aligned 16px/600 header). If keeping warp-dlg short-term, set .warp-dlg-header text-align:left and only show .warp-dlg-grab under a mobile breakpoint.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Footer button layout inconsistent (space-between vs right-aligned)",
+    "area": "ui",
+    "severity": "medium",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:5301",
+    "detail": "Marzban footers right-align actions (HStack gap=3, justify end). XLink's <Modal> footer is correctly `justify-end gap-2` (modal.tsx:51), but .warp-dlg-footer is `justify-content:space-between` pushing Cancel to the far left and Save to the far right \u2014 a different visual language in nodes/groups/admins/profiles. Footer padding also differs: Modal `px-6 py-4` vs warp-dlg `0.7rem 1rem`.",
+    "fix": "After migration the shared Modal footer (justify-end gap-2, px-6 py-4) applies everywhere. If keeping warp-dlg short-term, change .warp-dlg-footer to `justify-content:flex-end; gap:8px` and padding to match px-6/py-4.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Button height inconsistency: warp 38px vs shared 36px(sm)/40px(md)",
+    "area": "ui",
+    "severity": "medium",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/ui/button.tsx:23",
+    "detail": "Marzban uses one button size (sm) for dialog and toolbar actions. XLink has three heights in play: shared Button md=h-10 (40px), sm=h-9 (36px), and .warp-tb-button height:38px (globals.css 4385) used as the dialog footer buttons in warp dialogs. Inputs are h-10 (40px). So a warp dialog's footer button (38px) sits next to a shared 40px input, and toolbar buttons (38px) don't match dialog buttons that use the shared component (40px md).",
+    "fix": "Pick one control height (Marzban=sm). Set .warp-tb-button height to 36px and use shared <Button size=\"sm\"> for dialog footers so buttons and inputs share a coherent scale; or bump inputs to align. Standardize on 36px to match Marzban's size=sm density.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Label/hint typography differs between the two Field components",
+    "area": "ui",
+    "severity": "low",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/nodes/dialog.tsx:137",
+    "detail": "There are two <Field> implementations. parts.tsx Field: label text-sm/500 with hint text-[11px]/400 placed inline-right (good, matches Marzban FormLabel + hint). nodes/dialog.tsx defines its OWN local Field (line 137) rendering label via .warp-dlg-field CSS (color #333) with .warp-dlg-hint as a block element below at 11px. Two label colors (#333 warp vs token text-fg) and two hint placements (inline vs block) coexist.",
+    "fix": "Delete the local Field in nodes/dialog.tsx (137-147) and the inline-style Field usages; import the shared Field from ../parts. Ensures one label color (text-fg) and one hint style/placement everywhere.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Table density: row/header padding heavier than Marzban; min-width forces scroll",
+    "area": "ui",
+    "severity": "low",
+    "file": "/Users/parsa/Desktop/Xlink/web/app/globals.css:4413",
+    "detail": "Marzban table cells use compact Th/Td padding (pl/pr=4) with default row height for a dense list. XLink's .warp-tb-head/.warp-tb-row use `padding:0.7rem 1rem` (11px/16px) plus a hard `min-width:760px` (globals.css 4416) which forces horizontal scroll on narrower panes; cell font is 14px vs Marzban's smaller body text. Header is 13px/#707070 which is fine, but the fixed 96px first column + 760px min make the table feel boxier than Marzban's fluid table.",
+    "fix": "Reduce row vertical padding to ~0.55rem (\u22489px) for a denser list closer to Marzban, and relax `min-width:760px` (4416) to a smaller value or make low-priority columns hide under a breakpoint instead of forcing scroll.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Inline checkbox rows use ad-hoc styling, not the Field system",
+    "area": "ui",
+    "severity": "low",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/dialogs.tsx:132",
+    "detail": "Marzban keeps boolean controls within the same labeled FormControl rhythm. XLink renders on-hold and transport bool fields as raw `<label className=\"flex items-center gap-2 text-xs text-fg\">` (users/dialogs.tsx:132; profiles Grid bool branch 401) at text-xs while sibling field labels are text-sm. The size jump (xs vs sm) and lack of a Field wrapper breaks the vertical rhythm.",
+    "fix": "Wrap boolean controls in a consistent checkbox-Field helper at text-sm matching other labels, with the same 12px gap, so checkboxes align to the form rhythm instead of sitting at a smaller font.",
+    "source": "ui-sizing-structure"
+  },
+  {
+    "title": "Data-usage shown as a 24px donut instead of a horizontal progress bar",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/index.tsx:417-423",
+    "severity": "high",
+    "detail": "XLink renders usage as a tiny 24px WarpRadial donut with a text label. A circular sparkline is hard to read and impossible to compare row-to-row at a glance. Marzban (UsersTable.tsx UsageSlider) uses a full-width horizontal Slider (6px track, rounded) with 'used / total' beneath and a 'Total: <lifetime>' figure on the right, color-scheme driven by status (red when reached). A linear bar communicates percent-full far better in a dense table and is the standard for quota visualization. XLink even already ships a horizontal WarpTraffic bar component (warp-table.tsx:266) but the users table does not use it.",
+    "fix": "Replace WarpRadial in the Used Traffic cell with the existing WarpTraffic horizontal bar: pct = limit ? (used/limit)*100 : 0, tone = reached ? 'danger' : !limit ? 'unlimited' : 'default', label = limit ? `${bytes(used)} / ${bytes(limit)}` : `${bytes(used)} / \u221e`. Give the column a wider min-width so the bar has room (Marzban uses ~230-350px).",
+    "source": "user-table"
+  },
+  {
+    "title": "Expiration shows a raw ISO date, not relative time or days-left",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/index.tsx:424-426,703-707",
+    "severity": "high",
+    "detail": "expireLabel() returns u.expire_at.slice(0,10) \u2014 a bare date like '2026-06-27' inside a static orange badge, regardless of whether it is days away or already past. Marzban (StatusBadge.tsx + dateFormatter.relativeExpiryDate) shows human-relative text next to the status: 'expires in 29 days' / 'expired 2 days ago', built from a dayjs duration (years/months/days, falling back to hours/mins). That tells the admin urgency at a glance; a raw date forces mental date math. XLink also always paints the expiry badge orange even when the user is healthy and far from expiry.",
+    "fix": "Add a relativeExpiry(expire_at) helper (years/months/days, then hours/mins, signed for past) and render 'in 3 days' / '5 days ago'. Color the badge by urgency: red/orange if expired or <7 days, gray/neutral otherwise; keep \u221e for no expiry. Reuse the same helper in the detail drawer Expiration row (index.tsx:650-653) which also shows only slice(0,10).",
+    "source": "user-table"
+  },
+  {
+    "title": "Online column is a text badge with no last-seen time; no live pulse dot",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/index.tsx:398-402",
+    "severity": "medium",
+    "detail": "XLink shows a full 'Online'/'Offline' WarpBadge driven by a 30s-polled onlineSet, and the row carries no last-seen timestamp (last_seen is fetched only inside the detail drawer, index.tsx:552-556). Marzban uses a compact OnlineBadge dot (green pulsing animation if last_online <=60s, solid gray if offline, hollow ring if never connected) plus an OnlineStatus text that reads 'Online', '<time> ago', or 'Not Connected Yet'. The dot is less visually heavy in a dense table and the relative last-seen tells the admin how stale 'offline' is.",
+    "fix": "Render a small status dot (green pulse when online, gray when offline, hollow when never-seen) instead of/in addition to the badge, and surface last-seen relative text in the row. Pull last_seen for the visible page via usersLastSeen(userIds) at the list level (you already import it) so each row can show 'online' or '<relative> ago'.",
+    "source": "user-table"
+  },
+  {
+    "title": "Sorting is hidden in a dropdown; column headers are not clickable",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/index.tsx:344-354,358",
+    "severity": "medium",
+    "detail": "XLink sort is a separate <select> (Newest/Most traffic/Expiring/Name) and WarpHead columns are plain non-interactive labels (warp-table.tsx:162-173). Marzban makes the Username, Status/expire, and Data-usage headers clickable with a Sort chevron that rotates to show asc/desc and toggles direction on repeat click (UsersTable handleSort + Sort component). Clickable headers are the discoverable, conventional way to sort a table and remove a redundant toolbar control.",
+    "fix": "Make WarpHead accept per-column sort config (key + active dir) and render a direction chevron on the active column; clicking a header sets/toggles sort. Map Username->name, Used Traffic->traffic, Expiration->expiring. Keep the select as a fallback or drop it once headers are sortable.",
+    "source": "user-table"
+  },
+  {
+    "title": "Sort/filter/search operate only on the currently-loaded page, not the full dataset",
+    "area": "flow",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/index.tsx:74-80,241-254,466-471",
+    "severity": "high",
+    "detail": "listUsers is cursor-paginated at size 50 and all status filtering (matchStatus, 225-238), search (242), and sorting (244-254) run client-side over only the rows fetched so far; the UI even warns 'Searching loaded users only \u2014 load more to widen the search' (468-470). So 'Most traffic' / 'Expiring soon' / a status chip can silently miss users on unloaded pages \u2014 the sort is wrong for any account with >50 users. Marzban pushes sort and status to the server via onFilterChange -> API params (sort=used_traffic/expire/username, status=active/limited/expired/...) with real pagination, so results are correct across the whole dataset.",
+    "fix": "Move sort/status/search into the listUsers query params (server-side) and key the useInfiniteQuery on them so changing a control refetches from the API; render the server-ordered/filtered page directly instead of re-sorting client-side. Then the 'loaded users only' caveat and the partial-data sorting bug both disappear.",
+    "source": "user-table"
+  },
+  {
+    "title": "Status does not distinguish on_hold expiry strategy or show a status icon",
+    "area": "ui",
+    "file": "/Users/parsa/Desktop/Xlink/web/components/console/screens/users/index.tsx:403-415",
+    "severity": "low",
+    "detail": "XLink's Status cell is icon-less text badges (Disabled/Limited/Expired/On-hold/Active). Marzban pairs each status with a glyph (Wifi=active, NoSymbol=disabled, ExclamationCircle=limited, Clock=expired/on_hold) and a consistent color map (green/gray/orange/purple/red), and for on_hold the expiry shows the on-first-use duration rather than a date. XLink already knows expire_strategy === 'start_on_first_use' (expireLabel, 705) but the row's expiry cell only uses expireLabel via the badge and the status cell ignores the strategy nuance.",
+    "fix": "Add a small leading icon to each status badge (reuse lucide: Wifi/Ban/AlertCircle/Clock) and align the tone map to Marzban's (on_hold=purple/blue). For on_hold users render the expiry as the configured duration / 'On first use' (expireLabel already returns this) rather than an orange date badge.",
+    "source": "user-table"
+  },
+  {
+    "title": "No single canonical user status enum (Marzban's UserStatus)",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/user.py:85-132",
+    "severity": "high",
+    "detail": "Marzban models user state as one authoritative `status` Enum column (active/disabled/limited/expired/on_hold) persisted on the row, plus `last_status_change`. XLink scatters state across 3 booleans (`is_active`, `on_hold`, `removed`) + derived expiry/limit checks. The real status (active vs limited vs expired) is never stored \u2014 it is recomputed ad hoc in `app/subscription/generator.py:79-97` `_user_status()` purely for display text. There is no field the API, admin UI, list filters, or webhooks can query/sort by, so `UserRead` (schemas/user.py:64-92) exposes no `status` at all. `list_users` (user_service.py:344-360) can only filter by `is_active`/`removed`, never by limited/expired/on_hold.",
+    "fix": "Add a `UserStatus` StrEnum (active, disabled, limited, expired, on_hold) and a persisted `status` column with an index. Compute/persist it transactionally wherever state changes (enable/disable/delete, limit enforcement in traffic/service.py, expiry & on-hold activation in subscription/repository.py, reset cron in agent/reconcile.py). Expose `status` on UserRead and accept it as a list filter. Keep the booleans only as inputs that derive status, or migrate them into status.",
+    "source": "backend-user-model"
+  },
+  {
+    "title": "No persisted per-user used_traffic until traffic flows; status 'limited' never recorded",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/traffic/service.py:251-283",
+    "severity": "high",
+    "detail": "Marzban stores `used_traffic` (BigInteger) and a computed `lifetime_used_traffic` (sums reset logs + current) and transitions the user to status `limited` when over data_limit. XLink has `users_data_usage` (domain/user.py:150) but when a user exceeds `data_limit_bytes`, `_enforce_user_limits` only flips that user's ClientAssignments to `AssignmentStatus.DISABLED` \u2014 the User row keeps `is_active=True` and gains no 'limited' marker. So an over-limit user is indistinguishable from an admin-disabled or fully-active user at the user level, and there is no lifetime/historical usage (no reset-log table), so resets permanently lose cumulative totals.",
+    "fix": "Persist user status='limited' (see finding 1) in `_enforce_user_limits` instead of relying solely on assignment flips. Add a `lifetime_used_traffic` column and a usage-reset-log table (or accumulate lifetime into a column) so `_apply_data_resets` in agent/reconcile.py:53-59 adds current usage to lifetime before zeroing `used_bytes`/`users_data_usage`.",
+    "source": "backend-user-model"
+  },
+  {
+    "title": "Data-reset cron re-enables ALL disabled assignments, conflating limit-disabled with admin-disabled",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/agent/reconcile.py:61-76",
+    "severity": "high",
+    "detail": "AssignmentStatus has only ACTIVE/DISABLED/EXPIRED (domain/client_assignment.py:34-37), with no 'limited' variant. Limit enforcement (traffic/service.py:273-281), admin disable (user_service.py:425-433), and delete (user_service.py:516-524) all collapse into the same DISABLED state. On reset, `_apply_data_resets` re-activates every DISABLED assignment for the user as long as `user.is_active and not user.removed`. An assignment an admin disabled for a single node, or one disabled for any non-quota reason, gets silently re-enabled by the monthly/weekly reset. Marzban avoids this because 'limited' is a distinct status, so only limited users are reactivated on reset.",
+    "fix": "Add an `AssignmentStatus.LIMITED` (or track a `disabled_reason`) so quota-disabled assignments are distinguishable. In `_apply_data_resets` reactivate only LIMITED assignments, never admin-DISABLED ones. Set status=LIMITED in `_enforce_user_limits` / `_enforce_limit`.",
+    "source": "backend-user-model"
+  },
+  {
+    "title": "No online_at / last-seen tracking for users",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/user.py:93-94",
+    "severity": "medium",
+    "detail": "Marzban records `online_at` (DateTime) updated from node usage so admins see who is currently/recently connected. XLink tracks `sub_updated_at`/`sub_last_user_agent` (when the subscription URL is fetched) but has no equivalent of actual proxy connection time \u2014 there is no `online_at` on the user, and UserDevice.last_seen_at (user_service.py:197) is per-device, not surfaced on the user or in UserRead.",
+    "fix": "Add `online_at: datetime|None` on User, update it in the traffic ingest path (traffic/service.py `_bump_user_usage`) when deltas>0, and expose it on UserRead. Optionally derive an 'online' indicator (online_at within N minutes) for the admin UI.",
+    "source": "backend-user-model"
+  },
+  {
+    "title": "on_hold timeout modeled as duration+deadline split rather than a single resolved timestamp",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/user.py:113-130",
+    "severity": "low",
+    "detail": "Marzban uses `on_hold_expire_duration` (seconds to grant on first use) plus `on_hold_timeout` (absolute datetime by which it must activate). XLink models the duration as `on_hold_duration_seconds` and the activation cutoff as `activation_deadline`, plus a redundant `on_hold` boolean and `expire_strategy=START_ON_FIRST_USE` that encode the same fact (see `_resolve_expiry` user_service.py:28-38 forcing them in sync). This 3-way redundancy (on_hold + expire_strategy + activation_deadline) is more error-prone than Marzban's 2 explicit columns and is the only place 'on_hold' status is derivable. The naming (`activation_deadline` vs Marzban `on_hold_timeout`) also diverges from the ecosystem.",
+    "fix": "Collapse to status='on_hold' (finding 1) as the single source of truth and keep `on_hold_duration_seconds` + `activation_deadline` as the two data columns; drop the `on_hold` boolean and treat `expire_strategy` as derived. Align docs/field naming with Marzban's on_hold_expire_duration / on_hold_timeout for migration compatibility.",
+    "source": "backend-user-model"
+  },
+  {
+    "title": "No note / auto_delete_in_days / edit_at admin fields",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/user.py:72-153",
+    "severity": "low",
+    "detail": "Marzban's user model carries `note` (String 500, free-text admin note), `auto_delete_in_days` (auto-purge after expiry), and `edit_at` (last admin edit timestamp). XLink has none: TimestampMixin gives created_at/updated_at but no admin-note, no auto-delete policy (delete/purge in user_service.py:510-545 are fully manual), and no distinct last-edited marker.",
+    "fix": "Add `note: str|None` (max 500), `auto_delete_in_days: int|None`, and surface them in UserCreate/UserUpdate/UserRead. Add a reconcile job that purges users whose status is expired/limited for >= auto_delete_in_days (extend agent/reconcile.py). edit_at can be satisfied by TimestampMixin.updated_at if it only bumps on admin edits.",
+    "source": "backend-user-model"
+  },
+  {
+    "title": "Subscription revoke is well-modeled (parity / slight edge over Marzban) \u2014 keep, don't regress",
+    "area": "backend",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/user_service.py:160-165",
+    "severity": "low",
+    "detail": "Marzban revokes via a `sub_revoked_at` timestamp but its subscription JWT validation does NOT actually check it (token only verifies signature + embedded created_at), so old links can keep working. XLink's `revoke_subscription` bumps `sub_revision`, and the subscription router DOES enforce it (api/v1/routers/subscriptions.py:282 `owner.sub_revision != token_revision` rejects stale tokens; tokens are signed with the revision at :432). This is a genuinely stronger revoke than Marzban. No change needed beyond ensuring revision is embedded in every issued token and surfaced in UserRead if useful.",
+    "fix": "No fix required; documented to avoid regressing it during a Marzban-alignment refactor. Optionally expose `sub_revision`/last-revoked in UserRead for admin visibility.",
+    "source": "backend-user-model"
+  },
+  {
+    "title": "profile-update-interval header is in DAYS, but XLink sends an hours value",
+    "area": "backend",
+    "file": "app/api/v1/routers/subscriptions.py:400",
+    "severity": "high",
+    "detail": "Clients (Clash Meta, v2rayNG, Karing, etc.) interpret the integer in `profile-update-interval` as a number of DAYS. Marzban's default `SUB_UPDATE_INTERVAL=\"12\"` therefore means refresh every 12 days. XLink stores the setting as `update_interval_hours` (default 12, schema-capped at `le=168` = 7 days in app/schemas/settings.py:55, default 12 in app/domain/app_settings.py:20) and emits that raw integer as the header: `\"profile-update-interval\": str(cfg.update_interval_hours)`. So XLink's intended '12 hours' is read by every client as '12 days', and the 168 cap is meaningless (it would be 168 days). The semantics are wrong vs Marzban.",
+    "fix": "Treat the header value as days. Either (a) rename the setting to `update_interval_days` with a sane range (e.g. ge=1,le=30, default 1) and send it directly, or (b) keep hours internally but convert when emitting: `str(max(1, round(cfg.update_interval_hours / 24)))`. Also fix the schema bound in app/schemas/settings.py:55 accordingly. Match Marzban's default of 12 (days) unless you deliberately want hourly-equivalent refresh.",
+    "source": "subscription-formats"
+  },
+  {
+    "title": "content-disposition filename is hardcoded instead of per-user",
+    "area": "backend",
+    "file": "app/api/v1/routers/subscriptions.py:398",
+    "severity": "medium",
+    "detail": "XLink always sends `content-disposition: attachment; filename=\"xlink-subscription\"`. Marzban (app/routers/subscription.py:70) uses the username: `attachment; filename=\"{user.username}\"`, so a saved/imported profile is identifiable per user. XLink already has `owner` (the User) in scope in this handler but ignores it for the filename.",
+    "fix": "When `owner` is not None, set `filename=\"{owner.username}\"` (sanitize/quote it). Fall back to the profile title or 'xlink-subscription' only when no owner. e.g. `fname = owner.username if owner else (cfg.profile_title or \"xlink\")` then `f'attachment; filename=\"{fname}\"'`.",
+    "source": "subscription-formats"
+  },
+  {
+    "title": "profile-web-page-url header not emitted",
+    "area": "backend",
+    "file": "app/api/v1/routers/subscriptions.py:396",
+    "severity": "medium",
+    "detail": "Marzban sets `profile-web-page-url: {request.url}` on every subscription response (app/routers/subscription.py:71). Clients like v2rayTun/Happ/Streisand use it to open the subscription's web/management page from inside the app. XLink's header dict (lines 396-406) sets subscription-userinfo, content-disposition, cache-control, profile-update-interval, profile-title, support-url but never profile-web-page-url.",
+    "fix": "Add `headers[\"profile-web-page-url\"] = str(request.url).split(\"?\", 1)[0]` (the canonical sub URL is already computed at line 328/341 for the HTML page; reuse it). This is a one-line addition alongside the existing headers.",
+    "source": "subscription-formats"
+  },
+  {
+    "title": "Outline subscription format not supported",
+    "area": "backend",
+    "file": "app/subscription/formats/registry.py:72",
+    "severity": "medium",
+    "detail": "Marzban ships an Outline format (app/subscription/outline.py): a JSON object describing a single Shadowsocks outbound (method/password/server/server_port/tag), served to Outline/Shadowsocks-family clients. XLink has no OUTLINE member in SubscriptionFormat (app/subscription/schemas.py:20-36) and no renderer registered, so Outline/SSconf clients cannot be served the format they expect.",
+    "fix": "Add `OUTLINE = \"outline\"` to SubscriptionFormat, create app/subscription/formats/outline.py rendering the first shadowsocks/shadowsocks2022 config as Outline JSON (`{method,password,server,server_port,tag}` via json.dumps), register it in default_registry(), add content-type `application/json` in _FORMAT_CONTENT_TYPES, and add an alias 'outline' in _FORMAT_ALIASES.",
+    "source": "subscription-formats"
+  },
+  {
+    "title": "Modern v2rayN/v2rayNG/Streisand/Happ clients get base64 instead of xray/v2ray-json",
+    "area": "flow",
+    "file": "app/api/v1/routers/subscriptions.py:74",
+    "severity": "medium",
+    "detail": "Marzban version-gates per client: v2rayN>=6.40, v2rayNG>=1.8.29 (>=1.8.18 reversed), Streisand, Happ>=1.63.1 all receive `v2ray-json` (the rich xray JSON) and only fall back to base64 for older versions (app/routers/subscription.py:97-133). XLink's `_UA_FORMAT_RULES` lumps `v2ray|v2box|streisand|nekoray|nekobox|hiddify` straight into BASE64 with no version parsing, so modern v2rayNG/Streisand/Happ users lose the higher-fidelity xray-json config (fragment, advanced TLS, etc.) Marzban gives them. XLink already HAS the xray_json renderer (registry.py:76) so the capability exists, it just isn't routed.",
+    "fix": "In _UA_FORMAT_RULES (or a new version-aware matcher), detect `^v2rayNG/(\\d+\\.\\d+\\.\\d+)`, `^v2rayN/(\\d+\\.\\d+)`, `^Streisand`, `^Happ/(\\d+\\.\\d+\\.\\d+)` and return SubscriptionFormat.XRAY_JSON when the parsed version meets Marzban's thresholds, else BASE64. Reuse distutils-free version compare (tuple of ints).",
+    "source": "subscription-formats"
+  },
+  {
+    "title": "Outline / Shadowsocks-family User-Agents not detected",
+    "area": "flow",
+    "file": "app/api/v1/routers/subscriptions.py:64",
+    "severity": "low",
+    "detail": "Marzban routes UAs matching `^(SS|SSR|SSD|SSS|Outline|Shadowsocks|SSconf)` to the outline format (app/routers/subscription.py:93). XLink's `_UA_FORMAT_RULES` has no rule for these, so an Outline/Shadowsocks client falls through to the default BASE64 (subscriptions.py:196), which Outline cannot import.",
+    "fix": "After adding the Outline format, add a rule `(re.compile(r\"(?i)^(SS|SSR|SSD|SSS|Outline|Shadowsocks|SSconf)\"), SubscriptionFormat.OUTLINE)` to _UA_FORMAT_RULES and an 'outline' result mapping in _RULE_RESULT_FORMATS so admin UA rules can target it too.",
+    "source": "subscription-formats"
+  },
+  {
+    "title": "subscription-userinfo splits upload/download instead of upload=0",
+    "area": "backend",
+    "file": "app/api/v1/routers/subscriptions.py:387",
+    "severity": "low",
+    "detail": "Marzban reports `upload=0; download={used_traffic}; total; expire` (app/routers/subscription.py:38-45) \u2014 all usage counted as download. XLink derives `up = min(upload_bytes, used_bytes)` and `down = used - up`. This is arguably more accurate, but some clients sum upload+download for the usage bar and a few only read `download`; Marzban's convention guarantees the full usage shows. Field order/format otherwise matches Marzban (`upload=..; download=..; total=..; expire=..`).",
+    "fix": "Low priority / optional. If you see clients under-reporting usage, mirror Marzban: `upload=0; download={used_bytes}`. Otherwise leave as-is but keep `total` and `expire` emitting 0 (not the literal string 'None') when limit/expire are unset \u2014 currently `stats.traffic_limit_bytes` and `stats.expire_timestamp` could format as 'None'; coerce to 0 like Marzban does.",
+    "source": "subscription-formats"
+  },
+  {
+    "title": "on_hold and expire_at can be set simultaneously (silent, conflicting state)",
+    "area": "backend",
+    "file": "app/services/user_service.py:28-38 (_resolve_expiry); app/schemas/user.py:24-29,54-59",
+    "severity": "high",
+    "detail": "Marzban explicitly rejects a user that is on_hold while also carrying a fixed `expire` ('User cannot be on hold without a valid on_hold_expire_duration' / cannot specify expire simultaneously). XLink's _resolve_expiry silently picks one: if on_hold is true it forces START_ON_FIRST_USE and ignores expire_at, but UserCreate/UserUpdate still happily accept BOTH expire_at and on_hold=true with no error. The EditUserDialog (web/.../users/dialogs.tsx:61-71) literally sends expire_at AND on_hold together, so the stored row ends up with a stale expire_at that no longer matches the strategy. The admin gets no feedback that one of their inputs was discarded.",
+    "fix": "Add a pydantic model_validator on UserCreate/UserUpdate: if on_hold is true then expire_at must be None and on_hold_duration_seconds must be > 0 (raise ValidationError 'On-hold users use a duration, not a fixed expire date'); if expire_strategy==START_ON_FIRST_USE require a duration. Mirror Marzban's explicit messages instead of silently resolving.",
+    "source": "admin-validation"
+  },
+  {
+    "title": "on_hold requires a duration but XLink allows on_hold with no duration",
+    "area": "backend",
+    "file": "app/services/user_service.py:34-35,91-106; app/schemas/user.py:26-27",
+    "severity": "high",
+    "detail": "Marzban: 'User cannot be on hold without a valid on_hold_expire_duration' (non-zero, non-null required). In XLink on_hold=true with on_hold_duration_seconds=None is accepted; _resolve_expiry sets START_ON_FIRST_USE but there is no countdown length, producing a user that never expires after first use. UserDialog (web .../users/dialogs.tsx:219-223) sends on_hold_duration_seconds=null when usageDays is blank, with no client guard either.",
+    "fix": "Reject on_hold=true with missing/zero on_hold_duration_seconds in the schema validator (ge requirement + required-when-on_hold). In UserDialog disable Create / show inline error when expireStrategy=='start_on_first_use' and usageDays is empty.",
+    "source": "admin-validation"
+  },
+  {
+    "title": "No 'expire in the past' guard on expire_at / activation_deadline",
+    "area": "backend",
+    "file": "app/schemas/user.py:24,29,54,59",
+    "severity": "medium",
+    "detail": "expire_at and activation_deadline accept any datetime including dates already in the past, immediately creating an expired/dead user with no warning. Marzban surfaces expiry as a first-class validated concept tied to status. XLink's date inputs (web .../users/dialogs.tsx:112,150,317) have no min and the backend has no check.",
+    "fix": "Add a validator rejecting expire_at/activation_deadline earlier than now() (or warn). Set min={today} on the <Input type=date> fields so the UI cannot submit a past date.",
+    "source": "admin-validation"
+  },
+  {
+    "title": "Privilege fields silently ignored when creating a regular user",
+    "area": "backend",
+    "file": "app/schemas/user.py:32-36 (UserCreate); app/api/v1/routers/users.py:132-140; app/services/user_service.py:80-83,130-151",
+    "severity": "medium",
+    "detail": "UserCreate exposes is_active, is_sudo, all_groups_access, modify_users_access, subscription_url_prefix. On POST /users (create regular user) these are accepted by the schema but _create() never reads them, so a caller setting is_sudo=true on /users gets a 201 with the flag silently dropped. That is a confusing/misleading API contract and a latent privilege-escalation footgun if create() is ever refactored to honor the schema. Marzban keeps admin (sudo) creation on a separate, sudo-guarded model.",
+    "fix": "Split the schema: a UserCreate without any admin/privilege fields for POST /users, and AdminCreate (already effectively used via /users/admins) carrying is_sudo etc. Or add extra='forbid' + drop the admin fields from UserCreate so the API rejects them rather than ignoring them.",
+    "source": "admin-validation"
+  },
+  {
+    "title": "No protection against removing/disabling/demoting the last sudo admin (lockout)",
+    "area": "backend",
+    "file": "app/api/v1/routers/users.py:197-209 (delete), 173-194 (disable), 290-297 (demote); app/services/user_service.py:153-158,419,510",
+    "severity": "high",
+    "detail": "_guard_not_self only stops an admin acting on their own account. A sudo admin A can delete/disable/demote sudo admin B, and B can do the same to A \u2014 there is no check that at least one active sudo admin remains. update_admin (service:108-128) can also flip the last sudo's is_sudo=false or is_active=false. Result: full panel lockout with no recovery path in-app. Marzban's sudo model is anchored by the SUDOERS config so a configured sudoer always exists; XLink has no equivalent floor.",
+    "fix": "Before delete/disable/demote/clear-sudo on an ADMIN, count remaining active sudo admins (excluding the target) and raise ValidationError('Cannot remove the last sudo administrator', code='last_sudo') if it would reach zero. Apply in user_service for delete/disable/set_role/update_admin.",
+    "source": "admin-validation"
+  },
+  {
+    "title": "device_limit and on_hold_duration_seconds have no upper bound",
+    "area": "backend",
+    "file": "app/schemas/user.py:30,27,60,57",
+    "severity": "low",
+    "detail": "Only ge=0 is enforced. A typo like 9999999 days hold duration or device_limit overflows downstream logic and the UI (number inputs at dialogs.tsx:124-129,139-145 have min but no max). Marzban casts/validates numeric quota fields deliberately. data_limit_bytes likewise only ge=0.",
+    "fix": "Add reasonable le= bounds (e.g. device_limit le=1000, on_hold_duration_seconds le=10*365*86400) in the schema and matching max= on the inputs, with a clear validation message.",
+    "source": "admin-validation"
+  },
+  {
+    "title": "Subscription URL prefix accepted without URL validation",
+    "area": "backend",
+    "file": "app/schemas/user.py:36,48; web .../admins/dialog.tsx:56,128-136",
+    "severity": "low",
+    "detail": "subscription_url_prefix is only max_length=512 with no scheme/host validation, yet the UI placeholder says 'https://sub.example.com' and the value is concatenated into generated subscription URLs. A malformed value (missing scheme, trailing junk) silently produces broken subscription links. Compare Marzban's discord_webhook validator that enforces a required prefix and returns a clear message.",
+    "fix": "Validate subscription_url_prefix with a URL/AnyHttpUrl-style check (must start with http:// or https://, no path beyond host) and return 'Subscription URL prefix must be a valid https:// URL'. Add the same check client-side in admins/dialog before submit.",
+    "source": "admin-validation"
+  },
+  {
+    "title": "Username immutable on edit but no normalization / reserved-name guard",
+    "area": "backend",
+    "file": "app/schemas/user.py:11,18; app/services/user_service.py:130-151",
+    "severity": "low",
+    "detail": "Username is stored as-is (no lowercasing/trim on the backend; the UI trims at dialogs.tsx:211 but the API does not). Two users differing only by case-or-not could collide depending on DB collation, and there is no guard against reserved names like 'me' which collides with the /users/me route semantics. Marzban centralizes username rules in one validator with one error message.",
+    "fix": "Normalize username server-side (strip; decide on case policy and apply consistently) and reject a small reserved set ('me','admin' if desired). Keep the single regex error message ('Username must be 3-64 chars: letters, numbers, underscore') returned from one place.",
+    "source": "admin-validation"
+  },
+  {
+    "title": "No data_limit / expire reset semantics surfaced; clearing fields is ambiguous",
+    "area": "ui",
+    "file": "web/components/console/screens/users/dialogs.tsx:62-70 (EditUserDialog submit)",
+    "severity": "low",
+    "detail": "EditUserDialog always sends data_limit_bytes/expire_at/device_limit as either a value or null, and update_quota (service:258-259) unconditionally writes them. So an admin who opens edit just to change full_name and leaves 'Data limit' blank will wipe an existing limit to unlimited without any warning, because blank maps to null. There is no 'unchanged vs cleared' distinction and no confirmation. Marzban treats data_limit/expire changes explicitly.",
+    "fix": "Pre-fill every field from the current user (limit/devices already are; ensure all are) and/or only include changed fields in the PATCH payload. Optionally confirm when an edit would remove an existing limit/expiry ('Remove the 50 GiB limit?').",
+    "source": "admin-validation"
+  },
+  {
+    "title": "Two parallel modal systems (warp-dlg vs <Modal>) \u2014 pick one",
+    "area": "ui",
+    "file": "web/components/console/screens/nodes/dialog.tsx:81; admins/dialog.tsx:77; groups/dialog.tsx:60; profiles/dialog.tsx:218; profiles/host-dialog.tsx:104 vs users/dialogs.tsx:81,279 + profiles/host-dialog.tsx:7",
+    "severity": "high",
+    "detail": "Marzban uses a single Dialog primitive for every create/edit form, so all modals share identical chrome, padding, header weight, and footer. XLink has TWO incompatible systems running side by side: the raw `warp-dlg-overlay/warp-dlg/warp-dlg-header/warp-dlg-footer` CSS classes (nodes, admins, groups, profiles, host) and the shared `<Modal>` React component (users EditUserDialog + UserDialog, host-dialog imports Modal but never uses it). They differ in everything: header is `15px/weight-500` in warp-dlg (globals.css:5266) but `text-base font-semibold` in Modal (modal.tsx:34); body padding, overlay blur (Modal has `backdrop-blur-sm`, warp-dlg does not), and mobile bottom-sheet behavior all diverge. Same product, two visibly different dialog looks depending on which screen you opened.",
+    "fix": "Standardize on the shared `<Modal>` component for all create/edit dialogs. Port NodeDialog, AdminDialog, GroupDialog, ProfileDialog, and HostDialog to use `<Modal title onClose onSubmit footer>` and delete the `warp-dlg-*` markup. Remove the now-dead `warp-dlg-*` CSS block in globals.css (5247-5312, 5508-5511). host-dialog.tsx already imports Modal (line 7) but renders warp-dlg \u2014 finish that migration.",
+    "source": "general-cleanup"
+  },
+  {
+    "title": "Inconsistent footer button styling (warp-tb-button vs <Button>)",
+    "area": "ui",
+    "file": "web/components/console/screens/nodes/dialog.tsx:127-130; admins/dialog.tsx:178-181; groups/dialog.tsx:116-119; profiles/dialog.tsx:339-342; host-dialog.tsx:226-229 vs users/dialogs.tsx:87-94,285-296",
+    "severity": "high",
+    "detail": "Cancel/primary ORDER is consistent (good), but the BUTTON COMPONENTS differ. warp-dlg footers use raw `<button className=\"warp-tb-button\">` + `warp-tb-button-primary`; the Modal-based user dialogs use `<Button variant=\"outline\">` and `<Button variant=\"primary\">`. These render at different heights, radii, and hover treatments. The drawer Edit button (parts.tsx:77) uses yet a third path (`<Button variant=\"primary\">` with default `md` size = h-10). Marzban footers are uniform across every dialog.",
+    "fix": "After consolidating on `<Modal>`, render every footer with the shared `<Button>` component: `<Button type=\"button\" variant=\"outline\" onClick={onClose}>Cancel</Button>` then `<Button type=\"submit\" variant=\"primary\" disabled={busy}>`. One button system everywhere.",
+    "source": "general-cleanup"
+  },
+  {
+    "title": "Form rows: horizontal warp-dlg-field vs vertical shared Field (alignment mismatch)",
+    "area": "ui",
+    "file": "web/components/console/screens/parts.tsx:87 (vertical Field) vs nodes/dialog.tsx:137 (local Field) + globals.css:5277-5300 (warp-dlg-field horizontal); profiles/dialog.tsx:225 uses warp-dlg-body-flow hack",
+    "severity": "high",
+    "detail": "There are TWO `Field` definitions and they lay out oppositely. The shared `Field` (parts.tsx) stacks label-on-top of input (`flex-col`). The `warp-dlg-field` CSS class lays label-LEFT, input-RIGHT in a row (globals.css:5281 `flex:1 1 auto` label). So nodes/admins/groups dialogs show right-aligned inputs in rows, while users/profiles dialogs show stacked fields. profiles/dialog.tsx even has to add `warp-dlg-body-flow` (line 225) purely to force the shared vertical `<Field>` to behave inside a warp-dlg shell \u2014 a workaround that proves the two systems fight each other. nodes/dialog.tsx ships its own duplicate local `Field` (line 137) too.",
+    "fix": "Delete the local Field in nodes/dialog.tsx and the row-layout `warp-dlg-field` CSS. Use the single vertical `Field` from parts.tsx in every dialog (Marzban stacks label-over-input consistently). This removes the `warp-dlg-body-flow` workaround entirely.",
+    "source": "general-cleanup"
+  },
+  {
+    "title": "Switch component defined 3 times",
+    "area": "ui",
+    "file": "web/components/console/screens/subscription-settings.tsx:281; admins/dialog.tsx:188; profiles/host-dialog.tsx:261 (api-keys.tsx:18 imports the subscription one)",
+    "severity": "medium",
+    "detail": "The same toggle Switch (role=switch, h-5 w-9, knob h-4 w-4) is copy-pasted three times. Worse, the off-state color drifts: admins uses `bg-line` (dialog.tsx:198) while host-dialog uses `bg-hairline` (host-dialog.tsx:270) \u2014 visibly different gray for the same control. api-keys.tsx reaches across modules to import the subscription-settings copy.",
+    "fix": "Create one `<Switch>` in components/ui/ (or export from parts.tsx), pick a single off-state token (`bg-line`), and import it in subscription-settings, admins/dialog, host-dialog, and api-keys. Delete the three local copies.",
+    "source": "general-cleanup"
+  },
+  {
+    "title": "Section accordion + Toggle + CheckBox duplicated",
+    "area": "ui",
+    "file": "web/components/console/screens/profiles/dialog.tsx:349; profiles/host-dialog.tsx:236 (Section); host-dialog.tsx:283 (Toggle); groups/settings.tsx:262 (CheckBox)",
+    "severity": "medium",
+    "detail": "Two near-identical collapsible `Section` components (profiles dialog has one with an optional `action` slot + keyboard handler; host-dialog has a simpler one) \u2014 they render the same chevron-rotate accordion but with different a11y (one is `role=button tabIndex=0`, the other a real `<button>`). Plus a one-off `Toggle` (checkbox+label) in host-dialog and a one-off `CheckBox` in groups/settings. Marzban shares collapsible-section and form-control primitives.",
+    "fix": "Promote one `Section` (the profiles version, which supports the `action` slot and keyboard handling) to parts.tsx and import in both dialogs. Move `Toggle`/`CheckBox` to shared primitives too. Removes ~80 lines of dupes and unifies a11y.",
+    "source": "general-cleanup"
+  },
+  {
+    "title": "Three table implementations \u2014 kit vs raw <table>",
+    "area": "ui",
+    "file": "web/components/console/screens/warp-table.tsx (WarpTableCard/WarpHead/WarpRow kit, used by nodes/users/groups/profiles/admins index) vs api-keys.tsx:118-154; audit-log.tsx:49-78; groups/settings.tsx:225-257 (raw tables)",
+    "severity": "medium",
+    "detail": "Index screens use the polished table kit (WarpTableCard + WarpHead + WarpRow with row hover, context menu, skeleton). But api-keys, audit-log, and the group members tab hand-roll `<table>` with literal `<th className=\"px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted\">` repeated on every column, and ad-hoc `<tr className=\"hover:bg-muted\">`. Header typography (uppercase tracking-widest) doesn't match WarpHead's styling, so settings tables look like a different app than the main lists. Loading/empty rows are also hand-written `<td colSpan>` instead of WarpSkeleton/WarpEmpty.",
+    "fix": "Route api-keys, audit-log, and the group-members table through the WarpTableCard/WarpHead/WarpRow kit (or extract a shared `<DataTable cols rows>` wrapper) so header style, row hover, skeleton, and empty state are identical to the index screens.",
+    "source": "general-cleanup"
+  },
+  {
+    "title": "Empty states are inconsistent (icon+CTA kit vs bare text)",
+    "area": "ui",
+    "file": "web/components/console/screens/warp-table.tsx:318 (WarpEmpty supports cta but no screen passes it) vs api-keys.tsx:132; audit-log.tsx:64; groups/settings.tsx:251; users/dialogs.tsx:159,331,350; admins/dialog.tsx:163; users/access.tsx:302",
+    "severity": "medium",
+    "detail": "Three tiers of empty state coexist: (1) `WarpEmpty` with a 28px icon + text (nodes/users/groups/profiles/admins index), (2) bare centered `<td>` text `No API keys yet.` / `No audit entries yet.` (api-keys, audit-log, group members), (3) tiny `text-[11px]/text-sm text-fg-muted` inline strings in pickers (users dialogs, admins dialog, access). Also WarpEmpty exposes a `cta` prop (warp-table.tsx:324, renders a Plus button) but NONE of the five index screens pass it \u2014 Marzban always pairs an empty list with a 'Create' CTA. So a brand-new install shows 'No nodes yet.' with no button to add one.",
+    "fix": "Use WarpEmpty everywhere a list can be empty (api-keys, audit-log, group members). Pass the `cta={{label:'Add node', onClick:...}}` prop on the index screens so the first-run empty state offers the create action, matching Marzban. Standardize the picker empty strings to one muted size.",
+    "source": "general-cleanup"
+  },
+  {
+    "title": "Ad-hoc inline styles with hardcoded hex instead of tokens/classes",
+    "area": "ui",
+    "file": "web/components/console/screens/audit-log.tsx:38; nodes/index.tsx:79; users/access.tsx:604; admins/dialog.tsx:161; nodes/detail.tsx:201; profiles/index.tsx:277",
+    "severity": "medium",
+    "detail": "The search-input magnifier is positioned with a duplicated inline style `style={{ position:'absolute', left:14, color:'#707070', pointerEvents:'none' }}` in BOTH audit-log.tsx:38 and nodes/index.tsx:79 \u2014 same literal, copy-pasted, with a hardcoded `#707070` that isn't the `fg-muted` token. users/access.tsx:604 hardcodes a chart bar color `background:'#008ffb'` inline. Several `style={{ marginLeft:'auto' }}` / `marginTop:0` / `marginLeft:0` (detail.tsx:201, admins/dialog.tsx:161, profiles/index.tsx:277) are layout nudges that should be utility classes (`ml-auto`, `mt-0`).",
+    "fix": "Extract a `<SearchInput>` wrapper (icon + input) used by audit-log and nodes (and any other filter box) so the magnifier markup/positioning lives once and uses `text-fg-muted`. Replace inline `marginLeft:auto` etc. with Tailwind classes. Move the chart color to a token/CSS var.",
+    "source": "general-cleanup"
+  },
+  {
+    "title": "Drawer header weight differs from Modal/dialog headers",
+    "area": "ui",
+    "file": "web/components/console/screens/parts.tsx:65 (Drawer title text-sm font-medium) vs ui/modal.tsx:34 (text-base font-semibold) vs globals.css:5266 (warp-dlg 15px/500); security-settings.tsx:127 overrides with text-lg",
+    "severity": "low",
+    "detail": "Three different title typographies for what are all 'a panel with a heading and a form': Drawer renders title at `text-sm font-medium`, Modal at `text-base font-semibold`, warp-dlg at 15px/500. And SecuritySettings has to pass `<span className=\"text-lg font-medium\">` (security-settings.tsx:127) to make the Drawer title look right, proving the Drawer default is too small. Headers should read at one weight/size across panels like Marzban.",
+    "fix": "Set a single heading style (e.g. text-base font-semibold) for Modal, Drawer, and the consolidated dialog. Bake it into the Drawer so screens stop overriding it with text-lg per-call.",
+    "source": "general-cleanup"
+  }
+]

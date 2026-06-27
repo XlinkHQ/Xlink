@@ -393,11 +393,15 @@ async def public_subscription(
 
     content_type = _FORMAT_CONTENT_TYPES.get(detected_format, "text/plain")
 
+    fname = (owner.username if owner else None) or cfg.profile_title or "xlink"
+    fname = "".join(c for c in fname if c.isalnum() or c in "-_.") or "xlink"
+    update_days = max(1, round(cfg.update_interval_hours / 24))
     headers = {
         "subscription-userinfo": userinfo,
-        "content-disposition": 'attachment; filename="xlink-subscription"',
+        "content-disposition": f'attachment; filename="{fname}"',
         "cache-control": "no-store",
-        "profile-update-interval": str(cfg.update_interval_hours),
+        "profile-update-interval": str(update_days),
+        "profile-web-page-url": str(request.url).split("?", 1)[0],
     }
     if cfg.profile_title:
         encoded = base64.b64encode(cfg.profile_title.encode()).decode()
