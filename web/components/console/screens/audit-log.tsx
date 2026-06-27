@@ -35,7 +35,7 @@ export function AuditLogScreen() {
     <div className="w-full">
       <div className="mb-3 flex items-center justify-end gap-2">
         <span className="warp-tb-search-wrap" style={{ maxWidth: 220, flex: "none" }}>
-          <Search style={{ position: "absolute", left: 14, color: "var(--body-muted)", pointerEvents: "none" }} size={13} />
+          <Search style={{ position: "absolute", left: 14, color: "#707070", pointerEvents: "none" }} size={13} />
           <input
             className="warp-tb-search"
             value={actor}
@@ -45,32 +45,32 @@ export function AuditLogScreen() {
         </span>
       </div>
 
-      <div>
-        <table className="w-full border-collapse text-sm">
+      <div className="w-full overflow-hidden rounded-xl border border-hairline bg-canvas">
+        <table className="w-full table-fixed border-collapse text-sm">
           <thead>
-            <tr className="warp-thead text-left">
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">When</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Admin</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Action</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Method</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Path</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">IP</th>
+            <tr className="warp-thead border-b border-hairline text-left">
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">When</th>
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Admin</th>
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Action</th>
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Method</th>
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Path</th>
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">IP</th>
             </tr>
           </thead>
           <tbody>
             {q.isLoading ? (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-fg-muted">Loading…</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-fg-muted">Loading…</td></tr>
             ) : entries.length === 0 ? (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-fg-muted">{actor ? "No audit entries for this admin." : "No audit entries yet."}</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-fg-muted">{actor ? "No audit entries for this admin." : "No audit entries yet."}</td></tr>
             ) : (
               entries.map((e) => (
-                <tr key={e.id} className="hover:bg-muted">
-                  <td className="px-3 py-2.5 text-fg-muted" title={new Date(e.created_at).toLocaleString()}>{relTime(e.created_at)}</td>
-                  <td className="px-3 py-2.5 font-medium text-fg">{e.actor_username || "—"}</td>
-                  <td className="px-3 py-2.5 capitalize">{e.action}</td>
-                  <td className="px-3 py-2.5"><WarpBadge tone={methodTone(e.method)}>{e.method}</WarpBadge></td>
-                  <td className="px-3 py-2.5 warp-tb-mono text-xs">{e.path}</td>
-                  <td className="px-3 py-2.5 warp-tb-mono text-xs text-fg-muted">{e.ip_address || "—"}</td>
+                <tr key={e.id} className="border-t border-hairline hover:bg-muted">
+                  <td className="px-4 py-2.5 text-fg-muted" title={new Date(e.created_at).toLocaleString()}>{relTime(e.created_at)}</td>
+                  <td className="truncate px-4 py-2.5 font-medium text-fg">{e.actor_username || "—"}</td>
+                  <td className="px-4 py-2.5 capitalize">{e.action}</td>
+                  <td className="px-4 py-2.5"><WarpBadge tone={methodTone(e.method)}>{e.method}</WarpBadge></td>
+                  <td className="truncate px-4 py-2.5 warp-tb-mono text-xs">{e.path}</td>
+                  <td className="px-4 py-2.5 warp-tb-mono text-xs text-fg-muted">{e.ip_address || "—"}</td>
                 </tr>
               ))
             )}
