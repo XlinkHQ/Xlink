@@ -159,63 +159,14 @@ export function WarpButton({
   );
 }
 
-function SortArrow({ dir }: { dir?: "asc" | "desc" }) {
-  return (
-    <svg
-      className={`warp-th-arrow${dir ? " is-active" : ""}${dir === "asc" ? " is-asc" : ""}`}
-      width="12"
-      height="12"
-      viewBox="0 0 16 16"
-      role="img"
-      focusable="false"
-      aria-hidden="true"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="currentColor"
-    >
-      <path d="M11.5361 10.2745C11.8024 10.0029 11.8249 9.56807 11.5762 9.26961C11.3275 8.97139 10.8961 8.91526 10.5811 9.12801L10.5195 9.17391L8.00001 11.2735L5.48048 9.17391L5.41895 9.12801C5.10388 8.91526 4.67252 8.97139 4.42384 9.26961C4.17512 9.56807 4.19758 10.0029 4.46387 10.2745L4.51954 10.3263L7.51954 12.8263C7.79767 13.058 8.20234 13.058 8.48048 12.8263L11.4805 10.3263L11.5361 10.2745Z" />
-      <path d="M8.75 12.25C8.75 12.6642 8.41421 13 8 13C7.58579 13 7.25 12.6642 7.25 12.25L7.25 3.75C7.25 3.33579 7.58579 3 8 3C8.41421 3 8.75 3.33579 8.75 3.75V12.25Z" />
-    </svg>
-  );
-}
-
-export function WarpHead({
-  cols,
-  actions,
-  sortKey,
-  sortDir,
-  onSort,
-}: {
-  cols: ReactNode[];
-  actions?: boolean;
-  sortKey?: number | null;
-  sortDir?: "asc" | "desc";
-  onSort?: (index: number) => void;
-}) {
+export function WarpHead({ cols, actions }: { cols: ReactNode[]; actions?: boolean }) {
   return (
     <div className="warp-tb-head">
-      {cols.map((c, i) => {
-        const sortable = Boolean(onSort) && c != null && c !== "";
-        const active = sortKey === i;
-        if (!sortable) {
-          return (
-            <span key={i} className="warp-tb-cell">
-              {c}
-            </span>
-          );
-        }
-        return (
-          <span key={i} className="warp-tb-cell">
-            <button
-              type="button"
-              className={`warp-th-btn${active ? " is-active" : ""}`}
-              onClick={() => onSort?.(i)}
-            >
-              <span>{c}</span>
-              <SortArrow dir={active ? sortDir : undefined} />
-            </button>
-          </span>
-        );
-      })}
+      {cols.map((c, i) => (
+        <span key={i} className="warp-tb-cell">
+          {c}
+        </span>
+      ))}
       {actions ? <span className="warp-tb-cell warp-tb-cell-actions" /> : null}
     </div>
   );
@@ -230,35 +181,35 @@ export function WarpRow({
   onClick?: () => void;
   menu?: WarpMenuItem[];
 }) {
-  const theme = useTheme();
-  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
-  const clickTimer = useRef<number | null>(null);
-
-  const openMenu = (e: React.MouseEvent) => {
-    if (!menu || menu.length === 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (clickTimer.current) { window.clearTimeout(clickTimer.current); clickTimer.current = null; }
-    const W = 200;
-    let x = e.clientX;
-    if (x + W > window.innerWidth - 8) x = window.innerWidth - 8 - W;
-    setCtx({ x: Math.max(8, x), y: e.clientY });
+  const openMenu = (el: HTMLElement) => {
+    el.closest(".warp-tb-row")?.querySelector<HTMLButtonElement>(".warp-menu button")?.click();
   };
-
-  // Delay single-click (detail) so a double-click can cancel it and open the menu instead.
-  const handleClick = () => {
-    if (!onClick) return;
-    if (!menu) { onClick(); return; }
-    if (clickTimer.current) window.clearTimeout(clickTimer.current);
-    clickTimer.current = window.setTimeout(() => { clickTimer.current = null; onClick(); }, 220);
-  };
-
   return (
     <div
       className="warp-tb-row"
-      onClick={handleClick}
-      onDoubleClick={menu ? openMenu : undefined}
-      onContextMenu={menu ? openMenu : undefined}
+      onClick={
+        onClick
+          ? (e) => {
+              const row = e.currentTarget as HTMLElement & { _t?: number };
+              if (row._t) window.clearTimeout(row._t);
+              row._t = window.setTimeout(() => onClick(), menu ? 220 : 0);
+            }
+          : undefined
+      }
+      onDoubleClick={
+        menu
+          ? (e) => {
+              const row = e.currentTarget as HTMLElement & { _t?: number };
+              if (row._t) { window.clearTimeout(row._t); row._t = undefined; }
+              openMenu(e.currentTarget as HTMLElement);
+            }
+          : undefined
+      }
+      onContextMenu={
+        menu
+          ? (e) => { e.preventDefault(); openMenu(e.currentTarget as HTMLElement); }
+          : undefined
+      }
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={
@@ -277,40 +228,11 @@ export function WarpRow({
           {c}
         </span>
       ))}
-      {ctx && typeof document !== "undefined"
-        ? createPortal(
-            <div className={theme === "dark" ? "xlink-dark" : undefined}>
-              <button
-                type="button"
-                aria-hidden
-                tabIndex={-1}
-                className="warp-menu-scrim"
-                onClick={() => setCtx(null)}
-                onContextMenu={(e) => { e.preventDefault(); setCtx(null); }}
-              />
-              <div
-                role="menu"
-                className="warp-menu-pop"
-                style={{ top: ctx.y, left: ctx.x, right: "auto" }}
-              >
-                {menu?.map((it) => (
-                  <button
-                    key={it.label}
-                    type="button"
-                    role="menuitem"
-                    disabled={it.disabled}
-                    onClick={() => { setCtx(null); it.onClick(); }}
-                    className={cn("warp-menu-item", it.danger && "is-danger")}
-                  >
-                    {it.icon ? <Icon name={it.icon} size={13} /> : null}
-                    {it.label}
-                  </button>
-                ))}
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      {menu ? (
+        <span className="warp-tb-cell warp-tb-cell-actions" onClick={(e) => e.stopPropagation()}>
+          <WarpMenu items={menu} />
+        </span>
+      ) : null}
     </div>
   );
 }
