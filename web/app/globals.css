@@ -5176,7 +5176,7 @@ input.switch:focus-visible {
   -webkit-font-smoothing: antialiased;
 }
 .warp-tb-head { height: 36px; }
-.warp-tb-row { height: 44px; user-select: none; border-radius: 8px; }
+.warp-tb-row { height: 48px; user-select: none; border-radius: 8px; }
 .warp-tb-head { background-color: transparent; }
 .warp-tb-head > * { font-weight: 500; font-size: 0.75rem; color: var(--body-muted); }
 .warp-thead { background-color: transparent; }
