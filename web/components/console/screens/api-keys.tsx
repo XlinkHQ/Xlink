@@ -114,35 +114,35 @@ export function ApiKeysScreen() {
         </div>
       ) : null}
 
-      <div>
+      <div className="-mx-4 w-[calc(100%+2rem)] overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="warp-thead text-left">
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Key</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Last used</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Created</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Status</th>
-              <th className="w-16 px-3 py-2.5" />
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Key</th>
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Last used</th>
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Created</th>
+              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Status</th>
+              <th className="w-16 px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
             {q.isLoading ? (
-              <tr><td colSpan={5} className="px-3 py-8 text-center text-fg-muted">Loading…</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-fg-muted">Loading…</td></tr>
             ) : keys.length === 0 ? (
-              <tr><td colSpan={5} className="px-3 py-8 text-center text-fg-muted">No API keys yet. Create one to automate the panel.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-fg-muted">No API keys yet. Create one to automate the panel.</td></tr>
             ) : (
               keys.map((k) => (
                 <tr key={k.id} className="hover:bg-muted">
-                  <td className="px-3 py-2.5 warp-tb-mono text-xs font-medium text-fg">xlk_{k.prefix}…</td>
-                  <td className="px-3 py-2.5 text-fg-muted">{relTime(k.last_used_at)}</td>
-                  <td className="px-3 py-2.5 text-fg-muted">{new Date(k.created_at).toLocaleDateString()}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-4 py-2.5 warp-tb-mono text-xs font-medium text-fg">xlk_{k.prefix}…</td>
+                  <td className="px-4 py-2.5 text-fg-muted">{relTime(k.last_used_at)}</td>
+                  <td className="px-4 py-2.5 text-fg-muted">{new Date(k.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-2.5">
                     <Switch
                       checked={!k.revoked_at}
                       onChange={(on) => (on ? enable(k) : revoke(k))}
                     />
                   </td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-4 py-2.5 text-right">
                     <button type="button" className="warp-tb-rowicon warp-tb-del" title="Delete" onClick={() => purge(k)}>
                       <Trash size={12} />
                     </button>
