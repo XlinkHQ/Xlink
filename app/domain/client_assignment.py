@@ -35,6 +35,7 @@ class AssignmentStatus(StrEnum):
     ACTIVE = "active"
     DISABLED = "disabled"
     EXPIRED = "expired"
+    LIMITED = "limited"
 
 
 class ClientAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):

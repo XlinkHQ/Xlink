@@ -352,7 +352,7 @@ class TrafficRepository:
         node_rows = await self.session.execute(
             select(ClientAssignment.node_id).where(
                 ClientAssignment.user_id == user_id,
-                ClientAssignment.status == AssignmentStatus.DISABLED,
+                ClientAssignment.status == AssignmentStatus.LIMITED,
             )
         )
         node_ids = [nid for (nid,) in node_rows.all() if nid is not None]
@@ -360,7 +360,7 @@ class TrafficRepository:
             update(ClientAssignment)
             .where(
                 ClientAssignment.user_id == user_id,
-                ClientAssignment.status == AssignmentStatus.DISABLED,
+                ClientAssignment.status == AssignmentStatus.LIMITED,
             )
             .values(status=AssignmentStatus.ACTIVE)
             .execution_options(synchronize_session=False)

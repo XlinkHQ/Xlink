@@ -276,7 +276,7 @@ class TrafficService:
                 ClientAssignment.user_id.in_(over),
                 ClientAssignment.status == AssignmentStatus.ACTIVE,
             )
-            .values(status=AssignmentStatus.DISABLED)
+            .values(status=AssignmentStatus.LIMITED)
             .execution_options(synchronize_session=False)
         )
         await self._session.flush()
@@ -285,7 +285,7 @@ class TrafficService:
     async def _enforce_limit(self, assignment: ClientAssignment) -> None:
         if assignment.status is not AssignmentStatus.ACTIVE:
             return
-        assignment.status = AssignmentStatus.DISABLED
+        assignment.status = AssignmentStatus.LIMITED
         await self._session.execute(
             update(Node)
             .where(Node.id == assignment.node_id, Node.current_users > 0)

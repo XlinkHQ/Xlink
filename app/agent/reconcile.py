@@ -62,7 +62,7 @@ async def _apply_data_resets(session) -> list:
             node_rows = await session.execute(
                 select(ClientAssignment.node_id).where(
                     ClientAssignment.user_id == user.id,
-                    ClientAssignment.status == AssignmentStatus.DISABLED,
+                    ClientAssignment.status == AssignmentStatus.LIMITED,
                 )
             )
             woke_nodes.update(nid for (nid,) in node_rows.all() if nid is not None)
@@ -70,7 +70,7 @@ async def _apply_data_resets(session) -> list:
                 update(ClientAssignment)
                 .where(
                     ClientAssignment.user_id == user.id,
-                    ClientAssignment.status == AssignmentStatus.DISABLED,
+                    ClientAssignment.status == AssignmentStatus.LIMITED,
                 )
                 .values(status=AssignmentStatus.ACTIVE)
             )
