@@ -5287,15 +5287,21 @@ input.switch:focus-visible {
   flex: 0 0 240px; width: 240px; max-width: 55%; margin-left: auto;
 }
 .warp-dlg-field input, .warp-dlg-field select, .warp-dlg-field textarea {
-  border-radius: 10px;
-  border: 2px solid rgba(0,0,0,0.1);
-  padding: 0.45rem 0.7rem;
-  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  padding: 0 10px;
+  height: 36px;
+  font-size: 0.8125rem;
   width: 100%; max-width: 100%;
-  background: #fff; color: #111; outline: none;
+  background: var(--white); color: var(--body-color); outline: none;
   font-family: inherit;
+  transition: border-color .1s ease, box-shadow .1s ease;
 }
-.warp-dlg-field input:focus, .warp-dlg-field select:focus, .warp-dlg-field textarea:focus { border-color: #0e52fd; }
+.warp-dlg-field textarea { height: auto; padding: 8px 10px; }
+.warp-dlg-field input:focus, .warp-dlg-field select:focus, .warp-dlg-field textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
 .warp-dlg-field textarea { resize: vertical; min-height: 70px; font-family: var(--font-mono); font-size: 12px; }
 .warp-dlg-field .warp-dlg-hint { display:block; font-size: 11px; color: #9a9a9a; font-weight: 400; margin-top: 2px; }
 .warp-dlg-footer {
@@ -5446,33 +5452,35 @@ input.switch:focus-visible {
 .warp-dlg-picker { position: relative; width: 100%; }
 .warp-dlg-picker-trigger {
   display: flex; align-items: center; justify-content: space-between; width: 100%;
-  border-radius: 10px; border: 2px solid rgba(0,0,0,0.1);
-  padding: 0.45rem 0.7rem; font-size: 14px; background: #fff; color: #111; cursor: pointer;
+  height: 36px; border-radius: 8px; border: 1px solid var(--hairline);
+  padding: 0 10px; font-size: 0.8125rem; background: var(--white); color: var(--body-color); cursor: pointer;
+  transition: border-color .1s ease, box-shadow .1s ease;
 }
+.warp-dlg-picker-trigger:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--hairline)); }
 .warp-dlg-picker-list {
   position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30;
   max-height: 240px; overflow-y: auto; overscroll-behavior: contain;
-  border-radius: 10px; border: 1px solid rgba(0,0,0,0.1); padding: 4px;
-  background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  display: flex; flex-direction: column; gap: 2px;
+  border-radius: 10px; border: 1px solid var(--hairline); padding: 4px;
+  background: var(--white); box-shadow: 0 8px 28px rgba(0,0,0,0.16), 0 1px 2px rgba(0,0,0,0.06);
+  display: flex; flex-direction: column; gap: 0;
   scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.2) transparent;
 }
 .warp-dlg-picker-list::-webkit-scrollbar { width: 8px; }
 .warp-dlg-picker-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
 .warp-dlg-picker-item {
   display: flex; align-items: center; gap: 8px;
-  height: 34px; flex: none; border-radius: 8px; padding: 0 9px;
-  font-size: 13px; line-height: 1; text-align: left;
-  background: transparent; border: none; cursor: pointer; color: #111; width: 100%;
+  height: 32px; flex: none; border-radius: 6px; padding: 0 8px;
+  font-size: 0.8125rem; line-height: 1; text-align: left;
+  background: transparent; border: none; cursor: pointer; color: var(--body-color); width: 100%;
 }
 .warp-dlg-picker-item > .truncate { flex: 1; min-width: 0; }
-.warp-dlg-picker-item:hover { background: #f4f4f4; }
-.warp-dlg-picker-item.is-sel { background: #eff4ff; }
+.warp-dlg-picker-item:hover { background: rgba(0,0,0,0.05); }
+.warp-dlg-picker-item.is-sel { color: var(--primary); }
+.xlink-dark .warp-dlg-picker-item:hover { background: rgba(255,255,255,0.07); }
 .warp-dlg-check {
   display: grid; place-items: center; height: 16px; width: 16px; flex: none;
-  border-radius: 4px; border: 1px solid rgba(0,0,0,0.2); font-size: 10px; line-height: 1;
+  color: var(--primary);
 }
-.warp-dlg-picker-item.is-sel .warp-dlg-check { background: #2563eb; color: #fff; border-color: #2563eb; }
 .xlink-dark .warp-dlg-picker-trigger, .xlink-dark .warp-dlg-picker-list { background:#0b0b0b; color:#fff; border-color: rgba(255,255,255,0.12); }
 .xlink-dark .warp-dlg-picker-item { color:#fff; }
 .xlink-dark .warp-dlg-picker-item:hover { background:#141414; }

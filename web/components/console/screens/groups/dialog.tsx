@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { ApiError, createGroup, type GroupRead, type ProfileRead, updateGroup } from "@/lib/api";
@@ -76,7 +76,7 @@ export function GroupDialog({
             </div>
           ) : null}
 
-          <div className="warp-dlg-field">
+          <div className="warp-dlg-field" style={{ alignItems: "flex-start" }}>
             <label>Inbounds</label>
             <div className="warp-dlg-picker">
               <button
@@ -87,7 +87,7 @@ export function GroupDialog({
                 <span className="truncate">
                   {selected.size === 0 ? "Select inbounds" : `${selected.size} selected`}
                 </span>
-                <ChevronDown size={15} style={{ transform: pickerOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+                <ChevronDown size={14} style={{ transform: pickerOpen ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
               </button>
               {pickerOpen ? (
                 <div className="warp-dlg-picker-list">
@@ -101,7 +101,7 @@ export function GroupDialog({
                         onClick={() => toggle(p.id)}
                         className={cn("warp-dlg-picker-item", selected.has(p.id) && "is-sel")}
                       >
-                        <span className="warp-dlg-check">{selected.has(p.id) ? "✓" : ""}</span>
+                        <span className="warp-dlg-check">{selected.has(p.id) ? <Check size={14} /> : null}</span>
                         <span className="truncate">{p.name} · {p.protocol} @ {nodeName(p.node_id)}</span>
                       </button>
                     ))
