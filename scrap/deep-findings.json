@@ -1,0 +1,461 @@
+[
+  {
+    "title": "Incorrect traffic split calculation in public subscription endpoint",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/api/v1/routers/subscriptions.py:414-415",
+    "severity": "high",
+    "detail": "The calculation for separating upload and download traffic is incorrect. The code uses `up = min(stats.upload_bytes, stats.used_bytes)` and `down = max(0, stats.used_bytes - up)`, which assumes upload_bytes is an unknown value that needs to be extracted from used_bytes. However, UserTrafficStats.upload_bytes and download_bytes are already separate aggregated values from the database (sum of TrafficRecord.upload_bytes and TrafficRecord.download_bytes respectively). The current logic will produce incorrect upload/download splits in the subscription-userinfo header, causing clients to display wrong traffic statistics.",
+    "fix": "Replace lines 414-415 with: `up = stats.upload_bytes` and `down = stats.download_bytes`. These values are already correct aggregates from the database and should be used directly without transformation.",
+    "sub": "api-routers"
+  },
+  {
+    "title": "Wrong return type annotation for 204 No Content endpoint",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/api/v1/routers/backup.py:105-106",
+    "severity": "medium",
+    "detail": "The backup_import_db endpoint declares return type `-> Response` but FastAPI endpoints with `status_code=204` should return `None`. The function does return Response objects (lines 118, 139), but this violates the type contract expected by FastAPI. The endpoint works at runtime because FastAPI handles the actual response, but type checkers will flag this mismatch and it's inconsistent with other 204 endpoints in the codebase (e.g., auth.py, users.py).",
+    "fix": "Change the return type annotation from `-> Response:` to `-> None:` on line 106. The existing Response objects returned by the function will still work correctly since FastAPI automatically handles them.",
+    "sub": "api-routers"
+  },
+  {
+    "title": "Group update bypasses StaleDataError protection",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/group_service.py:41",
+    "severity": "high",
+    "detail": "GroupService.update() performs manual version check then calls session.flush() directly, but does not use save_or_conflict() wrapper like ProfileService and NodeService. This means StaleDataError (concurrent modification) will propagate uncaught instead of being converted to ConflictError, causing 500 errors instead of proper 409 responses.",
+    "fix": "Replace the manual flush with a call to _flush() that wraps save_or_conflict(), following the pattern used in profile_service.py:202-203 and node_service.py:125-126.",
+    "sub": "services"
+  },
+  {
+    "title": "Unusual __import__ pattern for TYPE_CHECKING",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/client_assignment_service.py:25",
+    "severity": "low",
+    "detail": "Uses if __import__('typing').TYPE_CHECKING: instead of the standard 'from typing import TYPE_CHECKING' pattern used in all other services. This is non-idiomatic and adds unnecessary runtime overhead, even though it still works.",
+    "fix": "Add 'from typing import TYPE_CHECKING' to line 4 imports and replace line 25 with 'if TYPE_CHECKING:' to match code style in user_service.py, profile_service.py, and token_service.py.",
+    "sub": "services"
+  },
+  {
+    "title": "Bare Exception handlers swallow logging issues",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/user_service.py:290",
+    "severity": "medium",
+    "detail": "The _invalidate_user_feed() method catches all exceptions silently without logging. Cache invalidation failures could hide critical Redis/networking issues without any observability, making production debugging difficult.",
+    "fix": "Log the exception at warning level before passing: 'except Exception as exc: logger.warning(\"cache_invalidation_failed\", error=str(exc))'.",
+    "sub": "services"
+  },
+  {
+    "title": "Race condition in WireGuard address allocation",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/client_assignment_service.py:344-368",
+    "severity": "high",
+    "detail": "The _allocate_wireguard_address() method queries existing addresses, finds the next free octet, but does not hold any lock during this check-then-allocate sequence. Concurrent create() calls can both see the same address as free and allocate the same address to different clients, causing address conflicts. The method only scans current assignments (line 352-356) without preventing concurrent allocations between the scan and insert.",
+    "fix": "Either: (1) Use a SELECT FOR UPDATE lock during the query to prevent concurrent reads, or (2) implement unique constraint on (node_id, address) at database level and catch IntegrityError on insert with retry logic, similar to register_device() pattern in user_service.py:219-223.",
+    "sub": "services"
+  },
+  {
+    "title": "Credentials potentially stored as None",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/client_assignment_service.py:117",
+    "severity": "medium",
+    "detail": "Calls 'dict(result.raw)' but result.raw has a default_factory=dict from ClientResult schema. If a provider returns result.raw=None explicitly, dict(None) raises TypeError. The code assumes raw is always a dict but doesn't validate this before conversion.",
+    "fix": "Change line 117 to: 'assignment.credentials = result.raw if isinstance(result.raw, dict) else {}' or add assertion: 'assert isinstance(result.raw, dict), f\"Provider returned invalid credentials: {result.raw}\"'.",
+    "sub": "services"
+  },
+  {
+    "title": "Missing transaction rollback on WireGuard address collision",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/client_assignment_service.py:119-124",
+    "severity": "medium",
+    "detail": "When add_pending() fails (line 121), the code calls _deprovision() and _release_node_slot() but does not explicitly rollback the pending assignment insertion. The new assignment entity was added to the session but not flushed yet, so it remains in session memory. If this exception is caught upstream and another operation occurs, the orphaned assignment state could leak.",
+    "fix": "Add 'await self._repo.session.rollback()' before or after releasing slot (line 122-123) to ensure session is clean, similar to user_service.py:222.",
+    "sub": "services"
+  },
+  {
+    "title": "sync_group bulk operation lacks aggregate cache invalidation",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/client_assignment_service.py:179-225",
+    "severity": "medium",
+    "detail": "The sync_group() method calls create() and delete() in a loop (lines 206, 213), and each call individually invalidates subscription cache for its node. This causes redundant cache invalidations for the same nodes if a group spans multiple profiles on the same node. For groups with many profiles on few nodes, this is O(n) cache flushes instead of O(k) where k=unique node count.",
+    "fix": "Collect all affected node_ids during the sync loop, then perform a single bulk invalidation at the end: 'affected_nodes = set(); ... await self._invalidate_subscription_cache(nid) for each nid in affected_nodes'.",
+    "sub": "services"
+  },
+  {
+    "title": "Potential uninitialized variable in heartbeat",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/services/node_service.py:68-81",
+    "severity": "low",
+    "detail": "The heartbeat() method has conditional logic where node.status may be set multiple times (lines 77-80). If status param is None and node.status is not OFFLINE, then status is never updated but the function returns flushed node. This is intentional per comment, but the logic path is subtle and could be misread as uninitialized.",
+    "fix": "No fix needed if intentional. Add clarifying comment: '# If status not provided, keep existing status unless offline (then go to ACTIVE)'.",
+    "sub": "services"
+  },
+  {
+    "title": "Incorrect async await on AsyncSession.delete()",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/repositories/base.py:41",
+    "severity": "critical",
+    "detail": "The delete() method in BaseRepository incorrectly awaits session.delete(). In SQLAlchemy's AsyncSession, session.delete() is a synchronous method that marks an object for deletion. Only session.flush() and session.commit() are async. Awaiting a non-awaitable synchronous method will raise a TypeError at runtime.",
+    "fix": "Remove the await keyword before session.delete(). Change 'await self.session.delete(instance)' to 'self.session.delete(instance)'. The same fix applies to InboundHostRepository.delete() at line 38 and ClientAssignmentRepository.remove() at line 65.",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Same incorrect async await on AsyncSession.delete() in InboundHostRepository",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/repositories/inbound_host.py:38",
+    "severity": "critical",
+    "detail": "Same as above - InboundHostRepository.delete() line 38 incorrectly awaits session.delete().",
+    "fix": "Change 'await self.session.delete(host)' to 'self.session.delete(host)' on line 38.",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Same incorrect async await on AsyncSession.delete() in ClientAssignmentRepository",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/repositories/client_assignment.py:65",
+    "severity": "critical",
+    "detail": "Same as above - ClientAssignmentRepository.remove() line 65 incorrectly awaits session.delete().",
+    "fix": "Change 'await self.session.delete(assignment)' to 'self.session.delete(assignment)' on line 65.",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Incorrect version_id_col reference in mapper args",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/group.py:23",
+    "severity": "high",
+    "detail": "The __mapper_args__ passes 'version' class attribute directly, but at definition time 'version' is the Mapped descriptor, not the Column object. This causes SQLAlchemy's optimistic locking to fail because it cannot properly identify the version column for change tracking and conflict detection.",
+    "fix": "Use the column object directly: __mapper_args__: ClassVar[dict[str, Any]] = {'version_id_col': Group.version.property.columns[0]} or use a string reference to the column name: __mapper_args__: ClassVar[dict[str, Any]] = {'version_id_col': 'version'}. Apply same fix to Profile (line 58), Node (line 57), and ClientAssignment (line 88).",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Same version_id_col issue in Profile domain",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/profile.py:58",
+    "severity": "high",
+    "detail": "Profile model has the same version_id_col reference bug as described above.",
+    "fix": "Fix version_id_col reference using string name 'version' or proper Column object reference.",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Same version_id_col issue in Node domain",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/node.py:57",
+    "severity": "high",
+    "detail": "Node model has the same version_id_col reference bug.",
+    "fix": "Fix version_id_col reference using string name 'version' or proper Column object reference.",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Same version_id_col issue in ClientAssignment domain",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/client_assignment.py:88",
+    "severity": "high",
+    "detail": "ClientAssignment model has the same version_id_col reference bug.",
+    "fix": "Fix version_id_col reference using string name 'version' or proper Column object reference.",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Nullable unique constraint on User.email",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/user.py:75",
+    "severity": "medium",
+    "detail": "The email column is both nullable and unique. While NULL != NULL in SQL, this can cause unexpected behavior depending on the database system and constraints handling. Multiple users with NULL emails might violate uniqueness in some scenarios, or the constraint may not work as expected. This is a data model inconsistency that could lead to validation errors.",
+    "fix": "Either make email non-nullable (remove nullable=True) or remove the unique constraint and enforce uniqueness at the application layer. If null emails should be allowed, use a partial unique index: Index('ix_users_email_unique', email, postgresql_where=User.email.isnot(None)).",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Missing flush in RefreshTokenRepository.mark_grace_used()",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/repositories/refresh_token.py:32",
+    "severity": "medium",
+    "detail": "The mark_grace_used() method executes an UPDATE statement but doesn't call session.flush(), unlike revoke_by_jti() and revoke_all_for_user(). While the transaction will eventually flush/commit higher up, this is inconsistent with the pattern in other methods and could lead to subtle timing issues if the method result is checked immediately afterward before the transaction completes.",
+    "fix": "Add 'await self.session.flush()' after the execute() call to ensure the change is persisted immediately, matching the pattern in revoke_by_jti() and revoke_all_for_user() methods.",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Inconsistent eager loading strategy for ClientAssignment relationships",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/domain/client_assignment.py:84",
+    "severity": "low",
+    "detail": "The user relationship is eager-loaded with lazy='selectin', but profile and node relationships use lazy='noload'. This inconsistency could lead to unexpected UndetachedInstanceError when accessing profile or node attributes outside of session scope, while user access works fine. This indicates unclear design intent about when these relationships are needed.",
+    "fix": "Document why user is eager-loaded but others are not, or make the strategy consistent. Consider using lazy='selectin' for all required relationships or lazy='noload' for all if they're loaded explicitly elsewhere.",
+    "sub": "repositories-domain"
+  },
+  {
+    "title": "Renderer produces mismatched feed content and items",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/subscription/renderer.py:53",
+    "severity": "critical",
+    "detail": "In render_feed(), line 53 passes the original unfiltered `configs` tuple to the registry renderer, but lines 42-52 create a filtered `rendered` tuple containing only successfully rendered RenderedConfig objects. When some configs fail to render (caught at line 46), the filtered `rendered` tuple is smaller than the original `configs`. The registry.render() then operates on the full original configs set, potentially including protocols/configs that failed rendering validation. This causes the feed content to reference configurations that are not in the rendered.configs output.\n\nFor example: if 5 configs are passed and 2 fail validation, rendered.configs has 3 items but content may reference all 5.",
+    "fix": "Change line 53 from:\n  content = self._registry.render(feed_format, configs)\nto:\n  content = self._registry.render(feed_format, tuple(c.config for c in rendered))\n\nThis ensures the registry receives only the successfully rendered configs that match what appears in rendered.configs.",
+    "sub": "subscription"
+  },
+  {
+    "title": "Text format silently drops shadowtls configs without warning",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/subscription/formats/text.py:8-21",
+    "severity": "high",
+    "detail": "The shadowtls protocol is listed in SUPPORTED_SUBSCRIPTION_PROTOCOLS (models.py:22) and is supported by clash, mihomo, and singbox formatters. However, text.py only checks if c.protocol is in URI_PROTOCOLS (line 11) or wireguard (line 16). Since shadowtls is not in URI_PROTOCOLS and is not wireguard, shadowtls configs are silently skipped in the text formatter without any warning or error. This creates a silent data loss scenario where users requesting text format will not receive shadowtls configs and won't know why.\n\nUsers with shadowtls-only profiles will get an empty text feed with no indication of what happened.",
+    "fix": "Add explicit handling for shadowtls in text.py, either:\n1. Add shadowtls URI rendering support to uri.py and include it in URI_PROTOCOLS, or\n2. Add an explicit elif clause in text.py to handle shadowtls (e.g., call a text renderer for it), or\n3. If shadowtls should not be in text format, remove it from SUPPORTED_SUBSCRIPTION_PROTOCOLS and validate profile protocols at feed generation time",
+    "sub": "subscription"
+  },
+  {
+    "title": "Broad exception handling swallows rendering errors in text format",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/subscription/formats/text.py:14,19",
+    "severity": "medium",
+    "detail": "Both try/except blocks (lines 12-15 and 17-20) catch all exceptions with bare `except Exception:`. This is too broad and swallows unexpected errors that might indicate bugs. Specific exceptions like FormatRenderError should be caught, and other exceptions should either propagate or be logged for debugging. Currently, if render_uri() raises an unexpected exception (e.g., AttributeError, TypeError), it's silently ignored.",
+    "fix": "Replace `except Exception:` with `except FormatRenderError:` to only catch expected rendering failures. Unexpected exceptions will then propagate for proper error handling and logging.",
+    "sub": "subscription"
+  },
+  {
+    "title": "Incomplete protocol support documentation in URI renderers",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/subscription/formats/uri.py:20-34",
+    "severity": "low",
+    "detail": "The URI_RENDERERS dict includes 'shadowsocks2022' as a string key (line 25) pointing to the same renderer as 'shadowsocks', but 'shadowsocks2022' is also in SUPPORTED_SUBSCRIPTION_PROTOCOLS. This works correctly but is inconsistent - 'shadowsocks2022' is not formally a protocol constant (unlike PROTOCOL constants in other modules). This makes the protocol support matrix unclear when reading the code.",
+    "fix": "Consider adding a PROTOCOL constant in shadowsocks module for 'shadowsocks2022' and use it in uri.py, or add a comment explaining why 'shadowsocks2022' is handled as a special case variant of shadowsocks in the URI renderer.",
+    "sub": "subscription"
+  },
+  {
+    "title": "Boolean conversion vulnerability in Xray payload builder",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/providers/xray/adapter.py:28",
+    "severity": "high",
+    "detail": "The code converts string values to bool using bool(value), which incorrectly treats any non-empty string (including 'false') as True. This causes fields like 'enable' to be set to True when users pass 'false' as a string value.",
+    "fix": "Use proper boolean parsing: `client[field] = str(value).lower() in ('true', '1', 'yes', 'on')` or use ast.literal_eval for safer conversion, with explicit error handling for invalid boolean inputs.",
+    "sub": "providers"
+  },
+  {
+    "title": "Inconsistent create_client behavior across providers",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/providers/singbox/provider.py:47-48",
+    "severity": "high",
+    "detail": "SingBox provider raises ClientAlreadyExistsError when creating a client that already exists, but WireGuard and Hysteria providers silently update the existing client. This violates the semantic contract that create_client should fail on duplicates. Consistency matters for distributed systems and causes unexpected behavior.",
+    "fix": "WireGuard and Hysteria create_client should raise ClientAlreadyExistsError if the client already exists, matching SingBox behavior. The idempotent behavior should only be in update_client if desired.",
+    "sub": "providers"
+  },
+  {
+    "title": "Incorrect update_client semantics in WireGuard and Hysteria",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/providers/wireguard/provider.py:68-71",
+    "severity": "high",
+    "detail": "WireGuard and Hysteria update_client methods create a new client if it doesn't exist, instead of raising ClientNotFoundError. This violates REST/operation semantics where update should fail on missing resources. This can mask bugs where clients are being created unintentionally.",
+    "fix": "Both providers should raise ClientNotFoundError if the client doesn't exist during update, matching SingBox behavior. If upsert semantics are needed, create a separate upsert_client method.",
+    "sub": "providers"
+  },
+  {
+    "title": "Missing transaction/rollback in JsonClientStore operations",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/providers/base/store.py:39-41",
+    "severity": "medium",
+    "detail": "The pop() method saves to disk after removing from memory. If an exception occurs during _save(), the in-memory and on-disk state become inconsistent. A client was removed from memory but not from disk. Subsequent calls may see conflicting states.",
+    "fix": "Implement a write-ahead log or snapshot/swap pattern: write to a temporary file, then atomically rename. This is partially done in _save() but pop() should be more defensive about partial failures.",
+    "sub": "providers"
+  },
+  {
+    "title": "Potential race condition in XrayGateway circuit breaker state",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/providers/xray/gateway.py:28-40",
+    "severity": "medium",
+    "detail": "The _CircuitState class uses mutable state (failures, open, opened_at) that is modified in _record_failure() and _record_success(). In concurrent scenarios, multiple coroutines could race on these fields, leading to incorrect failure counts or premature circuit opening.",
+    "fix": "Use asyncio.Lock to protect circuit state modifications. Alternatively, use immutable state with atomic replacements (functional approach).",
+    "sub": "providers"
+  },
+  {
+    "title": "Missing health_check implementation in WireGuard and Hysteria providers",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/providers/wireguard/provider.py:87-91",
+    "severity": "low",
+    "detail": "health_check() in WireGuard and Hysteria just checks if the store file exists, which is a weak health indicator. It doesn't verify actual connectivity or configuration validity. This could mask silent failures in the provider setup.",
+    "fix": "Enhance health_check to also validate at least one stored client or verify write permissions by attempting a test operation. Or document that this is intentionally minimal.",
+    "sub": "providers"
+  },
+  {
+    "title": "Overly broad exception handling in provider health check",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/providers/wireguard/provider.py:88-90",
+    "severity": "low",
+    "detail": "The health_check() method catches all exceptions and returns False, which silently swallows unexpected errors like permissions, disk corruption, or out-of-memory. This makes debugging harder and may mask serious issues.",
+    "fix": "Catch specific exceptions (IOError, OSError) and let unexpected exceptions propagate. Or log the exception before returning False.",
+    "sub": "providers"
+  },
+  {
+    "title": "UPDATE_GEO command missing from payload validation dictionary",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/agent/commands.py:14-22",
+    "severity": "medium",
+    "detail": "The UPDATE_GEO CommandKind is defined in domain.py but is missing from the _REQUIRED_PAYLOAD dictionary in commands.py. When validate_payload() is called with UPDATE_GEO, it uses .get() with a default of frozenset(), silently accepting any payload. This means UPDATE_GEO commands can be enqueued without proper validation, potentially leading to agents receiving malformed commands. If UPDATE_GEO requires specific payload fields (e.g., 'latitude', 'longitude'), they are not being validated.",
+    "fix": "Add UPDATE_GEO to the _REQUIRED_PAYLOAD dictionary with appropriate required fields: CommandKind.UPDATE_GEO: frozenset({...required_fields...}), For example if UPDATE_GEO needs geo coordinates: frozenset({\"latitude\", \"longitude\"}). If UPDATE_GEO accepts arbitrary payloads, document this explicitly and consider adding it with frozenset() to make the intention clear.",
+    "sub": "agent"
+  },
+  {
+    "title": "Inconsistent stale node detection logic between reconcile and scheduler",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/agent/reconcile.py:102",
+    "severity": "high",
+    "detail": "reconcile_once() marks nodes as OFFLINE if last_seen_at IS NULL OR last_seen_at < cutoff (line 102), but scheduler.detect_offline_once() marks nodes as OFFLINE only if last_seen_at IS NOT NULL AND last_seen_at < threshold (line 64 in scheduler.py). This inconsistency means newly created nodes with NULL last_seen_at will be marked OFFLINE immediately by reconcile but not by scheduler. Additionally, reconcile uses 120 seconds (_STALE_AFTER_SECONDS) while scheduler defaults to 90 seconds (offline_after_seconds), creating a timing mismatch.",
+    "fix": "Align the node offline detection logic: (1) Remove the NULL check from reconcile.py line 102 to match scheduler logic (change to: or_(Node.last_seen_at < cutoff)), (2) Ensure both use consistent timeout values, either by making scheduler also use 120 seconds or reconcile use 90 seconds, or preferring the scheduler's approach with 90 seconds as default.",
+    "sub": "agent"
+  },
+  {
+    "title": "N+1 query pattern in IP limit enforcement",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/agent/ip_limit.py:55-56",
+    "severity": "medium",
+    "detail": "In the IpLimitService.report() method, the loop at line 55-56 calls _enforce() for each user_id in the touched set. Each _enforce() call opens a new database session (line 59) to fetch the User and ClientAssignment records. Under load with many users hitting device limits, this creates multiple separate database round-trips. For example, if 10 unique users exceed their device limit, 10 separate sessions and queries are executed instead of batching.",
+    "fix": "Refactor to batch the enforcement operations: Instead of calling _enforce() per user_id in a loop, collect all needed user_ids and fetch all Users in a single batch query within one session, then process all enforcement operations together before committing once.",
+    "sub": "agent"
+  },
+  {
+    "title": "Session commit behavior inconsistency in _apply_data_resets",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/agent/reconcile.py:77-78",
+    "severity": "low",
+    "detail": "The _apply_data_resets() function only commits the session if changed == True (line 77-78). However, the session is shared and passed in from reconcile_once(), which manages the session context. While the current code works because reconcile_once() separately commits after calling _apply_data_resets(), the inconsistent commit behavior is confusing and error-prone if this function is called from other contexts. Some calls commit, some don't.",
+    "fix": "Either (1) always commit if changes are made and document the function's transaction semantics clearly, or (2) remove the internal commit and let the caller manage transaction boundaries explicitly. Recommended: remove line 78 commit and let reconcile_once() handle all commits, ensuring _apply_data_resets() doesn't manage its own transactions.",
+    "sub": "agent"
+  },
+  {
+    "title": "Missing type hint on _inserted_deltas parameter",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/traffic/service.py:198",
+    "severity": "medium",
+    "detail": "Parameter 'prepared' is missing type annotation and should be typed as PreparedBatch. Additionally, parameter 'before' is typed only as 'set' but should be more specific: 'set[tuple[uuid.UUID, datetime]]' to match the return type of existing_keys().",
+    "fix": "Add import for PreparedBatch and update signature to: def _inserted_deltas(self, prepared: PreparedBatch, before: set[tuple[uuid.UUID, datetime]]) -> dict[uuid.UUID, int]:",
+    "sub": "traffic"
+  },
+  {
+    "title": "Incorrect type hint in TrafficCollector.seen variable",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/traffic/collector.py:20",
+    "severity": "low",
+    "detail": "Variable 'seen' is declared as set[tuple[uuid.UUID, object]] but actually contains datetime objects (collected_at is datetime per TrafficSample schema). The type hint is misleading and may cause type checker warnings.",
+    "fix": "Change line 20 to: seen: set[tuple[uuid.UUID, datetime]] = set() and ensure datetime is imported from collections.abc or datetime module.",
+    "sub": "traffic"
+  },
+  {
+    "title": "N+1 query pattern in apply_usage_deltas",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/traffic/repository.py:26-33",
+    "severity": "medium",
+    "detail": "The method loops over each assignment ID and executes a separate UPDATE statement for each one. With 100+ traffic batches per second containing multiple assignments, this creates unnecessary database round-trips. A single batch with 1000 assignments would generate 1000 UPDATE queries instead of 1.",
+    "fix": "Use a single UPDATE with CASE expression: update(ClientAssignment).values(used_bytes=case({aid: ClientAssignment.used_bytes + delta for aid, delta in deltas.items()}, value=ClientAssignment.used_bytes)).where(ClientAssignment.id.in_(deltas.keys()))",
+    "sub": "traffic"
+  },
+  {
+    "title": "N+1 refresh queries in ingest flow",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/traffic/service.py:77-79",
+    "severity": "medium",
+    "detail": "After applying usage deltas, the code refreshes each assignment individually in a loop. For a batch with 100 assignments, this generates 100 separate refresh queries. These could be batched into a single query to fetch all modified assignments at once.",
+    "fix": "Replace loop with: assignment_ids = [aid for aid in deltas if aid in owned]; refreshed = await self.session.execute(select(ClientAssignment).where(ClientAssignment.id.in_(assignment_ids))); for assignment in refreshed.scalars(): owned[assignment.id] = assignment",
+    "sub": "traffic"
+  },
+  {
+    "title": "Unbounded query result set in online_user_ids endpoint",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/traffic/service.py:153-164",
+    "severity": "medium",
+    "detail": "The online_user_ids() query joins TrafficRecord with ClientAssignment and returns all distinct user IDs without any limit or pagination. In systems with millions of concurrent users, this query could load hundreds of thousands of UUIDs into memory as a set, causing memory exhaustion or slow responses.",
+    "fix": "Add an optional max_results parameter with reasonable default (e.g., 10000) and add .limit(max_results) to the statement. Alternatively, implement streaming/generator-based result handling for very large result sets.",
+    "sub": "traffic"
+  },
+  {
+    "title": "Untyped list variable in AssignmentExpirationJob._expire_assignments",
+    "kind": "polish",
+    "file": "core/jobs.py:122",
+    "severity": "low",
+    "detail": "Variable `node_ids` is declared as bare `list` without a generic type parameter. This reduces type safety and makes the code less self-documenting. Based on the usage at line 145, this should be `list[uuid.UUID]` to clearly indicate what elements are expected.",
+    "fix": "Add import for uuid at the top of the file if not present, then change `node_ids: list = []` to `node_ids: list[uuid.UUID] = []`",
+    "sub": "core-schemas"
+  },
+  {
+    "title": "Untyped list parameter in AssignmentExpirationJob._wake_nodes",
+    "kind": "polish",
+    "file": "core/jobs.py:173",
+    "severity": "low",
+    "detail": "Function parameter `node_ids` is declared as bare `list` without a generic type parameter. This reduces type safety. The parameter receives a `sorted()` list of UUID values from line 145, so it should be typed as `list[uuid.UUID]` for clarity and consistency with static type checkers.",
+    "fix": "Change the function signature from `async def _wake_nodes(self, node_ids: list) -> None:` to `async def _wake_nodes(self, node_ids: list[uuid.UUID]) -> None:`",
+    "sub": "core-schemas"
+  },
+  {
+    "title": "JWT secret validation could include pattern-based weak secret detection",
+    "kind": "polish",
+    "file": "core/config.py:197",
+    "severity": "low",
+    "detail": "The weak secret validation checks character set diversity with `len(set(secret)) < 8`, which is good. However, it doesn't detect weak patterns like simple repetition (e.g., 'aaaaaaaaaa...'), keyboard walks (e.g., 'qwerty...'), or simple sequences. While the current approach is reasonable, it could be more comprehensive for production systems.",
+    "fix": "Consider adding additional checks: regex patterns for common weak patterns like repeated characters (more than 3 in a row), common keyboard walks, and simple numeric/alphabetic sequences. For example: `if len(re.findall(r'(.)\\1{3,}', secret)) > 0:` to catch runs of repeated characters.",
+    "sub": "core-schemas"
+  },
+  {
+    "title": "Missing exception handling for _commit_migration - allows orphaned provider clients",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/failover/executor.py:95",
+    "severity": "critical",
+    "detail": "_commit_migration is called outside the try-except block (line 95). If _commit_migration raises an exception (e.g., due to database constraint violations or internal errors), the provider client created at line 84-91 will not be cleaned up via provider.delete_client() at line 98. The cleanup code (lines 97-104) is only reachable if committed=False, not if an exception is raised. This leaves orphaned clients on the provider side that cannot be accessed by users.",
+    "fix": "Wrap the _commit_migration call in a try-except block:\n\ntry:\n    committed = await self._commit_migration(ctx, new_id, result.client_id)\nexcept Exception:\n    logger.warning(\n        \"failover_migration_commit_failed\",\n        assignment_id=str(ctx.assignment_id),\n        error_type=type(ex).__name__,\n    )\n    try:\n        await provider.delete_client(result.client_id)\n    except Exception:\n        logger.warning(\n            \"failover_orphan_cleanup_failed\",\n            assignment_id=str(ctx.assignment_id),\n            client_id=result.client_id,\n        )\n    return False",
+    "sub": "scheduler-failover"
+  },
+  {
+    "title": "Race condition in check-then-act pattern for duplicate assignments",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/failover/executor.py:150",
+    "severity": "critical",
+    "detail": "The _already_migrated check (line 150-151) is not atomic with the subsequent INSERT of new_assignment (line 164). Between these two operations, another concurrent _commit_migration call could insert an assignment with the same (user_id, profile_id, node_id) triplet, violating the unique constraint. This race condition causes: 1) Unhandled database exception (as per previous bug), 2) Second migration attempt to fail without cleanup, 3) Inconsistent state. The check-then-act is performed in the session but without row-level locks.",
+    "fix": "Use SELECT ... FOR UPDATE to acquire a write lock on matching rows. Modify _already_migrated to use with_for_update():\n\nstmt = (\n    select(ClientAssignment.id)\n    .where(\n        ClientAssignment.user_id == assignment.user_id,\n        ClientAssignment.profile_id == assignment.profile_id,\n        ClientAssignment.node_id == target_node_id,\n    )\n    .with_for_update()\n)\n\nAlternatively, use a database constraint that includes a status filter or use optimistic locking via version numbers.",
+    "sub": "scheduler-failover"
+  },
+  {
+    "title": "Missing capacity validation when incrementing target node user count",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/failover/executor.py:172",
+    "severity": "high",
+    "detail": "Line 172 increments current_users without validating that it does not exceed max_users. The scheduler in service.py:61 enforces Node.current_users < Node.max_users as a candidate selection criterion, but failover operations violate this invariant. If a node has max_users=100 and current_users=100, failover can push it to 101+, breaking the scheduler's assumptions and causing overloaded nodes. This is especially problematic during cascading failures where multiple failovers target the same recovery node.",
+    "fix": "Add validation before incrementing:\n\nif target_node is not None:\n    if target_node.current_users >= target_node.max_users:\n        logger.warning(\n            \"failover_target_node_at_capacity\",\n            target_node_id=str(ctx.target_node_id),\n            current_users=target_node.current_users,\n            max_users=target_node.max_users,\n        )\n        return False\n    target_node.current_users = target_node.current_users + 1",
+    "sub": "scheduler-failover"
+  },
+  {
+    "title": "Weak exception logging - exception details lost in failover provider failure",
+    "kind": "bug",
+    "file": "/Users/parsa/Desktop/Xlink/app/failover/executor.py:92-93",
+    "severity": "high",
+    "detail": "Line 92-93 uses logger.warning() instead of logger.exception() when catching provider.create_client() failures. This means the exception traceback and type information are completely lost, making it impossible to debug or distinguish between different failure modes (network timeout, provider down, invalid config, etc.). This complicates troubleshooting of production failover failures.",
+    "fix": "Replace with logger.exception() to capture full traceback:\n\nexcept Exception as e:\n    logger.exception(\n        \"failover_provider_failed\",\n        assignment_id=str(ctx.assignment_id),\n    )\n    return False",
+    "sub": "scheduler-failover"
+  },
+  {
+    "title": "N+1 query pattern in planner - repeated full node table scans",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/failover/planner.py:38-45",
+    "severity": "medium",
+    "detail": "For each ACTIVE assignment on the source_node (line 38), the planner calls scheduler.choose_node() (line 39-45), which internally calls _candidate_nodes() that executes a full SELECT for all ACTIVE nodes (scheduler/service.py:57-65). If a source_node has N assignments, this executes N identical queries. On a large node with 100+ assignments, this becomes 100+ expensive scans of the nodes table. The node list never changes within a single plan, so it should be queried once and reused.",
+    "fix": "Cache the node list outside the assignment loop:\n\nnodes = await self._candidate_nodes_for_plan()\nfor assignment in assignments:\n    decision = await scheduler.choose_node_from_list(\n        SchedulerRequest(...),\n        nodes=nodes,\n    )\n\nOr alternatively, refactor SmartSchedulerService to accept a pre-fetched node list as an optional parameter.",
+    "sub": "scheduler-failover"
+  },
+  {
+    "title": "Telegram bot token embedded in URL string (potential secret exposure in error traces)",
+    "kind": "polish",
+    "file": "/Users/parsa/Desktop/Xlink/app/webhooks/dispatcher.py:107",
+    "severity": "medium",
+    "detail": "The Telegram bot token is embedded directly in the URL string on line 107. While urllib exceptions typically don't expose the URL in their string representation, if exceptions are re-raised, logged with full context, or if stack traces are captured in error monitoring systems, the token could be exposed. Although the Telegram Bot API requires the token in the URL path, this is a security consideration.",
+    "fix": "While the Telegram API requires the token in the URL path (not headers), consider adding sanitization to error messages logged to prevent accidental token exposure. Alternatively, use URL parsing utilities to extract and redact tokens from exception messages before logging.",
+    "sub": "monitoring-backup-misc"
+  },
+  {
+    "title": "Missing eager-loading optimization in notification scan (potential N+1 if User has relationships)",
+    "kind": "optimization",
+    "file": "/Users/parsa/Desktop/Xlink/app/notifications/job.py:108",
+    "severity": "low",
+    "detail": "The query selects User objects without explicit eager-loading of any relationships. If the User model has relationships that get accessed during _maybe_warn(), this could trigger lazy-loading queries per user. However, the current code only accesses scalar fields (expire_at, data_limit_bytes, username, id), so this is not currently a problem. If future code accesses relationships, this could become an issue.",
+    "fix": "No immediate fix needed, but if relationships are added to User that get accessed in _maybe_warn(), consider using selectinload() to eagerly load them in the main query on line 99-107.",
+    "sub": "monitoring-backup-misc"
+  },
+  {
+    "title": "Unused import: json module in backup scheduler",
+    "kind": "dead-code",
+    "file": "/Users/parsa/Desktop/Xlink/app/backup/scheduler.py:6",
+    "severity": "low",
+    "detail": "The 'json' module is imported but there is no direct usage of it. The code uses 'json.dumps()' via the standard library, but checking the imports shows json is listed as unused. Actually, upon review, json IS used on line 24 (json.dumps), so this is a false positive and not actually unused.",
+    "fix": "No action needed - json is properly used on line 24 (json.dumps).",
+    "sub": "monitoring-backup-misc"
+  }
+]

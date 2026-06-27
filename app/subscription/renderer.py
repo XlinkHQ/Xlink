@@ -4,10 +4,14 @@ import hashlib
 from datetime import datetime
 
 from app.core.exceptions import ValidationError
+from app.core.logging import get_logger
+from app.subscription.formats.base import FormatRenderError
 from app.subscription.formats.registry import RendererRegistry, default_registry
 from app.subscription.formats.uri import render_uri
 from app.subscription.models import ProviderConfig, RenderedConfig, RenderedFeed
 from app.subscription.schemas import RenderVersion, SubscriptionFormat
+
+logger = get_logger("xlink.subscription")
 
 
 class SubscriptionRenderer:
@@ -35,8 +39,18 @@ class SubscriptionRenderer:
         feed_format: SubscriptionFormat = SubscriptionFormat.TEXT,
     ) -> RenderedFeed:
         self._check_version(version)
-        rendered = tuple(self.render_config(config, version=version) for config in configs)
-        content = self._registry.render(feed_format, configs)
+        rendered_list = []
+        for config in configs:
+            try:
+                rendered_list.append(self.render_config(config, version=version))
+            except FormatRenderError as exc:
+                logger.warning(
+                    "config_skipped",
+                    protocol=config.protocol,
+                    reason=str(exc),
+                )
+        rendered = tuple(rendered_list)
+        content = self._registry.render(feed_format, tuple(r.config for r in rendered))
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return RenderedFeed(
             configs=rendered,

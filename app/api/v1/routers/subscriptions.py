@@ -411,10 +411,8 @@ async def public_subscription(
             )
         )
 
-    up = min(stats.upload_bytes, stats.used_bytes)
-    down = max(0, stats.used_bytes - up)
     userinfo = (
-        f"upload={up}; download={down}; "
+        f"upload={stats.upload_bytes}; download={stats.download_bytes}; "
         f"total={stats.traffic_limit_bytes}; expire={stats.expire_timestamp}"
     )
 

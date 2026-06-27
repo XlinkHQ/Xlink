@@ -25,7 +25,10 @@ def _build_client(spec: ClientSpec) -> dict[str, Any]:
         value = attrs.get(field, default)
         try:
             if isinstance(default, bool):
-                client[field] = bool(value)
+                if isinstance(value, str):
+                    client[field] = value.strip().lower() in ("true", "1", "yes", "on")
+                else:
+                    client[field] = bool(value)
             elif isinstance(default, int):
                 client[field] = int(value)
             else:

@@ -1,0 +1,3 @@
+Report written to `/Users/parsa/Desktop/Xlink/XLINK_BACKEND_AUDIT.md`.
+
+Covers all 50 findings, grouped by 9 subsystems (api-routers, services, repositories-domain, subscription, providers, agent, traffic, scheduler-failover, core-schemas, monitoring-backup-misc), bugs-first within each, every entry carrying file:line / problem / fix / severity. Ends with a 50-item ordered action list: 6 critical bugs first (the 3 `await session.delete()` TypeErrors, the renderer config mismatch, and the two failover executor issues), then high → medium → low bugs, then 11 optimizations, then dead-code (none — the `json` import is a false positive), then 13 polish items.

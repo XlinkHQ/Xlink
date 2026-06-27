@@ -3,18 +3,21 @@ from __future__ import annotations
 import asyncio
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 from sqlalchemy import select
 
 from app.core.logging import get_logger
 from app.db.session import Database
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
+from app.domain.node import Node
 from app.domain.profile import Profile
 from app.domain.user import User
 from app.events.bus import EventBus
 from app.events.models import SubscriptionGenerated
 from app.failover.models import FailoverPlan, FailoverResult
-from app.providers.base.models import ClientSpec
+from app.providers.base.models import ClientSpec, ProviderKind
 from app.providers.base.registry import ProviderRegistry
 
 logger = get_logger("xlink.failover")
@@ -27,13 +30,13 @@ class _MigrationContext:
     assignment_id: uuid.UUID
     user_id: uuid.UUID
     profile_id: uuid.UUID
-    provider_kind: object
+    provider_kind: ProviderKind
     target_node_id: uuid.UUID
     email: str | None
     profile_slug: str
     profile_protocol: str
-    profile_settings: dict
-    expires_at: object
+    profile_settings: dict[str, Any]
+    expires_at: datetime | None
     traffic_limit_bytes: int | None
 
 
@@ -75,9 +78,9 @@ class FailoverExecutor:
             ctx = await self._load_context(item)
             if ctx is None:
                 return False
-            provider = self._providers.get_by_kind(ctx.provider_kind)
             new_id = uuid.uuid4()
             try:
+                provider = self._providers.get_by_kind(ctx.provider_kind)
                 result = await provider.create_client(
                     ClientSpec(
                         client_id=str(new_id),
@@ -87,10 +90,24 @@ class FailoverExecutor:
                     )
                 )
             except Exception:
-                logger.warning("failover_provider_failed", assignment_id=str(ctx.assignment_id))
+                logger.exception("failover_provider_failed", assignment_id=str(ctx.assignment_id))
                 return False
-            committed = await self._commit_migration(ctx, new_id, result.client_id)
-            if committed and self._events is not None:
+            try:
+                committed = await self._commit_migration(ctx, new_id, result.client_id)
+            except Exception:
+                logger.exception("failover_commit_failed", assignment_id=str(ctx.assignment_id))
+                committed = False
+            if not committed:
+                try:
+                    await provider.delete_client(result.client_id)
+                except Exception:
+                    logger.warning(
+                        "failover_orphan_cleanup_failed",
+                        assignment_id=str(ctx.assignment_id),
+                        client_id=result.client_id,
+                    )
+                return False
+            if self._events is not None:
                 await self._events.publish(
                     SubscriptionGenerated(
                         scope="user",
@@ -149,6 +166,25 @@ class FailoverExecutor:
             )
             assignment.status = AssignmentStatus.DISABLED
             session.add(new_assignment)
+
+            source_node = await session.get(Node, assignment.node_id)
+            if source_node is not None:
+                source_node.current_users = max(0, source_node.current_users - 1)
+
+            target_node = await session.get(Node, ctx.target_node_id)
+            if target_node is not None:
+                if (
+                    target_node.max_users is not None
+                    and target_node.current_users >= target_node.max_users
+                ):
+                    logger.warning(
+                        "failover_target_at_capacity",
+                        assignment_id=str(ctx.assignment_id),
+                        target_node_id=str(ctx.target_node_id),
+                    )
+                    return False
+                target_node.current_users = target_node.current_users + 1
+
             await session.flush()
         return True
 
