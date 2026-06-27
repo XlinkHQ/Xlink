@@ -59,7 +59,7 @@ export function NodesScreen() {
   const totalUsers = nodes.reduce((s, n) => s + n.current_users, 0);
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <div className="warp-page-head">
         <h1 className="warp-page-title">Nodes</h1>
         <div className="warp-page-stats">
