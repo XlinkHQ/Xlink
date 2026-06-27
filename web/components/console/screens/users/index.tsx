@@ -38,7 +38,7 @@ import {
   WarpStat,
   WarpStatRow,
   WarpTableCard,
-  WarpRadial,
+  WarpTraffic,
 } from "../warp-table";
 import { copyText } from "@/lib/clipboard";
 import {
@@ -415,14 +415,18 @@ export function UsersScreen() {
                 </span>
                 <span className="warp-tb-cell">{ownerName(u.owner_id)}</span>
                 <span className="warp-tb-cell">
-                  <WarpRadial
-                    tone={!limit ? "blue" : used >= limit ? "red" : (used / limit) > 0.85 ? "orange" : "green"}
-                    pct={limit ? (used / limit) * 100 : maxUsed > 0 ? (used / maxUsed) * 100 : 0}
-                    label={limit ? `${bytes(used)} / ${bytes(limit)}` : bytes(used)}
+                  <WarpTraffic
+                    tone={!limit ? "unlimited" : used >= limit ? "danger" : "default"}
+                    pct={limit ? (used / limit) * 100 : 0}
+                    label={limit ? `${bytes(used)} / ${bytes(limit)}` : `${bytes(used)} / ∞`}
                   />
                 </span>
                 <span className="warp-tb-cell">
-                  {u.expire_at ? <WarpBadge tone="orange">{expireLabel(u)}</WarpBadge> : <WarpBadge tone="blue">∞</WarpBadge>}
+                  {(() => {
+                    const rel = relativeExpiry(u.expire_at);
+                    if (!rel) return <span className="text-fg-muted">∞</span>;
+                    return <span className={rel.urgent ? "text-danger" : "text-fg-muted"}>{rel.text}</span>;
+                  })()}
                 </span>
                 <span className="warp-tb-cell warp-tb-cell-actions" onClick={(e) => e.stopPropagation()}>
                   <WarpMenu
@@ -704,6 +708,22 @@ function expireLabel(u: UserRead): string {
   if (u.expire_at) return u.expire_at.slice(0, 10);
   if (u.expire_strategy === "start_on_first_use") return "On first use";
   return "Never";
+}
+
+function relativeExpiry(expireAt: string | null): { text: string; urgent: boolean } | null {
+  if (!expireAt) return null;
+  const ms = new Date(expireAt).getTime() - Date.now();
+  const past = ms < 0;
+  const days = Math.floor(Math.abs(ms) / 86400000);
+  const hours = Math.floor((Math.abs(ms) % 86400000) / 3600000);
+  let span: string;
+  if (days >= 1) span = `${days}d`;
+  else if (hours >= 1) span = `${hours}h`;
+  else span = "<1h";
+  return {
+    text: past ? `${span} ago` : `in ${span}`,
+    urgent: past || ms < 7 * 86400000,
+  };
 }
 
 function URow({
