@@ -20,7 +20,6 @@ import { NodeDialog } from "./dialog";
 import { isNodeOnline, relativeTime } from "./util";
 import {
   WarpBadge,
-  WarpButton,
   WarpEmpty,
   WarpHead,
   WarpMenu,
@@ -69,14 +68,20 @@ export function NodesScreen() {
           <span className="warp-page-dot" />
           <span><b>{totalUsers}</b> users</span>
         </div>
+        <button
+          type="button"
+          className="warp-page-add"
+          onClick={() => setEditing("new")}
+          aria-label="Add node"
+          title="Add node"
+        >
+          <Plus size={16} />
+        </button>
       </div>
 
       <WarpTableCard
         toolbar={
           <>
-            <WarpButton primary onClick={() => setEditing("new")}>
-              <Plus size={16} /> Add Node
-            </WarpButton>
             <span className="warp-tb-spacer" />
             <span className="warp-tb-search-wrap" style={{ maxWidth: 220, flex: "none" }}>
               <Search size={13} style={{ position: "absolute", left: 14, color: "var(--body-muted)", pointerEvents: "none" }} />
