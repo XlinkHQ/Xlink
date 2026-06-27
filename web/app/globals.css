@@ -6463,6 +6463,34 @@ input.switch:focus-visible {
 }
 .warp-page-add:hover { background: rgba(0,0,0,0.06); color: var(--body-color); }
 .xlink-dark .warp-page-add:hover { background: rgba(255,255,255,0.08); color: #fff; }
+/* Stats popover trigger (chevron next to title) */
+.warp-stats-wrap { position: relative; display: inline-flex; }
+.warp-stats-trigger {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 6px;
+  border: none; background: transparent; cursor: pointer;
+  color: var(--body-muted);
+  transition: background-color .1s ease, color .1s ease;
+}
+.warp-stats-trigger:hover { background: rgba(0,0,0,0.06); color: var(--body-color); }
+.xlink-dark .warp-stats-trigger:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.warp-stats-trigger svg { transition: transform .15s ease; }
+.warp-stats-trigger svg.is-open { transform: rotate(180deg); }
+.warp-stats-scrim { position: fixed; inset: 0; z-index: 40; }
+.warp-stats-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 41;
+  min-width: 168px; padding: 6px;
+  border-radius: 12px; border: 1px solid var(--hairline);
+  background: var(--white);
+  box-shadow: 0 5px 20px rgba(0,0,0,0.12);
+}
+.xlink-dark .warp-stats-pop { background: #1c1e21; border-color: rgba(255,255,255,0.10); box-shadow: 0 6px 24px rgba(0,0,0,0.5); }
+.warp-stats-row {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 30px; padding: 0 8px; border-radius: 6px;
+  font-size: 0.8125rem; color: var(--body-muted);
+}
+.warp-stats-row b { color: var(--body-color); font-weight: 500; }
 .warp-page-title {
   font-size: 0.9125rem; font-weight: 500; letter-spacing: -0.012em;
   color: var(--body-color); margin: 0;

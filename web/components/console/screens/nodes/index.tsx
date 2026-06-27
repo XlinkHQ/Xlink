@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 
 /** Linear toolbar icons (exact paths from Linear). 16x16. */
 function FilterIcon() {
@@ -75,6 +75,7 @@ export function NodesScreen() {
   const [editing, setEditing] = useState<NodeRead | "new" | null>(null);
   const [detail, setDetail] = useState<NodeRead | null>(null);
   const [search, setSearch] = useState("");
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["nodes"] });
   const act = async (fn: () => Promise<unknown>, ok?: string) => {
@@ -99,18 +100,29 @@ export function NodesScreen() {
   return (
     <div className="w-full">
       <div className="warp-page-head">
-        <h1 className="warp-page-title">
-          <span className="warp-crumb-root">Network</span>
-          <span className="warp-crumb-sep">›</span>
-          <span className="warp-crumb-leaf">Nodes</span>
-        </h1>
-        <div className="warp-page-stats">
-          <span><b>{nodes.length}</b> nodes</span>
-          <span className="warp-page-dot" />
-          <span><b>{online}</b> online</span>
-          <span className="warp-page-dot" />
-          <span><b>{totalUsers}</b> users</span>
-        </div>
+        <h1 className="warp-page-title">Nodes</h1>
+        <span className="warp-stats-wrap">
+          <button
+            type="button"
+            className="warp-stats-trigger"
+            aria-haspopup="dialog"
+            aria-expanded={statsOpen}
+            onClick={() => setStatsOpen((o) => !o)}
+            title="Overview"
+          >
+            <ChevronDown size={14} className={statsOpen ? "is-open" : undefined} />
+          </button>
+          {statsOpen ? (
+            <>
+              <span className="warp-stats-scrim" aria-hidden onClick={() => setStatsOpen(false)} />
+              <div className="warp-stats-pop" role="dialog">
+                <div className="warp-stats-row"><span>Nodes</span><b>{nodes.length}</b></div>
+                <div className="warp-stats-row"><span>Online</span><b>{online}</b></div>
+                <div className="warp-stats-row"><span>Users</span><b>{totalUsers}</b></div>
+              </div>
+            </>
+          ) : null}
+        </span>
         <button
           type="button"
           className="warp-page-add"
