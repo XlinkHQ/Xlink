@@ -29,6 +29,7 @@ export function Sidebar({
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [width, setWidth] = useState(SB_DEFAULT);
   const [collapsed, setCollapsed] = useState(false);
+  const [acctOpen, setAcctOpen] = useState(false);
   const dragging = useRef(false);
 
   useEffect(() => {
@@ -106,10 +107,17 @@ export function Sidebar({
       <div className="warp-sb-inner">
         <ul className="warp-sb-nav">
           <div className="warp-sb-head">
-            <div className="warp-sb-head-id">
+            <button
+              type="button"
+              className="warp-sb-head-id"
+              onClick={() => setAcctOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={acctOpen}
+              title={profileName}
+            >
               <span className="warp-sb-head-avatar">{initials}</span>
               <span className="warp-sb-head-name">{profileName}</span>
-            </div>
+            </button>
             <button
               type="button"
               className="warp-sb-head-search"
@@ -119,6 +127,37 @@ export function Sidebar({
             >
               <SearchIcon size={16} aria-hidden />
             </button>
+            {acctOpen ? (
+              <>
+                <button
+                  type="button"
+                  className="warp-sb-acct-scrim"
+                  aria-hidden
+                  tabIndex={-1}
+                  onClick={() => setAcctOpen(false)}
+                />
+                <div className="warp-sb-acct-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="warp-menu-item"
+                    onClick={() => { setAcctOpen(false); onSelect("Settings"); }}
+                  >
+                    Settings
+                  </button>
+                  {onLogout ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="warp-menu-item is-danger"
+                      onClick={() => { setAcctOpen(false); onLogout(); }}
+                    >
+                      Log out
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
           </div>
           {NAV_GROUPS.map((group, groupIndex) => {
             const groupKey = group.title ?? `root-${groupIndex}`;
