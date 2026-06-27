@@ -230,10 +230,35 @@ export function WarpRow({
   onClick?: () => void;
   menu?: WarpMenuItem[];
 }) {
+  const theme = useTheme();
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null);
+  const clickTimer = useRef<number | null>(null);
+
+  const openMenu = (e: React.MouseEvent) => {
+    if (!menu || menu.length === 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (clickTimer.current) { window.clearTimeout(clickTimer.current); clickTimer.current = null; }
+    const W = 200;
+    let x = e.clientX;
+    if (x + W > window.innerWidth - 8) x = window.innerWidth - 8 - W;
+    setCtx({ x: Math.max(8, x), y: e.clientY });
+  };
+
+  // Delay single-click (detail) so a double-click can cancel it and open the menu instead.
+  const handleClick = () => {
+    if (!onClick) return;
+    if (!menu) { onClick(); return; }
+    if (clickTimer.current) window.clearTimeout(clickTimer.current);
+    clickTimer.current = window.setTimeout(() => { clickTimer.current = null; onClick(); }, 220);
+  };
+
   return (
     <div
       className="warp-tb-row"
-      onClick={onClick}
+      onClick={handleClick}
+      onDoubleClick={menu ? openMenu : undefined}
+      onContextMenu={menu ? openMenu : undefined}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={
@@ -252,11 +277,40 @@ export function WarpRow({
           {c}
         </span>
       ))}
-      {menu ? (
-        <span className="warp-tb-cell warp-tb-cell-actions" onClick={(e) => e.stopPropagation()}>
-          <WarpMenu items={menu} />
-        </span>
-      ) : null}
+      {ctx && typeof document !== "undefined"
+        ? createPortal(
+            <div className={theme === "dark" ? "xlink-dark" : undefined}>
+              <button
+                type="button"
+                aria-hidden
+                tabIndex={-1}
+                className="warp-menu-scrim"
+                onClick={() => setCtx(null)}
+                onContextMenu={(e) => { e.preventDefault(); setCtx(null); }}
+              />
+              <div
+                role="menu"
+                className="warp-menu-pop"
+                style={{ top: ctx.y, left: ctx.x, right: "auto" }}
+              >
+                {menu?.map((it) => (
+                  <button
+                    key={it.label}
+                    type="button"
+                    role="menuitem"
+                    disabled={it.disabled}
+                    onClick={() => { setCtx(null); it.onClick(); }}
+                    className={cn("warp-menu-item", it.danger && "is-danger")}
+                  >
+                    {it.icon ? <Icon name={it.icon} size={13} /> : null}
+                    {it.label}
+                  </button>
+                ))}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
