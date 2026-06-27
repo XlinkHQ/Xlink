@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 import {
   AlertCircle,
   Ban,
+  Circle,
   Clock,
   Plus,
   Power,
@@ -11,7 +12,6 @@ import {
   Search,
   Trash2 as Trash,
   Wifi,
-  WifiOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -420,7 +420,7 @@ export function UsersScreen() {
                     data-online={onlineSet.has(u.id) ? "true" : "false"}
                     title={onlineSet.has(u.id) ? "Online" : "Offline"}
                   >
-                    {onlineSet.has(u.id) ? <Wifi size={14} /> : <WifiOff size={14} />}
+                    <Circle size={10} fill="currentColor" strokeWidth={0} />
                   </span>
                 </span>
                 <span className="warp-tb-cell">
