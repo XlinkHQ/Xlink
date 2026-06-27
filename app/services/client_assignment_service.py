@@ -114,7 +114,7 @@ class ClientAssignmentService:
             await self._release_node_slot(data.node_id)
             raise
         assignment.provider_client_id = result.client_id
-        assignment.credentials = dict(result.raw)
+        assignment.credentials = dict(result.raw) if isinstance(result.raw, dict) else {}
 
         try:
             await self._repo.add_pending(assignment)

@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 
 from app.core.cache import CacheProtocol
 from app.core.exceptions import NotFoundError, ValidationError
+from app.core.logging import get_logger
 from app.core.pagination import decode_cursor, encode_cursor
 from app.core.security import hash_password_async
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
@@ -36,6 +37,9 @@ def _resolve_expiry(
     if expire_at is not None:
         return UserExpireStrategy.FIXED_DATE, False
     return UserExpireStrategy.NEVER, False
+
+
+logger = get_logger("xlink.services.user")
 
 
 class UserService:
@@ -287,8 +291,8 @@ class UserService:
             keys = [key async for key in self._cache.client.scan_iter(match=pattern)]
             if keys:
                 await self._cache.client.delete(*keys)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("user_feed_cache_invalidation_failed", error=str(exc))
 
     async def get(self, user_id: uuid.UUID) -> User:
         user = await self._repo.get(user_id)
