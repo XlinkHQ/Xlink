@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.logging import get_logger
@@ -93,15 +93,20 @@ class ClientAssignmentService:
             group_id=data.group_id,
         )
 
+        attributes = {
+            **profile.settings,
+            "profile_slug": profile.slug,
+            "protocol": profile.protocol,
+        }
+        if data.provider_kind == ProviderKind.WIREGUARD:
+            attributes["address"] = await self._allocate_wireguard_address(
+                data.node_id, profile.settings.get("address")
+            )
         spec = ClientSpec(
             client_id=str(assignment.id),
             email=user.email or user.username,
             inbound_tag=profile.slug,
-            attributes={
-                **profile.settings,
-                "profile_slug": profile.slug,
-                "protocol": profile.protocol,
-            },
+            attributes=attributes,
         )
         try:
             result = await self._provision(provider, spec)
@@ -322,6 +327,32 @@ class ClientAssignmentService:
         if node is not None:
             self._adjust_node_users(node, delta)
             await self._repo.session.flush()
+
+    async def _allocate_wireguard_address(
+        self, node_id: uuid.UUID, server_address: object
+    ) -> str:
+        prefix = "10.8.0"
+        if isinstance(server_address, str) and "." in server_address:
+            head = server_address.split("/")[0].strip().rsplit(".", 1)[0]
+            if head:
+                prefix = head
+        rows = await self._repo.session.execute(
+            select(ClientAssignment.credentials).where(
+                ClientAssignment.node_id == node_id,
+                ClientAssignment.provider_kind == ProviderKind.WIREGUARD,
+            )
+        )
+        used = {1}
+        for (creds,) in rows.all():
+            addr = (creds or {}).get("address") if isinstance(creds, dict) else None
+            if isinstance(addr, str) and "." in addr:
+                tail = addr.split("/")[0].strip().rsplit(".", 1)[-1]
+                if tail.isdigit():
+                    used.add(int(tail))
+        octet = 2
+        while octet in used and octet < 255:
+            octet += 1
+        return f"{prefix}.{octet}/32"
 
     async def _reserve_node_slot(self, node_id: uuid.UUID) -> bool:
         result = await self._repo.session.execute(
