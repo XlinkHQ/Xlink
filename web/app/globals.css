@@ -1106,7 +1106,7 @@ input.switch:focus-visible {
   background-color: var(--bg-light);
   color: var(--body-color);
   caret-color: transparent;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.4;
   white-space: pre;
@@ -1643,7 +1643,7 @@ input.switch:focus-visible {
   border: 1px solid var(--bg-medium);
   border-radius: var(--corner-sm);
   background: var(--white);
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: var(--font-sm);
   resize: vertical;
 }
@@ -1656,7 +1656,7 @@ input.switch:focus-visible {
   border-radius: var(--corner);
   background: var(--bg-whitesmoke);
   color: var(--body-color);
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: var(--font-sm);
   white-space: pre-wrap;
 }
@@ -3986,7 +3986,6 @@ input.switch:focus-visible {
   justify-content: space-between;
   margin: 4px 0;
 }
-.warp-k { color: var(--warp-silver); }
 .warp-v { color: #000; font-weight: 500; }
 
 /* radial bar */
@@ -4462,7 +4461,7 @@ input.switch:focus-visible {
 .warp-json-ta {
   margin: 0;
   padding: 4px 0;
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 18px;
   tab-size: 2;
@@ -4515,7 +4514,7 @@ input.switch:focus-visible {
 .warp-code-pre,
 .warp-code-ta {
   margin: 0; padding: 14px 16px;
-  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-family: var(--font-mono);
   font-size: 12.5px; line-height: 19px; tab-size: 2;
   white-space: pre; word-break: normal; letter-spacing: 0;
 }
@@ -4556,7 +4555,7 @@ input.switch:focus-visible {
   position: absolute; top: 0; left: 0; bottom: 0; width: 44px;
   overflow: hidden; padding: 14px 0; box-sizing: border-box;
   display: flex; flex-direction: column; align-items: flex-end;
-  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-family: var(--font-mono);
   font-size: 12.5px; line-height: 19px;
   color: #6a6a6a; user-select: none; pointer-events: none;
   background: rgba(0,0,0,0.18); border-right: 1px solid rgba(255,255,255,0.06);
@@ -4925,19 +4924,6 @@ input.switch:focus-visible {
 .xlink-dark .warp-bulk-sep { background: rgba(255,255,255,0.12); }
 
 /* Status filter chips (Users) */
-.warp-chips { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.warp-chip {
-  height: 30px; padding: 0 12px;
-  border: 1px solid rgba(0,0,0,0.1); border-radius: 9999px;
-  background: #fff; color: #707070;
-  font-family: var(--warp-font); font-size: 13px; cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-.warp-chip:hover { background: #f4f4f4; }
-.warp-chip.is-active { background: #2545d3; color: #fff; border-color: #2545d3; }
-.xlink-dark .warp-chip { background: #0b0b0b; color: #707070; border-color: rgba(255,255,255,0.12); }
-.xlink-dark .warp-chip:hover { background: #141414; }
-.xlink-dark .warp-chip.is-active { background: #2545d3; color: #fff; border-color: #2545d3; }
 
 /* Row / toolbar dropdown menu (WarpProxy options-dropdown) */
 .warp-menu { position: relative; display: inline-flex; }
@@ -5122,17 +5108,6 @@ input.switch:focus-visible {
 .xlink-dark .warp-confirm-option.is-selected { background: rgba(14,127,248,0.18); border-color: rgba(14,127,248,0.5); }
 
 /* Online/offline client status (Users table) — dot + label */
-.warp-online {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 13px; font-weight: 500; color: #8a8f98;
-}
-.warp-online .fa-circle { font-size: 7px; color: #c2c2c2; }
-.warp-online[data-online="true"] { color: #17803d; }
-.warp-online[data-online="true"] .fa-circle { color: #17803d; }
-.xlink-dark .warp-online { color: #8a8f98; }
-.xlink-dark .warp-online .fa-circle { color: #4a4a4a; }
-.xlink-dark .warp-online[data-online="true"],
-.xlink-dark .warp-online[data-online="true"] .fa-circle { color: #4ade80; }
 
 /* Automatic-failover status banner */
 .warp-failover-auto {

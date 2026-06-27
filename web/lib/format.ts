@@ -11,7 +11,3 @@ export function bytes(v: number): string {
   }
   return `${size.toFixed(1)} ${units[i]}`;
 }
-
-export function gibToBytes(gib: string): number | null {
-  return gib ? Math.round(Number(gib) * 1024 ** 3) : null;
-}
