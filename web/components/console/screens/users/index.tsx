@@ -376,7 +376,20 @@ export function UsersScreen() {
                 className="warp-tb-row"
                 role="button"
                 tabIndex={0}
-                onClick={() => setDetail(u)}
+                onClick={(e) => {
+                  const row = e.currentTarget as HTMLElement & { _t?: number };
+                  if (row._t) window.clearTimeout(row._t);
+                  row._t = window.setTimeout(() => setDetail(u), 220);
+                }}
+                onDoubleClick={(e) => {
+                  const row = e.currentTarget as HTMLElement & { _t?: number };
+                  if (row._t) { window.clearTimeout(row._t); row._t = undefined; }
+                  row.querySelector<HTMLButtonElement>(".warp-menu button")?.click();
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  (e.currentTarget as HTMLElement).querySelector<HTMLButtonElement>(".warp-menu button")?.click();
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -384,7 +397,10 @@ export function UsersScreen() {
                   }
                 }}
               >
-                <span className="warp-tb-cell">
+                <span
+                  className="warp-tb-cell"
+                  onClick={(e) => { e.stopPropagation(); toggleSel(u.id); }}
+                >
                   <span className="warp-tb-idcell">
                     <input
                       type="checkbox"
@@ -392,6 +408,7 @@ export function UsersScreen() {
                       checked={selected.has(u.id)}
                       onClick={(e) => e.stopPropagation()}
                       onChange={() => toggleSel(u.id)}
+                      tabIndex={-1}
                     />
                     <span className="warp-tb-idnum">{idx + 1}</span>
                   </span>

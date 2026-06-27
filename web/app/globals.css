@@ -4439,6 +4439,7 @@ input.switch:focus-visible {
 .warp-tb-cell.actions button:hover { color: #000; }
 .warp-tb-cell.actions .warp-tb-del:hover { color: #ef4444; }
 
+.warp-tb-cell:has(.warp-online-tag) { justify-content: flex-start; }
 .warp-online-tag {
   display: inline-flex; align-items: center; justify-content: center;
   color: #c0c4cb;
@@ -4849,7 +4850,8 @@ input.switch:focus-visible {
 .warp-tb-bar.is-unlimited > div { background: #17803d; }
 .warp-tb-bar.is-danger > div { background: #e0564f; }
 
-.warp-tb-cell-actions { flex: 0 0 56px; display: flex; justify-content: flex-end; overflow: visible; }
+.warp-tb-cell-actions { flex: 0 0 8px; width: 8px; padding: 0; display: flex; justify-content: flex-end; overflow: visible; }
+.warp-tb-cell-actions .warp-menu > button { opacity: 0; pointer-events: none; }
 .warp-tb-empty { padding: 48px 40px; text-align: center; color: #707070; font-size: 14px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .warp-tb-empty-ico { font-size: 28px; color: #c2c2c2; }
 .warp-tb-empty-text { margin: 0; max-width: 360px; line-height: 1.5; }
