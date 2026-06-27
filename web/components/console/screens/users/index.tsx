@@ -2,16 +2,17 @@
 
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle,
+  AlarmClock,
   Ban,
+  BrickWall,
+  CalendarX,
   Circle,
-  Clock,
+  PowerCircle,
   Plus,
   Power,
   RotateCcw,
   Search,
   Trash2 as Trash,
-  Wifi,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -428,13 +429,13 @@ export function UsersScreen() {
                   {!u.is_active ? (
                     <WarpBadge tone="gray"><Ban size={13} /> Disabled</WarpBadge>
                   ) : reached ? (
-                    <WarpBadge tone="red"><AlertCircle size={13} /> Limited</WarpBadge>
+                    <WarpBadge tone="orange"><BrickWall size={13} /> Limited</WarpBadge>
                   ) : expired ? (
-                    <WarpBadge tone="orange"><Clock size={13} /> Expired</WarpBadge>
+                    <WarpBadge tone="orange"><CalendarX size={13} /> Expired</WarpBadge>
                   ) : u.on_hold ? (
-                    <WarpBadge tone="blue"><Clock size={13} /> On-hold</WarpBadge>
+                    <WarpBadge tone="blue"><AlarmClock size={13} /> On-hold</WarpBadge>
                   ) : (
-                    <WarpBadge tone="green"><Wifi size={13} /> Active</WarpBadge>
+                    <WarpBadge tone="green"><PowerCircle size={13} /> Active</WarpBadge>
                   )}
                 </span>
                 <span className="warp-tb-cell">
