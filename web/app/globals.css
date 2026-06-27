@@ -4429,6 +4429,8 @@ input.switch:focus-visible {
 .xlink-dark .warp-thead > th { color: #707070 !important; }
 .warp-tb-row { cursor: pointer; border-top: 1px solid rgba(0,0,0,0.05); transition: background-color 0.15s ease; }
 .warp-tb-row:hover { background-color: #f4f4f4; }
+.warp-tb-row[data-selected="true"] { background-color: #eef1f6; }
+.xlink-dark .warp-tb-row[data-selected="true"] { background-color: #1c1f26; }
 .warp-tb-cell { flex: 1 1 0; min-width: 0; padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; color: #707070; }
 .warp-tb-cell.actions { display: flex; align-items: center; gap: 16px; }
 .warp-tb-cell:has(.warp-tb-traffic) { overflow: visible; }

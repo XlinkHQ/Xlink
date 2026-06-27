@@ -374,6 +374,7 @@ export function UsersScreen() {
               <div
                 key={u.id}
                 className="warp-tb-row"
+                data-selected={selected.has(u.id) ? "true" : undefined}
                 role="button"
                 tabIndex={0}
                 onClick={(e) => {
