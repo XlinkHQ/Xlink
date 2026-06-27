@@ -627,12 +627,12 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
 
 :root:not(.xlink-dark) .warp-tb-button,
 :root:not(.xlink-dark) .warp-tb-search {
-  height: 30px;
-  border-color: #dedede;
+  height: 32px;
+  border-color: var(--hairline);
   border-radius: 6px;
-  background: #ffffff;
-  color: #23252a;
-  font-size: 13px;
+  background: var(--white);
+  color: var(--body-color);
+  font-size: 0.8125rem;
 }
 
 :root:not(.xlink-dark) .warp-tb-button {
@@ -5148,21 +5148,21 @@ input.switch:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 38px;
-  padding: 0 14px;
-  border-radius: var(--corner-lg);
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
   border: 1px solid var(--hairline);
-  background-color: #fff;
-  color: #303031;
-  font-size: 14px;
+  background-color: var(--white);
+  color: var(--body-color);
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
   font-family: inherit;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--speed-quickTransition, .1s) ease, border-color var(--speed-quickTransition, .1s) ease;
 }
-.warp-tb-button:hover { background-color: #f8f8f8; }
-.warp-tb-button-primary { background-color: #2545d3; color: #fff; border-color: #2545d3; }
-.warp-tb-button-primary:hover { background-color: #0e52fd; }
+.warp-tb-button:hover { background-color: var(--bg-bright); }
+.warp-tb-button-primary { background-color: var(--primary); color: #fff; border-color: transparent; }
+.warp-tb-button-primary:hover { background-color: var(--primary); filter: brightness(1.08); }
 .warp-tb-search {
   height: 38px; padding: 0 14px;
   border-radius: var(--corner-lg);
