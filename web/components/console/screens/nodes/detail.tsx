@@ -17,7 +17,7 @@ import {
   updateCoreTemplate,
   xrayVersions,
 } from "@/lib/api";
-import { Globe, Loader2, RotateCw, Upload, X } from "lucide-react";
+import { ChevronDown, Globe, Loader2, RotateCw, Upload, Wifi, WifiOff, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { bytes } from "@/lib/format";
@@ -191,9 +191,18 @@ function XrayBackendCard({ node, running }: { node: NodeRead; running: boolean }
     <div>
       <div className="flex flex-row items-center gap-2 pb-4">
         <h4 className="text-base font-medium capitalize text-fg">Xray</h4>
-        {version ? <span className="warp-tb-badge gray">v{version}</span> : null}
+        <button
+          type="button"
+          className="warp-ver-pill"
+          onClick={upgrade}
+          disabled={upgrading}
+          title="Change Xray-core version"
+        >
+          {version ? `v${version}` : "Set version"}
+          <ChevronDown size={12} />
+        </button>
         <span className={cn("warp-tb-badge", running ? "green" : "red")}>
-          {running ? "Running" : "Offline"}
+          {running ? <Wifi size={12} /> : <WifiOff size={12} />} {running ? "Running" : "Offline"}
         </span>
         <button
           type="button"
