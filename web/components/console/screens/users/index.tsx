@@ -1,7 +1,17 @@
 "use client";
 
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Power, RotateCcw, Search, Trash } from "lucide-react";
+import {
+  AlertCircle,
+  Ban,
+  Clock,
+  Plus,
+  Power,
+  RotateCcw,
+  Search,
+  Trash2 as Trash,
+  Wifi,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
@@ -396,21 +406,24 @@ export function UsersScreen() {
                 </span>
                 <span className="warp-tb-cell font-medium">{u.username}</span>
                 <span className="warp-tb-cell">
-                  <WarpBadge tone={onlineSet.has(u.id) ? "green" : "gray"}>
-                    {onlineSet.has(u.id) ? "Online" : "Offline"}
-                  </WarpBadge>
+                  <span
+                    className="warp-online-dot"
+                    data-online={onlineSet.has(u.id) ? "true" : "false"}
+                    title={onlineSet.has(u.id) ? "Online" : "Offline"}
+                    aria-label={onlineSet.has(u.id) ? "Online" : "Offline"}
+                  />
                 </span>
                 <span className="warp-tb-cell">
                   {!u.is_active ? (
-                    <WarpBadge tone="red">Disabled</WarpBadge>
+                    <WarpBadge tone="gray"><Ban size={13} /> Disabled</WarpBadge>
                   ) : reached ? (
-                    <WarpBadge tone="red">Limited</WarpBadge>
+                    <WarpBadge tone="red"><AlertCircle size={13} /> Limited</WarpBadge>
                   ) : expired ? (
-                    <WarpBadge tone="orange">Expired</WarpBadge>
+                    <WarpBadge tone="orange"><Clock size={13} /> Expired</WarpBadge>
                   ) : u.on_hold ? (
-                    <WarpBadge tone="blue">On-hold</WarpBadge>
+                    <WarpBadge tone="blue"><Clock size={13} /> On-hold</WarpBadge>
                   ) : (
-                    <WarpBadge tone="green">Active</WarpBadge>
+                    <WarpBadge tone="green"><Wifi size={13} /> Active</WarpBadge>
                   )}
                 </span>
                 <span className="warp-tb-cell">{ownerName(u.owner_id)}</span>

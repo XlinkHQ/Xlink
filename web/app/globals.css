@@ -4439,6 +4439,23 @@ input.switch:focus-visible {
 .warp-tb-cell.actions button:hover { color: #000; }
 .warp-tb-cell.actions .warp-tb-del:hover { color: #ef4444; }
 
+.warp-online-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 9999px;
+  background: #c4c7cc; box-shadow: 0 0 0 3px rgba(0,0,0,0.03);
+}
+.warp-online-dot[data-online="true"] {
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.18);
+  animation: warp-pulse 1.8s ease-in-out infinite;
+}
+@keyframes warp-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(34,197,94,0.18); }
+  50% { box-shadow: 0 0 0 5px rgba(34,197,94,0.08); }
+}
+.xlink-dark .warp-online-dot { background: #4a4a4a; }
+.xlink-dark .warp-online-dot[data-online="true"] { background: #4ade80; }
+.warp-tb-badge svg { flex: none; }
+
 .warp-tb-badge {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 0.25rem 0.5rem; border-radius: 10px;
