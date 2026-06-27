@@ -26,8 +26,6 @@ import {
   WarpMenu,
   WarpRow,
   WarpSkeleton,
-  WarpStat,
-  WarpStatRow,
   WarpTableCard,
 } from "../warp-table";
 
@@ -62,11 +60,16 @@ export function NodesScreen() {
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <WarpStatRow>
-        <WarpStat label="Total Nodes" value={nodes.length} />
-        <WarpStat label="Online" value={`${online} / ${nodes.length}`} />
-        <WarpStat label="Total Users" value={totalUsers} />
-      </WarpStatRow>
+      <div className="warp-page-head">
+        <h1 className="warp-page-title">Nodes</h1>
+        <div className="warp-page-stats">
+          <span><b>{nodes.length}</b> nodes</span>
+          <span className="warp-page-dot" />
+          <span><b>{online}</b> online</span>
+          <span className="warp-page-dot" />
+          <span><b>{totalUsers}</b> users</span>
+        </div>
+      </div>
 
       <WarpTableCard
         toolbar={
