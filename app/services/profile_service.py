@@ -100,6 +100,26 @@ class ProfileService:
         await self._repo.session.flush()
         return profile
 
+    async def delete(self, profile_id: uuid.UUID) -> None:
+        from sqlalchemy import func, select
+
+        profile = await self.get(profile_id)
+        count = await self._repo.session.scalar(
+            select(func.count())
+            .select_from(ClientAssignment)
+            .where(ClientAssignment.profile_id == profile_id)
+        )
+        if count:
+            raise ConflictError(
+                "Profile still has assignments. Remove them first.",
+                code="profile_in_use",
+                details={"assignments": int(count)},
+            )
+        node_id = profile.node_id
+        await self._repo.session.delete(profile)
+        await self._repo.session.flush()
+        await self._invalidate_subscription_cache(node_id)
+
     async def list_profiles_keyset(
         self,
         params: CursorParams,

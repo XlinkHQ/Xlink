@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import base64
+import secrets
 import uuid
 
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+)
 from fastapi import APIRouter, status
+from pydantic import BaseModel
 
 from app.dependencies.auth import AdminUser
 from app.dependencies.pagination import CursorPaginationDep
@@ -12,6 +22,42 @@ from app.schemas.pagination import CursorPage
 from app.schemas.profile import ProfileCreate, ProfileRead, ProfileUpdate
 
 router = APIRouter(prefix="/profiles", tags=["profiles"])
+
+
+def _x25519(urlsafe: bool) -> tuple[str, str]:
+    key = X25519PrivateKey.generate()
+    priv = key.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
+    pub = key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+    if urlsafe:
+        return (
+            base64.urlsafe_b64encode(priv).rstrip(b"=").decode(),
+            base64.urlsafe_b64encode(pub).rstrip(b"=").decode(),
+        )
+    return base64.b64encode(priv).decode(), base64.b64encode(pub).decode()
+
+
+class KeyGenRequest(BaseModel):
+    protocol: str
+    security: str = "none"
+
+
+@router.post("/keys")
+async def generate_profile_keys(payload: KeyGenRequest, _admin: AdminUser) -> dict[str, str]:
+    if payload.security == "reality":
+        priv, pub = _x25519(urlsafe=True)
+        return {"privateKey": priv, "publicKey": pub, "shortId": secrets.token_hex(8)}
+    if payload.protocol == "wireguard":
+        priv, pub = _x25519(urlsafe=False)
+        return {
+            "privateKey": priv,
+            "publicKey": pub,
+            "presharedKey": base64.b64encode(secrets.token_bytes(32)).decode(),
+            "address": "10.8.0.1/24",
+            "allowedIPs": "0.0.0.0/0",
+            "dns": "1.1.1.1",
+            "mtu": "1420",
+        }
+    return {}
 
 
 @router.post("", response_model=ProfileRead, status_code=status.HTTP_201_CREATED)
@@ -72,3 +118,12 @@ async def disable_profile(
 ) -> ProfileRead:
     profile = await profiles.disable(profile_id)
     return ProfileRead.model_validate(profile)
+
+
+@router.delete("/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_profile(
+    profile_id: uuid.UUID,
+    _admin: AdminUser,
+    profiles: ProfileServiceDep,
+) -> None:
+    await profiles.delete(profile_id)
