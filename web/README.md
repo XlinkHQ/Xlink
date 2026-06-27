@@ -10,4 +10,6 @@ npm install
 npm run dev
 ```
 
-The backend API can be wired through `NEXT_PUBLIC_API_BASE_URL`.
+By default, local development proxies `/api/*` to `http://127.0.0.1:8000`.
+Set `XLINK_API_URL` to override the backend origin, or `XLINK_PORT` when the
+local API is running on another port.

@@ -1,5 +1,5 @@
-import { XLinkConsole } from "@/components/xlink-console";
+import { ConsoleV2 } from "@/components/console/console";
 
 export default function Page() {
-  return <XLinkConsole />;
+  return <ConsoleV2 />;
 }
