@@ -4592,17 +4592,23 @@ input.switch:focus-visible {
 .xlink-dark .warp-cpe-tab.is-active { color: #fff; background: #2a2a2a; box-shadow: none; }
 
 .warp-pin-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  height: 24px; padding: 0 9px; border-radius: 6px; cursor: pointer;
-  border: 1px solid var(--hairline, rgba(0,0,0,0.12)); background: transparent;
-  font-family: var(--warp-font); font-size: 11.5px; color: var(--fg, #1c1c1c);
-  transition: all 0.12s ease;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 30px; padding: 0 12px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--hairline); background: var(--white);
+  font-family: var(--warp-font); font-size: 0.8125rem; font-weight: 450;
+  color: var(--body-color);
+  transition: background-color .1s ease, border-color .1s ease, color .1s ease;
 }
-.warp-pin-chip:hover { border-color: rgba(14,127,248,0.4); }
-.warp-pin-chip.is-on { background: rgba(14,127,248,0.1); border-color: #0e7ff8; color: #0e7ff8; font-weight: 600; }
-.warp-pin-chip .far { font-size: 10px; }
-.xlink-dark .warp-pin-chip { border-color: rgba(255,255,255,0.14); color: #ddd; }
-.xlink-dark .warp-pin-chip.is-on { background: rgba(91,140,255,0.14); border-color: #5b8cff; color: #7ba3ff; }
+.warp-pin-chip:hover { background: rgba(0,0,0,0.035); }
+.warp-pin-chip.is-on {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.warp-pin-chip svg { flex: none; }
+.xlink-dark .warp-pin-chip { background: transparent; border-color: rgba(255,255,255,0.12); }
+.xlink-dark .warp-pin-chip:hover { background: rgba(255,255,255,0.06); }
+.xlink-dark .warp-pin-chip.is-on { color: #aab2ef; }
 
 .warp-key-reveal {
   margin-bottom: 14px; padding: 0; border: none; background: transparent;
