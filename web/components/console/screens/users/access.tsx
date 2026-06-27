@@ -598,10 +598,10 @@ export function UserNodesUsagePanel({ userId }: { userId: string }) {
                         {r.node_name}
                       </td>
                       <td className="py-2.5 align-middle">
-                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: "rgba(0,143,251,0.12)" }}>
+                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: "var(--primary-soft)" }}>
                           <div
                             className="h-full rounded-full"
-                            style={{ width: `${pct}%`, background: "#008ffb" }}
+                            style={{ width: `${pct}%`, background: "var(--primary)" }}
                           />
                         </div>
                       </td>

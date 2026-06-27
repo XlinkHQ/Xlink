@@ -4245,7 +4245,8 @@ input.switch:focus-visible {
 .warp-si-row-full { grid-column: 1 / -1; }
 .xlink-dark .warp-si-box { background-color: #000000; border-color: rgba(65,65,65,0.1); }
 .xlink-dark .warp-si-box h5 { color: #fff; }
-.xlink-dark .warp-si-ip h4, .xlink-dark .warp-si-ip p { color: #707070; }
+.xlink-dark .warp-si-ip h4 { color: var(--body-color); }
+.xlink-dark .warp-si-ip p { color: var(--body-muted); }
 /* Plain meta badges (OS/Kernel/version) go neutral; Status(green)/Restart(blue)
    keep their light-mode colour. */
 .xlink-dark .warp-si-badge { background-color: rgba(255,255,255,0.06); color: #4a5361; border-color: #121314; }
@@ -5629,3 +5630,17 @@ input.switch:focus-visible {
 .xlink-dark .warp-ico-check { background-color: rgba(31,136,61,0.20); }
 .xlink-dark .warp-code-preview { background: #0b0b0b; border-color: rgba(255,255,255,0.12); }
 .xlink-dark .warp-confirm-input:focus { background: #161616; }
+
+.xlink-dark input.switch::before { background: #ffffff; }
+.xlink-dark .warp-sysinfo-k { color: var(--body-muted); }
+.xlink-dark .warp-card-toggle { color: var(--body-muted); }
+.xlink-dark .warp-tb-cell.actions button:hover { color: var(--body-color); }
+.xlink-dark .warp-tb-search-wrap > svg:first-child { color: var(--body-muted); }
+.xlink-dark .warp-card-dot.span-blue { background-color: #3b82f6; }
+.xlink-dark .warp-card-dot.span-green { background-color: #22c55e; }
+.xlink-dark .warp-card-dot.span-orange { background-color: #f59e0b; }
+.xlink-dark .warp-card-dot.span-yellow { background-color: #eab308; }
+.xlink-dark .warp-card-dot.span-pink { background-color: #ec4899; }
+.xlink-dark .warp-card-dot.span-purple { background-color: #a855f7; }
+.xlink-dark .warp-si-iconchip { border-color: rgba(34,197,94,0.35); }
+.xlink-dark .warp-si-badge { color: var(--body-muted); }
