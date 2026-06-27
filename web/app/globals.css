@@ -701,6 +701,13 @@ h1, h2, h3, h4, h5, .warp-titlebar-title, .warp-card-header h4 {
   color: #717680;
 }
 
+/* Light-mode table text colors (exact) */
+:root:not(.xlink-dark) .warp-tb-head > * { color: #5d5d5f; }
+:root:not(.xlink-dark) .warp-tb-cell { color: #5d5d5f; }
+:root:not(.xlink-dark) .warp-tb-cell:nth-child(2) { color: #1b1b1b; }
+:root:not(.xlink-dark) .warp-tb-icochip { color: #5d5d5f !important; }
+:root:not(.xlink-dark) .warp-tb-row:hover .warp-tb-icochip { background: rgba(0,0,0,0.045); }
+
 :root:not(.xlink-dark) .warp-tb-empty {
   padding: 28px 24px;
   gap: 8px;
@@ -5138,8 +5145,8 @@ input.switch:focus-visible {
 .warp-tb-ico {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border-radius: 9999px;
-  border: 1px solid var(--hairline); background: var(--white); cursor: pointer;
-  color: var(--body-muted);
+  border: 1px solid var(--hairline); background: #ffffff; cursor: pointer;
+  color: #5d5d5f;
   transition: background-color .1s ease, color .1s ease, border-color .1s ease;
 }
 .xlink-dark .warp-tb-ico { background: transparent; border-color: rgba(255,255,255,0.10); }
