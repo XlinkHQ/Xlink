@@ -20,26 +20,37 @@ import { UsersScreen } from "./screens/users";
 
 const SCREEN_KEYS = NAV_ITEMS.map((i) => i.key);
 
-function keyFromHash(): string {
+function keyFromPath(): string {
   if (typeof window === "undefined") return "Overview";
-  const slug = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+  // support legacy #hash links by redirecting them to a real path
+  const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
+  const slug = hash || window.location.pathname.replace(/^\/+/, "").toLowerCase();
   return SCREEN_KEYS.find((k) => k.toLowerCase() === slug) ?? "Overview";
+}
+
+function pathForKey(key: string): string {
+  return key === "Overview" ? "/" : `/${key.toLowerCase()}`;
 }
 
 export function ConsoleV2() {
   const [active, setActiveState] = useState("Overview");
 
   useEffect(() => {
-    setActiveState(keyFromHash());
-    const onHash = () => setActiveState(keyFromHash());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    const initial = keyFromPath();
+    setActiveState(initial);
+    // migrate any legacy #hash URL to a clean path
+    if (window.location.hash) {
+      window.history.replaceState(null, "", pathForKey(initial));
+    }
+    const onPop = () => setActiveState(keyFromPath());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   const setActive = (key: string) => {
     setActiveState(key);
-    if (typeof window !== "undefined" && keyFromHash() !== key) {
-      window.location.hash = key.toLowerCase();
+    if (typeof window !== "undefined" && keyFromPath() !== key) {
+      window.history.pushState(null, "", pathForKey(key));
     }
   };
   const [authed, setAuthed] = useState<boolean | null>(null);
