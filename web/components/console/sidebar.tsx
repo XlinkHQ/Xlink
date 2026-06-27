@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { setTheme, useTheme } from "@/lib/theme";
-import { LogoutIcon, MoonIcon, NAV_GROUPS, SearchIcon, SunIcon } from "./nav";
+import { NAV_GROUPS, SearchIcon } from "./nav";
 
 const SB_MIN = 200;
 const SB_MAX = 360;
-const SB_DEFAULT = 244;
+const SB_DEFAULT = 260;
 const SB_COLLAPSE_AT = 168;
 
 export function Sidebar({
@@ -143,17 +143,31 @@ export function Sidebar({
                     className="warp-menu-item"
                     onClick={() => { setAcctOpen(false); onSelect("Settings"); }}
                   >
-                    Settings
+                    <span>Settings</span>
+                    <span className="warp-sb-acct-kbd"><kbd>G</kbd><span>then</span><kbd>S</kbd></span>
+                  </button>
+                  <div className="warp-sb-acct-sep" role="separator" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="warp-menu-item"
+                    onClick={() => { setTheme(theme === "dark" ? "light" : "dark"); }}
+                  >
+                    <span>{theme === "dark" ? "Light theme" : "Dark theme"}</span>
                   </button>
                   {onLogout ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="warp-menu-item is-danger"
-                      onClick={() => { setAcctOpen(false); onLogout(); }}
-                    >
-                      Log out
-                    </button>
+                    <>
+                      <div className="warp-sb-acct-sep" role="separator" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="warp-menu-item is-danger"
+                        onClick={() => { setAcctOpen(false); onLogout(); }}
+                      >
+                        <span>Log out</span>
+                        <span className="warp-sb-acct-kbd"><kbd>⌥</kbd><kbd>⇧</kbd><kbd>Q</kbd></span>
+                      </button>
+                    </>
                   ) : null}
                 </div>
               </>
@@ -217,38 +231,6 @@ export function Sidebar({
             );
           })}
         </ul>
-
-        <div className="warp-sb-footer">
-          <div className="warp-tab-dark-light">
-            <button
-              type="button"
-              title="Switch Light Mode"
-              className={theme !== "dark" ? "is-active" : ""}
-              onClick={() => setTheme("light")}
-            >
-              <SunIcon size={14} aria-hidden />
-            </button>
-            <button
-              type="button"
-              title="Switch Dark Mode"
-              className={theme === "dark" ? "is-active" : ""}
-              onClick={() => setTheme("dark")}
-            >
-              <MoonIcon size={14} aria-hidden />
-            </button>
-          </div>
-          {onLogout && (
-            <button
-              type="button"
-              title="Logout"
-              onClick={() => onLogout()}
-              className="warp-sb-item"
-            >
-              <LogoutIcon className="warp-sb-ico" size={18} aria-hidden />
-              <span className="warp-sb-label">Logout</span>
-            </button>
-          )}
-        </div>
       </div>
     </aside>
   );
