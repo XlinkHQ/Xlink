@@ -4354,7 +4354,7 @@ input.switch:focus-visible {
 .xlink-dark .warp-tb-stat h5 { color: #fff; }
 
 .warp-tb-card {
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   background-color: #fff;
   overflow: hidden;
@@ -4458,7 +4458,7 @@ input.switch:focus-visible {
 
 .warp-tb-badge {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 0.25rem 0.5rem; border-radius: 10px;
+  padding: 0.25rem 0.5rem; border-radius: 9999px;
   line-height: 0.8rem; font-size: 0.75rem; font-weight: 500;
   margin-right: 4px;
 }
@@ -4896,7 +4896,7 @@ input.switch:focus-visible {
 }
 .warp-cmd {
   width: 520px; max-width: calc(100vw - 2rem);
-  background: #fff; border: 1px solid rgba(0,0,0,0.1); border-radius: 12px;
+  background: #fff; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden;
   font-family: var(--warp-font);
 }
@@ -4954,7 +4954,7 @@ input.switch:focus-visible {
 .warp-menu-pop {
   position: fixed; z-index: 9999;
   width: 184px; min-width: 184px; padding: 5px;
-  background: #fff; border: 1px solid rgba(0,0,0,0.06); border-radius: 12px;
+  background: #fff; border: 1px solid rgba(0,0,0,0.06); border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
   display: flex; flex-direction: column; gap: 1px;
 }
@@ -5099,7 +5099,7 @@ input.switch:focus-visible {
 .warp-confirm-select {
   margin-top: 16px; max-height: 280px; overflow-y: auto;
   display: flex; flex-direction: column; gap: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.1); border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1); border-radius: 8px;
   padding: 6px; background: #fafafa;
 }
 .warp-confirm-option {
@@ -5420,7 +5420,7 @@ input.switch:focus-visible {
 
 /* Settings — grouped sections (clean enterprise layout) */
 .warp-set-section {
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid rgba(0,0,0,0.08);
   background: #fff;
   overflow: hidden;
