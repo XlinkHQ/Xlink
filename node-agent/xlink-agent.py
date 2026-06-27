@@ -503,6 +503,10 @@ def check_provider_health(active_kinds: set[str]) -> dict[str, str]:
                 active = _systemd_active(core.get("service", "xray"))
                 if active:
                     healthy = True
+        elif kind == "wireguard":
+            iface = os.environ.get("XLINK_WG_INTERFACE", "wg0")
+            rc, _ = _run(f"ip link show {iface}")
+            healthy = rc == 0
         else:
             active = _systemd_active(core.get("service", ""))
             healthy = os.path.exists(core["path"]) if active is None else active
