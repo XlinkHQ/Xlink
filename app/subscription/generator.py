@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.core.exceptions import ValidationError
+from app.core.logging import get_logger
 from app.domain.client_assignment import AssignmentStatus
 from app.domain.node import NodeStatus
 from app.providers.base.exceptions import ProviderNotFoundError
@@ -18,6 +19,8 @@ from app.subscription.models import (
     ProviderConfig,
     SubscriptionSource,
 )
+
+_log = get_logger("xlink.subscription.generator")
 
 _CREDENTIAL_KEY_ALIASES = {
     "private_key": "privateKey",
@@ -137,7 +140,12 @@ class SubscriptionGenerator:
                 configs.extend(
                     self._build_configs(source, used_total, status_texts, host_overrides)
                 )
-            except ValidationError:
+            except ValidationError as exc:
+                _log.info(
+                    "subscription_source_skipped",
+                    assignment_id=str(getattr(source.assignment, "id", "")),
+                    reason=str(exc),
+                )
                 continue
 
         return tuple(configs)
