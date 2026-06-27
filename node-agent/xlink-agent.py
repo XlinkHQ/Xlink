@@ -337,6 +337,26 @@ def build_singbox_config(clients: list[dict]) -> dict:
     return config
 
 
+def _wg_subnet(addr: str) -> str:
+    """Derive the network CIDR from a WireGuard interface address.
+
+    Accepts 'X.X.X.Y/NN' (defaults to /24 if no prefix). Uses ipaddress so
+    non-/24 and malformed inputs don't produce garbage iptables rules. Falls
+    back to 10.8.0.0/24 on anything non-IPv4 or unparseable.
+    """
+    import ipaddress
+    try:
+        a = addr.strip()
+        if "/" not in a:
+            a = a + "/24"
+        net = ipaddress.ip_network(a, strict=False)
+        if net.version != 4:
+            return "10.8.0.0/24"
+        return str(net)
+    except (ValueError, TypeError):
+        return "10.8.0.0/24"
+
+
 def build_wireguard_config(clients: list[dict]) -> str:
     s0 = (clients[0].get("settings") or {}) if clients else {}
     port = int(s0.get("port", 51820) or 51820)
@@ -346,7 +366,7 @@ def build_wireguard_config(clients: list[dict]) -> str:
     if not priv:
         raise RuntimeError("wireguard: no private key in settings or XLINK_WG_PRIVATE_KEY")
     addr = str(s0.get("address") or "10.8.0.1/24").strip()
-    subnet = addr.rsplit(".", 1)[0] + ".0/24"
+    subnet = _wg_subnet(addr)
     post_up = (
         "WAN=$(ip route list default | awk '{print $5; exit}'); "
         "sysctl -w net.ipv4.ip_forward=1; "
@@ -444,8 +464,17 @@ CORES = {
             "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
             "sysctl -w net.ipv4.conf.wg0.rp_filter=0 >/dev/null 2>&1; "
             "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
-            "iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -o $WAN -j MASQUERADE 2>/dev/null || "
-            "iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o $WAN -j MASQUERADE; "
+            # Derive the masquerade subnet from the live wg0.conf Address line so it
+            # always matches build_wireguard_config (no hardcoded 10.8.0.0/24).
+            "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
+            "/etc/wireguard/wg0.conf 2>/dev/null | "
+            "python3 -c 'import sys,ipaddress;\\n"
+            "a=sys.stdin.read().strip() or \"10.8.0.1/24\";\\n"
+            "a=a if \"/\" in a else a+\"/24\";\\n"
+            "print(ipaddress.ip_network(a,strict=False))' 2>/dev/null); "
+            "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
+            "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
+            "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
             "iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null || iptables -A FORWARD -i wg0 -j ACCEPT; "
             "iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null || iptables -A FORWARD -o wg0 -j ACCEPT",
         ),
@@ -870,7 +899,7 @@ def _local_enforce(clients: list[dict], samples: list[dict]) -> list[dict]:
         lim = c.get("data_limit_bytes")
         if lim:
             user_limit[uid] = int(lim)
-        user_base[uid] = max(user_base.get(uid, 0), int(c.get("used_bytes", 0) or 0))
+        user_base[uid] = user_base.get(uid, 0) + int(c.get("used_bytes", 0) or 0)
     for s in samples:
         uid = asg_user.get(s.get("assignment_id"))
         if uid is None:

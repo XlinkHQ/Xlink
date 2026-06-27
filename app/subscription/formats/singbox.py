@@ -19,10 +19,21 @@ def _tls_block(config: ProviderConfig) -> dict[str, Any] | None:
     if fingerprint:
         block["utls"] = {"enabled": True, "fingerprint": fingerprint}
     if security == "reality":
+        public_key = str(setting(config, "publicKey", setting(config, "pbk", "")) or "").strip()
+        short_id = str(setting(config, "shortId", setting(config, "sid", "")) or "").strip()
+        missing = [n for n, v in (("publicKey", public_key), ("shortId", short_id)) if not v]
+        if missing:
+            raise FormatRenderError(
+                "REALITY requires a public key and short id.",
+                code="subscription_missing_fields",
+                details={"missing": missing},
+            )
+        # sing-box REALITY needs a uTLS fingerprint; default to chrome if unset.
+        block.setdefault("utls", {"enabled": True, "fingerprint": fingerprint or "chrome"})
         block["reality"] = {
             "enabled": True,
-            "public_key": str(setting(config, "publicKey", setting(config, "pbk", ""))),
-            "short_id": str(setting(config, "shortId", setting(config, "sid", ""))),
+            "public_key": public_key,
+            "short_id": short_id,
         }
     return block
 
@@ -32,7 +43,11 @@ def _transport_block(config: ProviderConfig) -> dict[str, Any] | None:
     if network == "ws":
         return {"type": "ws", "path": str(setting(config, "path", "/"))}
     if network == "grpc":
-        return {"type": "grpc", "service_name": str(setting(config, "serviceName", ""))}
+        t: dict[str, Any] = {"type": "grpc"}
+        svc = str(setting(config, "serviceName", "") or "").strip()
+        if svc:
+            t["service_name"] = svc
+        return t
     if network == "httpupgrade":
         return {"type": "httpupgrade", "path": str(setting(config, "path", "/"))}
     return None
@@ -85,7 +100,9 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
         base["type"] = protocol
         base["uuid"] = config.resolved_uuid
         if protocol == "vless":
-            base["flow"] = str(setting(config, "flow", ""))
+            flow = str(setting(config, "flow", "") or "").strip()
+            if flow:
+                base["flow"] = flow
         else:
             base["alter_id"] = int(setting(config, "alterId", 0))
     elif protocol == "trojan":

@@ -12,6 +12,28 @@ from app.subscription.models import ProviderConfig
 PROTOCOL = "wireguard"
 
 
+def _int_setting(config: ProviderConfig, key: str, default: int, lo: int, hi: int) -> int:
+    """Coerce a setting to int with range validation; raise on bad input."""
+    raw = setting(config, key)
+    if raw in (None, ""):
+        return default
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        raise FormatRenderError(
+            f"WireGuard {key} must be an integer.",
+            code="subscription_invalid_field",
+            details={"field": key, "value": str(raw)},
+        )
+    if not (lo <= val <= hi):
+        raise FormatRenderError(
+            f"WireGuard {key} must be between {lo} and {hi}.",
+            code="subscription_invalid_field",
+            details={"field": key, "value": val},
+        )
+    return val
+
+
 def _peer_block(config: ProviderConfig) -> str:
     public_key = str(setting(config, "peerPublicKey", setting(config, "publicKey", "")))
     if not public_key:
@@ -30,13 +52,19 @@ def _peer_block(config: ProviderConfig) -> str:
     preshared = str(setting(config, "presharedKey", ""))
     if preshared:
         lines.insert(2, f"PresharedKey = {preshared}")
-    keepalive = setting(config, "persistentKeepalive") or 25
-    lines.append(f"PersistentKeepalive = {int(keepalive)}")
+    keepalive = _int_setting(config, "persistentKeepalive", 25, 1, 65535)
+    lines.append(f"PersistentKeepalive = {keepalive}")
     return "\n".join(lines)
 
 
 def _interface_block(config: ProviderConfig) -> str:
-    private_key = str(setting(config, "privateKey", config.client_id))
+    private_key = str(setting(config, "privateKey", "") or "").strip()
+    if not private_key:
+        raise FormatRenderError(
+            "WireGuard requires a client private key.",
+            code="subscription_missing_fields",
+            details={"missing": ["privateKey"]},
+        )
     address = str(setting(config, "address", "10.0.0.2/32"))
     lines = [
         "[Interface]",
@@ -46,8 +74,8 @@ def _interface_block(config: ProviderConfig) -> str:
     dns = str(setting(config, "dns", ""))
     if dns:
         lines.append(f"DNS = {dns}")
-    mtu = setting(config, "mtu") or 1280
-    lines.append(f"MTU = {int(mtu)}")
+    mtu = _int_setting(config, "mtu", 1280, 1280, 65535)
+    lines.append(f"MTU = {mtu}")
     return "\n".join(lines)
 
 

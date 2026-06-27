@@ -51,7 +51,7 @@ _PROTO_NAMES = {
 
 
 def _human(num: int | None) -> str:
-    if not num:
+    if num is None:
         return "∞"
     return format_bytes(num, units=("B", "KB", "MB", "GB", "TB"), precision=1, sep="")
 
@@ -89,7 +89,7 @@ def _user_status(
         exp = expire if expire.tzinfo else expire.replace(tzinfo=UTC)
         if exp < datetime.now(UTC):
             return (t.get("expired", "Expired"), "⌛️")
-    if limit and used >= limit:
+    if limit is not None and used >= limit:
         return (t.get("limited", "Limited"), "🪫")
     return (t.get("active", "Active"), "✅")
 
@@ -158,8 +158,8 @@ class SubscriptionGenerator:
             "SERVER_IP": source.node.host,
             "USERNAME": user.email or user.username,
             "DATA_USAGE": _human(used_total),
-            "DATA_LEFT": _human(max(0, limit - used_total)) if limit else "∞",
-            "DATA_LIMIT": _human(limit) if limit else "∞",
+            "DATA_LEFT": _human(max(0, limit - used_total)) if limit is not None else "∞",
+            "DATA_LIMIT": _human(limit) if limit is not None else "∞",
             "DAYS_LEFT": days_left,
             "STATUS_TEXT": status_text,
             "STATUS_EMOJI": status_emoji,
