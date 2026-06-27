@@ -11,6 +11,7 @@ import {
   Search,
   Trash2 as Trash,
   Wifi,
+  WifiOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -102,15 +103,6 @@ export function UsersScreen() {
     refetchInterval: 30000,
   });
   const onlineSet = new Set(onlineQuery.data?.user_ids ?? []);
-  const adminsQuery = useQuery({
-    queryKey: ["admins-min"],
-    queryFn: () => listUsers({ size: 200, role: "admin" }),
-  });
-  const ownerName = (ownerId: string | null) => {
-    if (!ownerId) return "—";
-    const a = (adminsQuery.data?.items ?? []).find((x) => x.id === ownerId);
-    return a?.username ?? `${ownerId.slice(0, 8)}`;
-  };
 
   const [detail, setDetail] = useState<UserRead | null>(null);
   const [editing, setEditing] = useState<UserRead | null>(null);
@@ -365,7 +357,7 @@ export function UsersScreen() {
           </>
         }
       >
-        <WarpHead cols={["#", "Username", "Online", "Status", "Owner", "Used Traffic", "Expiration"]} actions />
+        <WarpHead cols={["#", "Username", "Online", "Status", "Used Traffic", "Expiration"]} actions />
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
@@ -407,11 +399,12 @@ export function UsersScreen() {
                 <span className="warp-tb-cell font-medium">{u.username}</span>
                 <span className="warp-tb-cell">
                   <span
-                    className="warp-online-dot"
+                    className="warp-online-tag"
                     data-online={onlineSet.has(u.id) ? "true" : "false"}
                     title={onlineSet.has(u.id) ? "Online" : "Offline"}
-                    aria-label={onlineSet.has(u.id) ? "Online" : "Offline"}
-                  />
+                  >
+                    {onlineSet.has(u.id) ? <Wifi size={14} /> : <WifiOff size={14} />}
+                  </span>
                 </span>
                 <span className="warp-tb-cell">
                   {!u.is_active ? (
@@ -426,7 +419,6 @@ export function UsersScreen() {
                     <WarpBadge tone="green"><Wifi size={13} /> Active</WarpBadge>
                   )}
                 </span>
-                <span className="warp-tb-cell">{ownerName(u.owner_id)}</span>
                 <span className="warp-tb-cell">
                   <WarpTraffic
                     tone={!limit ? "unlimited" : used >= limit ? "danger" : "default"}

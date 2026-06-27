@@ -4439,6 +4439,13 @@ input.switch:focus-visible {
 .warp-tb-cell.actions button:hover { color: #000; }
 .warp-tb-cell.actions .warp-tb-del:hover { color: #ef4444; }
 
+.warp-online-tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #c0c4cb;
+}
+.warp-online-tag[data-online="true"] { color: #22c55e; }
+.xlink-dark .warp-online-tag { color: #5a5a5a; }
+.xlink-dark .warp-online-tag[data-online="true"] { color: #4ade80; }
 .warp-online-dot {
   display: inline-block; width: 9px; height: 9px; border-radius: 9999px;
   background: #c4c7cc; box-shadow: 0 0 0 3px rgba(0,0,0,0.03);
