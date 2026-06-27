@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import secrets
 import uuid
-from datetime import UTC, datetime, timedelta
-
-from sqlalchemy.orm.exc import StaleDataError
+from datetime import UTC, datetime
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pagination import decode_cursor, encode_cursor
@@ -11,8 +11,7 @@ from app.domain.node import Node, NodeStatus
 from app.repositories.node import NodeRepository
 from app.schemas.node import NodeCreate, NodeUpdate
 from app.schemas.pagination import CursorParams
-
-DEFAULT_OFFLINE_AFTER_SECONDS = 90
+from app.services._shared import save_or_conflict
 
 
 class NodeService:
@@ -26,6 +25,7 @@ class NodeService:
             host=data.host,
             port=data.port,
             max_users=data.max_users,
+            usage_coefficient=data.usage_coefficient,
             node_metadata=data.metadata,
             status=NodeStatus.OFFLINE,
         )
@@ -50,6 +50,8 @@ class NodeService:
             node.port = data.port
         if data.max_users is not None:
             node.max_users = data.max_users
+        if data.usage_coefficient is not None:
+            node.usage_coefficient = data.usage_coefficient
         if data.metadata is not None:
             node.node_metadata = data.metadata
 
@@ -78,6 +80,24 @@ class NodeService:
             node.status = NodeStatus.ACTIVE
         return await self._flush(node)
 
+    async def provision_agent_token(self, node_id: uuid.UUID) -> str:
+        node = await self.get(node_id)
+        token = secrets.token_urlsafe(32)
+        metadata = dict(node.node_metadata)
+
+        metadata["agent_token_hash"] = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        node.node_metadata = metadata
+        await self._flush(node)
+        return token
+
+    async def restart_core(self, node_id: uuid.UUID) -> Node:
+        node = await self.get(node_id)
+        metadata = dict(node.node_metadata)
+        metadata["restart_nonce"] = int(metadata.get("restart_nonce", 0)) + 1
+        node.node_metadata = metadata
+        await self._flush(node)
+        return node
+
     async def list_nodes_keyset(
         self,
         params: CursorParams,
@@ -102,19 +122,5 @@ class NodeService:
             next_cursor = encode_cursor(last.created_at, last.id)
         return rows, next_cursor
 
-    def is_stale(
-        self, node: Node, *, offline_after_seconds: int = DEFAULT_OFFLINE_AFTER_SECONDS
-    ) -> bool:
-        if node.last_seen_at is None:
-            return node.status is NodeStatus.ACTIVE
-        threshold = datetime.now(UTC) - timedelta(seconds=offline_after_seconds)
-        last_seen = node.last_seen_at
-        if last_seen.tzinfo is None:
-            last_seen = last_seen.replace(tzinfo=UTC)
-        return node.status is NodeStatus.ACTIVE and last_seen < threshold
-
     async def _flush(self, node: Node) -> Node:
-        try:
-            return await self._repo.save(node)
-        except StaleDataError as exc:
-            raise ConflictError("Node was modified concurrently.", code="version_conflict") from exc
+        return await save_or_conflict(self._repo.save, node, "Node")

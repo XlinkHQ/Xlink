@@ -1,25 +1,59 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import quote, urlencode
 
 from app.core.exceptions import ValidationError
 from app.subscription.models import ProviderConfig
 
 
+def format_bytes(
+    num: float,
+    *,
+    units: tuple[str, ...] = ("B", "KiB", "MiB", "GiB", "TiB"),
+    precision: int = 1,
+    sep: str = "",
+) -> str:
+    value = float(num)
+    index = 0
+    while value >= 1024 and index < len(units) - 1:
+        value /= 1024
+        index += 1
+    digits = 0 if index == 0 else precision
+    return f"{value:.{digits}f}{sep}{units[index]}"
+
+
+def _bytes(v: int) -> str:
+    return format_bytes(v)
+
+
+def _remark_vars(config: ProviderConfig) -> dict[str, str]:
+    expire_date = ""
+    days_left = ""
+    if config.expires_at is not None:
+        exp = (
+            config.expires_at if config.expires_at.tzinfo else config.expires_at.replace(tzinfo=UTC)
+        )
+        expire_date = exp.strftime("%Y-%m-%d")
+        days_left = str(max(0, (exp - datetime.now(UTC)).days))
+
+    resolved = config.settings.get("_vars")
+    if isinstance(resolved, dict):
+        return {**resolved, "EXPIRE_DATE": expire_date}
+    return {
+        "USERNAME": str(config.email or ""),
+        "PROTOCOL": config.protocol,
+        "TRANSPORT": str(config.settings.get("network", "tcp")),
+        "EXPIRE_DATE": expire_date,
+        "DAYS_LEFT": days_left,
+        "DATA_LIMIT": _bytes(config.traffic_limit_bytes) if config.traffic_limit_bytes else "∞",
+    }
+
+
 class FormatRenderError(ValidationError):
     code = "subscription_format_error"
     message = "Subscription format rendering failed."
-
-
-class UriRenderer(Protocol):
-    protocol: str
-
-    def render(self, config: ProviderConfig) -> str: ...
-
-
-class FeedRenderer(Protocol):
-    def render(self, configs: tuple[ProviderConfig, ...]) -> str: ...
 
 
 def require_protocol(config: ProviderConfig, expected: str) -> None:
@@ -60,7 +94,15 @@ def validate_node(config: ProviderConfig) -> None:
 
 
 def label(config: ProviderConfig, *, encoded: bool = True) -> str:
-    raw = f"{config.provider_name}-{config.inbound_tag}-{config.assignment_id}"
+
+    raw = str(
+        config.settings.get("remark")
+        or config.settings.get("display_name")
+        or config.inbound_tag
+        or config.provider_name
+    )
+    for key, value in _remark_vars(config).items():
+        raw = raw.replace(f"{{{key}}}", value)
     return quote(raw) if encoded else raw
 
 

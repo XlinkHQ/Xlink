@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import uuid
-
-from sqlalchemy.orm.exc import StaleDataError
+from typing import TYPE_CHECKING
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.pagination import decode_cursor, encode_cursor
+from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.profile import Profile
 from app.providers.base.exceptions import ProviderNotFoundError
 from app.providers.base.models import ProviderKind
@@ -14,6 +14,10 @@ from app.repositories.node import NodeRepository
 from app.repositories.profile import ProfileRepository
 from app.schemas.pagination import CursorParams
 from app.schemas.profile import ProfileCreate, ProfileUpdate
+from app.services._shared import invalidate_subscription_cache, save_or_conflict
+
+if TYPE_CHECKING:
+    from app.subscription.service import SubscriptionService
 
 
 class ProfileService:
@@ -22,10 +26,15 @@ class ProfileService:
         repo: ProfileRepository,
         node_repo: NodeRepository,
         providers: ProviderRegistry,
+        subscription_service: SubscriptionService | None = None,
     ) -> None:
         self._repo = repo
         self._nodes = node_repo
         self._providers = providers
+        self._subscription_service = subscription_service
+
+    async def _invalidate_subscription_cache(self, node_id: uuid.UUID | None = None) -> None:
+        await invalidate_subscription_cache(self._subscription_service, node_id)
 
     async def create(self, data: ProfileCreate) -> Profile:
         self._validate_provider_kind(data.provider_kind)
@@ -40,7 +49,9 @@ class ProfileService:
             settings=data.settings,
             is_active=True,
         )
-        return await self._repo.create_profile(profile)
+        created = await self._repo.create_profile(profile)
+        await self._invalidate_subscription_cache(created.node_id)
+        return created
 
     async def get(self, profile_id: uuid.UUID) -> Profile:
         profile = await self._repo.get(profile_id)
@@ -62,7 +73,9 @@ class ProfileService:
         if data.is_active is not None:
             profile.is_active = data.is_active
 
-        return await self._flush(profile)
+        flushed = await self._flush(profile)
+        await self._invalidate_subscription_cache(flushed.node_id)
+        return flushed
 
     async def set_active(self, profile_id: uuid.UUID, is_active: bool) -> Profile:
         profile = await self.get(profile_id)
@@ -70,7 +83,22 @@ class ProfileService:
         return await self._flush(profile)
 
     async def disable(self, profile_id: uuid.UUID) -> Profile:
-        return await self.set_active(profile_id, False)
+        profile = await self.set_active(profile_id, False)
+
+        from sqlalchemy import select
+
+        stmt = select(ClientAssignment).where(
+            ClientAssignment.profile_id == profile_id,
+            ClientAssignment.status == AssignmentStatus.ACTIVE,
+        )
+        active_assignments = (await self._repo.session.execute(stmt)).scalars().all()
+        for assignment in active_assignments:
+            assignment.status = AssignmentStatus.DISABLED
+            node = await self._nodes.get(assignment.node_id)
+            if node is not None:
+                node.current_users = max(0, node.current_users - 1)
+        await self._repo.session.flush()
+        return profile
 
     async def list_profiles_keyset(
         self,
@@ -124,9 +152,4 @@ class ProfileService:
             )
 
     async def _flush(self, profile: Profile) -> Profile:
-        try:
-            return await self._repo.save(profile)
-        except StaleDataError as exc:
-            raise ConflictError(
-                "Profile was modified concurrently.", code="version_conflict"
-            ) from exc
+        return await save_or_conflict(self._repo.save, profile, "Profile")

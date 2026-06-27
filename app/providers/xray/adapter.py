@@ -15,7 +15,7 @@ from app.providers.xray.stream import build_stream_settings
 from app.providers.xray.validator import validate_spec, validate_xray_client_payload
 
 
-def _build_client(spec: ClientSpec, protocol: str) -> dict[str, Any]:
+def _build_client(spec: ClientSpec) -> dict[str, Any]:
     attrs = spec.attributes
     client: dict[str, Any] = {
         "id": str(spec.client_id),
@@ -23,12 +23,15 @@ def _build_client(spec: ClientSpec, protocol: str) -> dict[str, Any]:
     }
     for field, default in CLIENT_DEFAULTS.items():
         value = attrs.get(field, default)
-        if isinstance(default, bool):
-            client[field] = bool(value)
-        elif isinstance(default, int):
-            client[field] = int(value)
-        else:
-            client[field] = str(value)
+        try:
+            if isinstance(default, bool):
+                client[field] = bool(value)
+            elif isinstance(default, int):
+                client[field] = int(value)
+            else:
+                client[field] = str(value)
+        except (TypeError, ValueError) as exc:
+            raise XrayPayloadError(f"Invalid value for field '{field}': {value!r}") from exc
     return client
 
 
@@ -37,7 +40,7 @@ def _build_client_payload(spec: ClientSpec, operation: str) -> dict[str, Any]:
     payload = {
         "operation": operation,
         "protocol": protocol,
-        "client": _build_client(spec, protocol),
+        "client": _build_client(spec),
         "streamSettings": build_stream_settings(spec.attributes),
     }
     validate_xray_client_payload(payload)

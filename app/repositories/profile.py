@@ -12,13 +12,22 @@ from app.core.exceptions import ConflictError
 from app.domain.profile import Profile
 from app.providers.base.models import ProviderKind
 from app.repositories.base import BaseRepository
+from app.repositories.conflicts import conflict_from_integrity
 
 
 def _conflict_from_integrity(exc: IntegrityError) -> ConflictError:
-    detail = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
-    if "uq_profiles_slug" in detail or "profiles.slug" in detail or "slug" in detail:
-        return ConflictError("Profile slug already exists.", code="slug_taken")
-    return ConflictError("Profile already exists.", code="profile_conflict")
+    return conflict_from_integrity(
+        exc,
+        [
+            (
+                ("uq_profiles_slug", "profiles.slug", "slug"),
+                "Profile slug already exists.",
+                "slug_taken",
+            ),
+        ],
+        "Profile already exists.",
+        "profile_conflict",
+    )
 
 
 class ProfileRepository(BaseRepository[Profile]):

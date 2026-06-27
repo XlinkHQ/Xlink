@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import event
 
@@ -37,6 +38,7 @@ async def _seed_nodes(app_state: AppState, count: int) -> None:
                 port=443,
                 max_users=100,
                 status=NodeStatus.ACTIVE,
+                last_seen_at=datetime.now(UTC),
                 node_metadata={"agent_token_hash": hash_agent_token(TOKEN)},
             )
             session.add(node)

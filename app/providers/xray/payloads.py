@@ -34,20 +34,6 @@ SUPPORTED_SECURITIES: frozenset[str] = frozenset(s.value for s in XraySecurity)
 DEFAULT_NETWORK = XrayNetwork.TCP.value
 DEFAULT_SECURITY = XraySecurity.NONE.value
 
-CLIENT_FIELDS: tuple[str, ...] = (
-    "id",
-    "email",
-    "flow",
-    "level",
-    "totalGB",
-    "expiryTime",
-    "enable",
-    "limitIp",
-    "subId",
-    "tgId",
-    "reset",
-)
-
 CLIENT_DEFAULTS: dict[str, Any] = {
     "flow": "",
     "level": 0,

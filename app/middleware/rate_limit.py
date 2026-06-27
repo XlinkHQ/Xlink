@@ -5,6 +5,7 @@ from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_add
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.logging import get_logger
+from app.middleware.headers import find_header
 
 logger = get_logger("xlink.ratelimit")
 
@@ -36,13 +37,6 @@ def is_trusted_proxy(host: str | None, trusted_proxies: tuple[IPNetwork, ...]) -
     return any(peer in network for network in trusted_proxies)
 
 
-def _header(scope: Scope, name: bytes) -> str | None:
-    for key, value in scope.get("headers", []):
-        if key.lower() == name:
-            return value.decode("latin-1")
-    return None
-
-
 def _peer_host(scope: Scope) -> str | None:
     client = scope.get("client")
     return client[0] if client else None
@@ -53,11 +47,14 @@ def resolve_client_ip(scope: Scope, trusted_proxies: tuple[IPNetwork, ...]) -> s
     if not is_trusted_proxy(peer_host, trusted_proxies):
         return peer_host or "unknown"
 
-    forwarded_for = _header(scope, b"x-forwarded-for")
+    forwarded_for = find_header(scope.get("headers", []), b"x-forwarded-for")
     if not forwarded_for:
         return peer_host or "unknown"
 
     forwarded_chain = parse_forwarded_for(forwarded_for)
+    for ip in reversed(forwarded_chain):
+        if not is_trusted_proxy(str(ip), trusted_proxies):
+            return str(ip)
     return str(forwarded_chain[0])
 
 
@@ -110,6 +107,10 @@ class RateLimitMiddleware:
             return
 
         if is_excluded_path(scope.get("path", "")):
+            await self.app(scope, receive, send)
+            return
+
+        if scope.get("method") == "OPTIONS":
             await self.app(scope, receive, send)
             return
 

@@ -113,6 +113,19 @@ async def test_restore_validation_and_dry_run(db: Database) -> None:
     assert result.users == 1
 
 
+async def test_restore_persists_data(db: Database) -> None:
+    await _seed(db)
+    document = await _service_export_full(db)
+    payload = dataclasses.asdict(document)
+
+    async with db.session() as session:
+        result = await BackupService(session).restore(payload, dry_run=False)
+        assert result.dry_run is False
+        assert result.users == 1
+        restored_user = await session.get(User, payload["data"]["users"][0]["id"])
+        assert restored_user is not None
+
+
 async def test_corrupted_backup_rejected(db: Database) -> None:
     await _seed(db)
     document = dataclasses.asdict(await _service_export_full(db))
@@ -128,7 +141,11 @@ async def test_missing_dependency_rejected(db: Database) -> None:
     await _seed(db)
     document = dataclasses.asdict(await _service_export_full(db))
     document["checksum"] = None
+
     document["data"]["nodes"] = []
+    orphan_node = str(uuid.uuid4())
+    for profile in document["data"]["profiles"]:
+        profile["node_id"] = orphan_node
 
     with pytest.raises(ValidationError) as exc_info:
         await _service_restore(db, document, dry_run=True)

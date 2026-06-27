@@ -38,35 +38,70 @@ def _transport_block(config: ProviderConfig) -> dict[str, Any] | None:
     return None
 
 
-def _outbound(config: ProviderConfig) -> dict[str, Any]:
+def _default_ss_method(protocol: str) -> str:
+    return "2022-blake3-aes-256-gcm" if protocol == "shadowsocks2022" else "aes-256-gcm"
+
+
+def _shadowtls_outbounds(config: ProviderConfig, tag: str) -> list[dict[str, Any]]:
+    st_tag = f"{tag}-shadowtls"
+    st_tls: dict[str, Any] = {
+        "enabled": True,
+        "server_name": str(setting(config, "sni", setting(config, "host", ""))),
+    }
+    fingerprint = str(setting(config, "fingerprint", ""))
+    if fingerprint:
+        st_tls["utls"] = {"enabled": True, "fingerprint": fingerprint}
+    shadowtls = {
+        "type": "shadowtls",
+        "tag": st_tag,
+        "server": config.host,
+        "server_port": config.port,
+        "version": int(setting(config, "shadowtls_version", 3)),
+        "password": str(setting(config, "shadowtls_password", config.resolved_password)),
+        "tls": st_tls,
+    }
+    inner = {
+        "type": "shadowsocks",
+        "tag": tag,
+        "method": str(setting(config, "method", "2022-blake3-aes-256-gcm")),
+        "password": str(setting(config, "password", config.resolved_password)),
+        "detour": st_tag,
+    }
+    return [shadowtls, inner]
+
+
+def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
     tag = f"{config.provider_name}-{config.inbound_tag}-{config.assignment_id}"
+    protocol = config.protocol
+    if protocol == "shadowtls":
+        return _shadowtls_outbounds(config, tag)
+
     base: dict[str, Any] = {
         "tag": tag,
         "server": config.host,
         "server_port": config.port,
     }
-    protocol = config.protocol
     if protocol in ("vless", "vmess"):
         base["type"] = protocol
-        base["uuid"] = config.client_id
+        base["uuid"] = config.resolved_uuid
         if protocol == "vless":
             base["flow"] = str(setting(config, "flow", ""))
         else:
             base["alter_id"] = int(setting(config, "alterId", 0))
     elif protocol == "trojan":
         base["type"] = "trojan"
-        base["password"] = config.client_id
-    elif protocol == "shadowsocks":
+        base["password"] = config.resolved_password
+    elif protocol in ("shadowsocks", "shadowsocks2022"):
         base["type"] = "shadowsocks"
-        base["method"] = str(setting(config, "method"))
-        base["password"] = str(setting(config, "password"))
+        base["method"] = str(setting(config, "method", _default_ss_method(protocol)))
+        base["password"] = str(setting(config, "password", config.resolved_password))
     elif protocol == "hysteria2":
         base["type"] = "hysteria2"
-        base["password"] = config.client_id
+        base["password"] = config.resolved_password
     elif protocol == "tuic":
         base["type"] = "tuic"
-        base["uuid"] = config.client_id
-        base["password"] = str(setting(config, "password"))
+        base["uuid"] = config.resolved_uuid
+        base["password"] = str(setting(config, "password", "") or config.resolved_password)
     elif protocol in ("socks", "http"):
         base["type"] = protocol
         if setting(config, "username"):
@@ -84,13 +119,16 @@ def _outbound(config: ProviderConfig) -> dict[str, Any]:
     transport = _transport_block(config)
     if transport is not None:
         base["transport"] = transport
-    return base
+    return [base]
 
 
 def render(configs: tuple[ProviderConfig, ...]) -> str:
-    outbounds = []
+    outbounds: list[dict[str, Any]] = []
     for config in configs:
-        validate_node(config)
-        outbounds.append(_outbound(config))
+        try:
+            validate_node(config)
+            outbounds.extend(_outbounds(config))
+        except FormatRenderError:
+            continue
     document = {"outbounds": outbounds}
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False)

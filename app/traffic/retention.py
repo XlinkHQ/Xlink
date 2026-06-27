@@ -21,7 +21,12 @@ class TrafficRetention:
 
     async def purge(self, now: datetime | None = None) -> int:
         cutoff = self.cutoff(now)
+        byte_sums = await self._repo.sum_bytes_before(cutoff)
         deleted = await self._repo.delete_before(cutoff)
+        if byte_sums:
+            reduction = {aid: -total for aid, total in byte_sums.items()}
+            await self._repo.apply_usage_deltas(reduction)
+            await self._repo.resync_user_usage_for_assignments(list(byte_sums))
         if deleted:
             logger.info("traffic_purged", deleted=deleted, cutoff=cutoff.isoformat())
         return deleted

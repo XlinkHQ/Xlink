@@ -7,16 +7,10 @@ import structlog
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.logging import get_logger
+from app.middleware.headers import find_header
 
 logger = get_logger("xlink.access")
 REQUEST_ID_HEADER = b"x-request-id"
-
-
-def _find_header(headers: list[tuple[bytes, bytes]], name: bytes) -> str | None:
-    for key, value in headers:
-        if key.lower() == name:
-            return value.decode("latin-1")
-    return None
 
 
 class RequestContextMiddleware:
@@ -28,7 +22,7 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send)
             return
 
-        request_id = _find_header(scope.get("headers", []), REQUEST_ID_HEADER) or uuid.uuid4().hex
+        request_id = find_header(scope.get("headers", []), REQUEST_ID_HEADER) or uuid.uuid4().hex
         structlog.contextvars.bind_contextvars(
             request_id=request_id,
             method=scope.get("method", ""),

@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
@@ -11,15 +12,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError
 from app.domain.user import User, UserRole
 from app.repositories.base import BaseRepository
+from app.repositories.conflicts import conflict_from_integrity
 
 
 def _conflict_from_integrity(exc: IntegrityError) -> ConflictError:
-    detail = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
-    if "uq_users_email" in detail or "users.email" in detail or "email" in detail:
-        return ConflictError("Email already registered.", code="email_taken")
-    if "uq_users_username" in detail or "users.username" in detail or "username" in detail:
-        return ConflictError("Username already taken.", code="username_taken")
-    return ConflictError("User already exists.", code="user_conflict")
+    return conflict_from_integrity(
+        exc,
+        [
+            (
+                ("uq_users_email", "users.email", "email"),
+                "Email already registered.",
+                "email_taken",
+            ),
+            (
+                ("uq_users_username", "users.username", "username"),
+                "Username already taken.",
+                "username_taken",
+            ),
+        ],
+        "User already exists.",
+        "user_conflict",
+    )
 
 
 class UserRepository(BaseRepository[User]):
@@ -28,15 +41,19 @@ class UserRepository(BaseRepository[User]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
 
-    async def get_by_email(self, email: str) -> User | None:
-        return await self.get_by(email=email.lower())
-
     async def get_by_username(self, username: str) -> User | None:
         return await self.get_by(username=username)
 
     async def get_by_identifier(self, identifier: str) -> User | None:
         ident = identifier.strip()
-        stmt = select(User).where(or_(User.email == ident.lower(), User.username == ident)).limit(1)
+        stmt = (
+            select(User)
+            .where(
+                or_(User.email == ident.lower(), User.username == ident),
+                User.removed.is_(False),
+            )
+            .limit(1)
+        )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
     async def create_user(self, user: User) -> User:
@@ -48,12 +65,21 @@ class UserRepository(BaseRepository[User]):
             raise _conflict_from_integrity(exc) from exc
         return user
 
-    def _filter_conditions(self, role: UserRole | None, is_active: bool | None) -> list:
-        conditions = []
+    def _filter_conditions(
+        self,
+        role: UserRole | None,
+        is_active: bool | None,
+        include_removed: bool = False,
+        owner_id: uuid.UUID | None = None,
+    ) -> list[Any]:
+
+        conditions = [] if include_removed else [User.removed.is_(False)]
         if role is not None:
             conditions.append(User.role == role)
         if is_active is not None:
             conditions.append(User.is_active == is_active)
+        if owner_id is not None:
+            conditions.append(User.owner_id == owner_id)
         return conditions
 
     async def list_paginated(
@@ -63,8 +89,10 @@ class UserRepository(BaseRepository[User]):
         limit: int,
         role: UserRole | None = None,
         is_active: bool | None = None,
+        include_removed: bool = False,
+        owner_id: uuid.UUID | None = None,
     ) -> tuple[Sequence[User], int]:
-        conditions = self._filter_conditions(role, is_active)
+        conditions = self._filter_conditions(role, is_active, include_removed, owner_id)
 
         base = select(User)
         count_stmt = select(func.count()).select_from(User)
@@ -86,9 +114,11 @@ class UserRepository(BaseRepository[User]):
         cursor: tuple[datetime, uuid.UUID] | None = None,
         role: UserRole | None = None,
         is_active: bool | None = None,
+        include_removed: bool = False,
+        owner_id: uuid.UUID | None = None,
     ) -> Sequence[User]:
         stmt = select(User)
-        for cond in self._filter_conditions(role, is_active):
+        for cond in self._filter_conditions(role, is_active, include_removed, owner_id):
             stmt = stmt.where(cond)
 
         if cursor is not None:

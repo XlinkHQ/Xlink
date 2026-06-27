@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 import orjson
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.domain import DriftSeverity, NodeDriftReport
@@ -14,15 +15,49 @@ from app.agent.repository import NodeDriftRepository
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.node import Node
 from app.domain.profile import Profile
+from app.domain.user import User
 from app.gitops.diff import DiffEngine
 
 _DESIRED_VERSION_KEY = "desired_config_version"
+
+
+def _user_serviceable(now: datetime):
+    return and_(
+        User.is_active.is_(True),
+        User.removed.is_(False),
+        or_(User.expire_at.is_(None), User.expire_at > now),
+        or_(
+            User.data_limit_bytes.is_(None),
+            User.users_data_usage < User.data_limit_bytes,
+        ),
+    )
+
+_AGENT_SECRET_DROP = frozenset({"private_key", "privateKey"})
+
+
+def _agent_credentials(credentials: Any) -> dict[str, Any]:
+    if not credentials:
+        return {}
+    return {k: v for k, v in dict(credentials).items() if k not in _AGENT_SECRET_DROP}
+
+
+def _agent_settings(settings: Any) -> dict[str, Any]:
+    return dict(settings or {})
+
+
 _REPORTED_VERSION_KEY = "reported_config_version"
 _REPORTED_STATE_KEY = "reported_state"
 
 
 def config_version(config: dict[str, Any]) -> str:
-    raw = orjson.dumps(config, option=orjson.OPT_SORT_KEYS)
+    stable = dict(config)
+    clients = stable.get("clients")
+    if isinstance(clients, list):
+        stable["clients"] = [
+            {k: v for k, v in c.items() if k != "used_bytes"} if isinstance(c, dict) else c
+            for c in clients
+        ]
+    raw = orjson.dumps(stable, option=orjson.OPT_SORT_KEYS)
     return hashlib.sha256(raw).hexdigest()[:32]
 
 
@@ -38,39 +73,54 @@ class ConfigSyncService:
         if not node_ids:
             return {}
         result: dict[uuid.UUID, list[dict[str, Any]]] = {nid: [] for nid in node_ids}
+        now = datetime.now(UTC)
         stmt = (
-            select(ClientAssignment, Profile)
+            select(ClientAssignment, Profile, User)
             .join(Profile, ClientAssignment.profile_id == Profile.id)
+            .join(User, ClientAssignment.user_id == User.id)
             .where(
                 ClientAssignment.node_id.in_(node_ids),
                 ClientAssignment.status == AssignmentStatus.ACTIVE,
+                _user_serviceable(now),
             )
             .order_by(ClientAssignment.node_id, ClientAssignment.id.asc())
         )
         rows = (await self._session.execute(stmt)).all()
-        for assignment, profile in rows:
+        for assignment, profile, user in rows:
             result.setdefault(assignment.node_id, []).append(
                 {
                     "assignment_id": str(assignment.id),
+                    "user_id": str(assignment.user_id),
                     "provider_client_id": assignment.provider_client_id,
                     "provider_kind": assignment.provider_kind.value,
                     "protocol": profile.protocol,
                     "profile_slug": profile.slug,
-                    "settings": dict(profile.settings),
+                    "settings": _agent_settings(profile.settings),
+                    "credentials": _agent_credentials(assignment.credentials),
+                    "data_limit_bytes": user.data_limit_bytes,
+                    "used_bytes": int(user.users_data_usage or 0),
                 }
             )
+        core_templates = await self._core_templates()
         return {
-            nid: {"clients": clients, "client_count": len(clients)}
+            nid: {
+                "clients": clients,
+                "client_count": len(clients),
+                "core_templates": core_templates,
+            }
             for nid, clients in result.items()
         }
 
     async def desired_config(self, node_id: uuid.UUID) -> dict[str, Any]:
+        now = datetime.now(UTC)
         stmt = (
-            select(ClientAssignment, Profile)
+            select(ClientAssignment, Profile, User)
             .join(Profile, ClientAssignment.profile_id == Profile.id)
+            .join(User, ClientAssignment.user_id == User.id)
             .where(
                 ClientAssignment.node_id == node_id,
                 ClientAssignment.status == AssignmentStatus.ACTIVE,
+                _user_serviceable(now),
             )
             .order_by(ClientAssignment.id.asc())
         )
@@ -78,18 +128,39 @@ class ConfigSyncService:
         clients = [
             {
                 "assignment_id": str(assignment.id),
+                "user_id": str(assignment.user_id),
                 "provider_client_id": assignment.provider_client_id,
                 "provider_kind": assignment.provider_kind.value,
                 "protocol": profile.protocol,
                 "profile_slug": profile.slug,
-                "settings": dict(profile.settings),
+                "settings": _agent_settings(profile.settings),
+                "credentials": _agent_credentials(assignment.credentials),
+                "data_limit_bytes": user.data_limit_bytes,
+                "used_bytes": int(user.users_data_usage or 0),
             }
-            for assignment, profile in rows
+            for assignment, profile, user in rows
         ]
-        return {"clients": clients, "client_count": len(clients)}
+        return {
+            "clients": clients,
+            "client_count": len(clients),
+            "core_templates": await self._core_templates(),
+        }
+
+    async def _core_templates(self) -> dict[str, Any]:
+        from app.domain.app_settings import SINGLETON_ID, AppSettings
+
+        row = await self._session.get(AppSettings, SINGLETON_ID)
+        raw = row.xray_core_template if row else "{}"
+        try:
+            parsed = json.loads(raw or "{}")
+            return parsed if isinstance(parsed, dict) else {}
+        except (ValueError, TypeError):
+            return {}
 
     async def build_snapshot(self, node: Node) -> dict[str, Any]:
         config = await self.desired_config(node.id)
+
+        config["restart_nonce"] = node.node_metadata.get("restart_nonce", 0)
         version = config_version(config)
         metadata = dict(node.node_metadata)
         if metadata.get(_DESIRED_VERSION_KEY) != version:
@@ -125,6 +196,8 @@ class ConfigSyncService:
 
     async def detect_drift(self, node: Node) -> NodeDriftReport:
         config = await self.desired_config(node.id)
+
+        config["restart_nonce"] = node.node_metadata.get("restart_nonce", 0)
         return await self.detect_drift_with_config(node, config)
 
     async def detect_drift_with_config(self, node: Node, config: dict[str, Any]) -> NodeDriftReport:
@@ -133,6 +206,7 @@ class ConfigSyncService:
         if metadata.get(_DESIRED_VERSION_KEY) != desired_version:
             metadata[_DESIRED_VERSION_KEY] = desired_version
             node.node_metadata = metadata
+            await self._session.flush()
         reported_version = metadata.get(_REPORTED_VERSION_KEY)
         reported_state = metadata.get(_REPORTED_STATE_KEY) or {}
         applied = reported_state.get("applied", {}) if isinstance(reported_state, dict) else {}

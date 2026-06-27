@@ -10,9 +10,7 @@ from app.domain.node import Node
 
 logger = get_logger("xlink.agent.healing")
 
-_DESIRED_VERSION_KEY = "desired_config_version"
 _AGENT_VERSION_KEY = "reported_state"
-_TARGET_AGENT_VERSION_KEY = "target_agent_version"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +50,7 @@ class SelfHealingService:
         )
         if command is not None:
             report.remediated = True
+            await self._commands.flush()
             logger.info(
                 "self_healing_command_issued",
                 node_id=str(node.id),

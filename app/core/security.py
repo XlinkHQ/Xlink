@@ -37,7 +37,7 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     try:
         return _hasher().verify(password_hash, password)
-    except (VerifyMismatchError, InvalidHashError, Exception):
+    except (VerifyMismatchError, InvalidHashError):
         return False
 
 
@@ -73,16 +73,20 @@ def _create_token(
     now = datetime.now(UTC)
     expires_at = now + expires_delta
     jti = uuid.uuid4().hex
-    payload: dict[str, Any] = {
-        "sub": subject,
-        "type": token_type.value,
-        "jti": jti,
-        "iat": int(now.timestamp()),
-        "nbf": int(now.timestamp()),
-        "exp": int(expires_at.timestamp()),
-    }
+    payload: dict[str, Any] = {}
     if extra_claims:
         payload.update(extra_claims)
+
+    payload.update(
+        {
+            "sub": subject,
+            "type": token_type.value,
+            "jti": jti,
+            "iat": int(now.timestamp()),
+            "nbf": int(now.timestamp()),
+            "exp": int(expires_at.timestamp()),
+        }
+    )
     encoded = jwt.encode(
         payload,
         settings.jwt_secret_key.get_secret_value(),

@@ -12,16 +12,22 @@ from app.core.exceptions import ConflictError
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.providers.base.models import ProviderKind
 from app.repositories.base import BaseRepository
+from app.repositories.conflicts import conflict_from_integrity
 
 
 def _conflict_from_integrity(exc: IntegrityError) -> ConflictError:
-    detail = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
-    if "uq_client_assignments_triplet" in detail or "user_id" in detail:
-        return ConflictError(
-            "Assignment already exists for this user, profile and node.",
-            code="assignment_exists",
-        )
-    return ConflictError("Assignment already exists.", code="assignment_conflict")
+    return conflict_from_integrity(
+        exc,
+        [
+            (
+                ("uq_client_assignments_triplet", "user_id"),
+                "Assignment already exists for this user, profile and node.",
+                "assignment_exists",
+            ),
+        ],
+        "Assignment already exists.",
+        "assignment_conflict",
+    )
 
 
 class ClientAssignmentRepository(BaseRepository[ClientAssignment]):
@@ -34,6 +40,12 @@ class ClientAssignmentRepository(BaseRepository[ClientAssignment]):
         self, user_id: uuid.UUID, profile_id: uuid.UUID, node_id: uuid.UUID
     ) -> bool:
         return await self.exists(user_id=user_id, profile_id=profile_id, node_id=node_id)
+
+    async def list_by_group(self, group_id: uuid.UUID) -> Sequence[ClientAssignment]:
+        result = await self.session.execute(
+            select(ClientAssignment).where(ClientAssignment.group_id == group_id)
+        )
+        return result.scalars().all()
 
     async def add_pending(self, assignment: ClientAssignment) -> ClientAssignment:
         try:

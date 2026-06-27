@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from sqlalchemy import (
     JSON,
@@ -15,9 +15,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:
+    from app.domain.client_assignment import ClientAssignment
+    from app.domain.node import Node
 from app.providers.base.models import ProviderKind
 
 SLUG_PATTERN = r"^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$"
@@ -45,6 +49,11 @@ class Profile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+
+    node: Mapped[Node] = relationship(back_populates="profiles", lazy="noload")
+    assignments: Mapped[list[ClientAssignment]] = relationship(
+        back_populates="profile", lazy="noload"
+    )
 
     __mapper_args__: ClassVar[dict[str, Any]] = {"version_id_col": version}
 

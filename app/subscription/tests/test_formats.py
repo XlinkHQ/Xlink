@@ -43,9 +43,6 @@ NAIVE = {"username": "u", "password": "p"}
 WG = {"peerPublicKey": "PUB", "privateKey": "PRIV"}
 
 
-# ---------- per-protocol URI renderers: valid + deterministic ----------
-
-
 @pytest.mark.parametrize(
     "protocol,scheme,extra",
     [
@@ -73,14 +70,15 @@ def test_unsupported_protocol_uri():
         render_uri(_cfg("mtproto"))
 
 
-def test_shadowsocks_missing_fields():
-    with pytest.raises(FormatRenderError):
-        render_uri(_cfg("shadowsocks"))
+def test_shadowsocks_defaults_to_credential():
+
+    uri = render_uri(_cfg("shadowsocks"))
+    assert uri.startswith("ss://")
 
 
-def test_tuic_missing_password():
-    with pytest.raises(FormatRenderError):
-        render_uri(_cfg("tuic"))
+def test_tuic_falls_back_to_credential():
+    uri = render_uri(_cfg("tuic"))
+    assert uri.startswith("tuic://")
 
 
 def test_naive_missing_credentials():
@@ -96,9 +94,6 @@ def test_invalid_node_host_rejected():
 def test_invalid_node_port_rejected():
     with pytest.raises(FormatRenderError):
         render_uri(_cfg("vless", port=0))
-
-
-# ---------- container formats: serialization validation ----------
 
 
 def test_singbox_json_serialization():
@@ -143,9 +138,6 @@ def test_wireguard_missing_peer_key():
         default_registry().render(SubscriptionFormat.WIREGUARD_CONF, (_cfg("wireguard"),))
 
 
-# ---------- determinism across container formats ----------
-
-
 @pytest.mark.parametrize(
     "fmt,config",
     [
@@ -162,9 +154,6 @@ def test_container_format_deterministic(fmt, config):
     out1 = registry.render(fmt, (config,))
     out2 = registry.render(fmt, (config,))
     assert out1 == out2
-
-
-# ---------- registry ----------
 
 
 def test_registry_has_all_formats():
@@ -191,9 +180,6 @@ def test_single_protocol_feed_incompatible():
     registry = default_registry()
     with pytest.raises(FormatRenderError):
         registry.render(SubscriptionFormat.TUIC_URI, (_cfg("vless"),))
-
-
-# ---------- regression: text/base64 unchanged ----------
 
 
 def test_text_format_regression():

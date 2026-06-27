@@ -11,13 +11,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import ConflictError
 from app.domain.node import Node, NodeStatus
 from app.repositories.base import BaseRepository
+from app.repositories.conflicts import conflict_from_integrity
 
 
 def _conflict_from_integrity(exc: IntegrityError) -> ConflictError:
-    detail = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
-    if "uq_nodes_slug" in detail or "nodes.slug" in detail or "slug" in detail:
-        return ConflictError("Node slug already exists.", code="slug_taken")
-    return ConflictError("Node already exists.", code="node_conflict")
+    return conflict_from_integrity(
+        exc,
+        [
+            (
+                ("uq_nodes_slug", "nodes.slug", "slug"),
+                "Node slug already exists.",
+                "slug_taken",
+            ),
+        ],
+        "Node already exists.",
+        "node_conflict",
+    )
 
 
 class NodeRepository(BaseRepository[Node]):

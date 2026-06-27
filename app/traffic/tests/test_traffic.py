@@ -274,3 +274,28 @@ def test_collector_dedup_and_validation():
     assert prepared.received == 2
     assert len(prepared.rows) == 1
     assert prepared.deduped == 1
+
+
+async def test_online_user_ids_recent(app_state: AppState):
+    ids = await _seed(app_state)
+    now = datetime.now(UTC)
+    async with app_state.db.session() as session:
+        service = TrafficService(session)
+
+        await service.ingest(
+            _batch(ids["node_id"], ids["assignment_id"], count=1, start=now - timedelta(seconds=30))
+        )
+    async with app_state.db.session() as session:
+        online = await TrafficService(session).online_user_ids(window_seconds=180)
+    assert ids["user_id"] in online
+
+
+async def test_online_user_ids_stale_excluded(app_state: AppState):
+    ids = await _seed(app_state)
+    async with app_state.db.session() as session:
+        service = TrafficService(session)
+
+        await service.ingest(_batch(ids["node_id"], ids["assignment_id"], count=1))
+    async with app_state.db.session() as session:
+        online = await TrafficService(session).online_user_ids(window_seconds=180)
+    assert ids["user_id"] not in online

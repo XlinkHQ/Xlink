@@ -223,7 +223,7 @@ def test_renderer_validation_and_immutable_rendering() -> None:
     with pytest.raises(ValidationError):
         renderer.render_config(config)
     with pytest.raises(FrozenInstanceError):
-        config.protocol = "vless"  # type: ignore[misc]
+        config.protocol = "vless"
 
 
 async def test_provider_compatibility_requires_registered_provider(app_state: AppState) -> None:

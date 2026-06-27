@@ -87,14 +87,6 @@ class SubscriptionGenerated(DomainEvent):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class NodeDriftDetected(DomainEvent):
-    node_id: uuid.UUID
-    severity: str
-    desired_version: str
-    reported_version: str | None
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class NodeCommandIssued(DomainEvent):
     command_id: uuid.UUID
     node_id: uuid.UUID

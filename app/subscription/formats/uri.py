@@ -22,6 +22,7 @@ _URI_RENDERERS: dict[str, Callable[[ProviderConfig], str]] = {
     vmess.PROTOCOL: vmess.render,
     trojan.PROTOCOL: trojan.render,
     shadowsocks.PROTOCOL: shadowsocks.render,
+    "shadowsocks2022": shadowsocks.render,
     hysteria2.PROTOCOL: hysteria2.render,
     tuic.PROTOCOL: tuic.render,
     socks.PROTOCOL: socks.render,

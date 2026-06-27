@@ -20,21 +20,20 @@ class Database:
         is_sqlite = settings.database_url.startswith("sqlite")
 
         engine_kwargs: dict[str, object] = {}
-        if is_sqlite:
-            engine_kwargs = {}
-        elif settings.db_uses_pgbouncer:
-            engine_kwargs = {
-                "poolclass": NullPool,
-                "connect_args": {"statement_cache_size": 0},
-            }
-        else:
-            engine_kwargs = {
-                "pool_size": settings.db_pool_size,
-                "max_overflow": settings.db_max_overflow,
-                "pool_timeout": settings.db_pool_timeout,
-                "pool_recycle": settings.db_pool_recycle,
-                "pool_pre_ping": settings.db_pool_pre_ping,
-            }
+        if not is_sqlite:
+            if settings.db_uses_pgbouncer:
+                engine_kwargs = {
+                    "poolclass": NullPool,
+                    "connect_args": {"statement_cache_size": 0},
+                }
+            else:
+                engine_kwargs = {
+                    "pool_size": settings.db_pool_size,
+                    "max_overflow": settings.db_max_overflow,
+                    "pool_timeout": settings.db_pool_timeout,
+                    "pool_recycle": settings.db_pool_recycle,
+                    "pool_pre_ping": settings.db_pool_pre_ping,
+                }
 
         self._engine: AsyncEngine = create_async_engine(
             settings.database_url,
@@ -63,18 +62,14 @@ class Database:
         try:
             yield session
             await session.commit()
-        except Exception:
-            await session.rollback()
+        except Exception as exc:
+            try:
+                await session.rollback()
+            except Exception as rollback_exc:
+                raise rollback_exc from exc
             raise
         finally:
             await session.close()
-
-    async def ping(self) -> bool:
-        from sqlalchemy import text
-
-        async with self._engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        return True
 
     def pool_stats(self) -> dict[str, int | str]:
         pool = self._engine.pool

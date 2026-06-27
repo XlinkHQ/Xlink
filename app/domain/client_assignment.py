@@ -3,9 +3,10 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     DateTime,
     Enum,
@@ -15,11 +16,19 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.providers.base.models import ProviderKind
+
+if TYPE_CHECKING:
+    from app.domain.node import Node
+    from app.domain.profile import Profile
+    from app.domain.user import User
+
+_JSON_VARIANT = JSONB().with_variant(JSON(), "sqlite")
 
 
 class AssignmentStatus(StrEnum):
@@ -51,6 +60,11 @@ class ClientAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     provider_client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("groups.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     status: Mapped[AssignmentStatus] = mapped_column(
         Enum(AssignmentStatus, name="assignment_status", native_enum=False, length=16),
@@ -60,8 +74,15 @@ class ClientAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     traffic_limit_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     used_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    credentials: Mapped[dict[str, Any]] = mapped_column(
+        _JSON_VARIANT, default=dict, server_default=text("'{}'"), nullable=False
+    )
 
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
+
+    user: Mapped[User] = relationship(back_populates="assignments", lazy="selectin")
+    profile: Mapped[Profile] = relationship(back_populates="assignments", lazy="noload")
+    node: Mapped[Node] = relationship(back_populates="assignments", lazy="noload")
 
     __mapper_args__: ClassVar[dict[str, Any]] = {"version_id_col": version}
 
