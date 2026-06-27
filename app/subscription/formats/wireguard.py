@@ -46,9 +46,8 @@ def _interface_block(config: ProviderConfig) -> str:
     dns = str(setting(config, "dns", ""))
     if dns:
         lines.append(f"DNS = {dns}")
-    mtu = setting(config, "mtu")
-    if mtu:
-        lines.append(f"MTU = {int(mtu)}")
+    mtu = setting(config, "mtu") or 1280
+    lines.append(f"MTU = {int(mtu)}")
     return "\n".join(lines)
 
 

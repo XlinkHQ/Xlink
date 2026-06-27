@@ -346,22 +346,21 @@ def build_wireguard_config(clients: list[dict]) -> str:
     if not priv:
         raise RuntimeError("wireguard: no private key in settings or XLINK_WG_PRIVATE_KEY")
     addr = str(s0.get("address") or "10.8.0.1/24").strip()
+    subnet = addr.rsplit(".", 1)[0] + ".0/24"
     post_up = (
         "WAN=$(ip route list default | awk '{print $5; exit}'); "
         "sysctl -w net.ipv4.ip_forward=1; "
         "sysctl -w net.ipv4.conf.all.rp_filter=0; "
+        "sysctl -w net.ipv4.conf.default.rp_filter=0; "
         "sysctl -w net.ipv4.conf.%i.rp_filter=0; "
         "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 2>/dev/null; "
-        "modprobe xt_string 2>/dev/null; "
-        "iptables -t nat -A POSTROUTING -o $WAN -j MASQUERADE; "
+        f"iptables -t nat -A POSTROUTING -s {subnet} -o $WAN -j MASQUERADE; "
         "iptables -A FORWARD -i %i -j ACCEPT; "
-        "iptables -A FORWARD -o %i -j ACCEPT; "
-        "iptables -I FORWARD -i %i -p udp --dport 53 -m string --algo bm --hex-string '|00001c0001|' -j DROP 2>/dev/null; "
-        "iptables -I FORWARD -i %i -p tcp --dport 53 -m string --algo bm --hex-string '|00001c0001|' -j DROP 2>/dev/null"
+        "iptables -A FORWARD -o %i -j ACCEPT"
     )
     post_down = (
         "WAN=$(ip route list default | awk '{print $5; exit}'); "
-        "iptables -t nat -D POSTROUTING -o $WAN -j MASQUERADE; "
+        f"iptables -t nat -D POSTROUTING -s {subnet} -o $WAN -j MASQUERADE; "
         "iptables -D FORWARD -i %i -j ACCEPT; "
         "iptables -D FORWARD -o %i -j ACCEPT"
     )
@@ -438,7 +437,17 @@ CORES = {
             "if ip link show wg0 >/dev/null 2>&1; then "
             "wg syncconf wg0 <(wg-quick strip wg0) || "
             "{ (wg-quick down wg0 2>/dev/null; ip link delete wg0 2>/dev/null); wg-quick up wg0; }; "
-            "else wg-quick up wg0; fi",
+            "else wg-quick up wg0; fi; "
+            "WAN=$(ip route list default | awk '{print $5; exit}'); "
+            "sysctl -w net.ipv4.ip_forward=1 >/dev/null; "
+            "sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null; "
+            "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
+            "sysctl -w net.ipv4.conf.wg0.rp_filter=0 >/dev/null 2>&1; "
+            "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
+            "iptables -t nat -C POSTROUTING -s 10.8.0.0/24 -o $WAN -j MASQUERADE 2>/dev/null || "
+            "iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o $WAN -j MASQUERADE; "
+            "iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null || iptables -A FORWARD -i wg0 -j ACCEPT; "
+            "iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null || iptables -A FORWARD -o wg0 -j ACCEPT",
         ),
         "validate": None,
         "service": os.environ.get("XLINK_WG_SERVICE", "wg-quick@wg0"),
