@@ -52,17 +52,17 @@
   --font-xl: 18px;
   --font-2xl: 24px;
   --line-height: 1.4375;
-  --white: #ffffff; /* surface */
-  --bg-whitesmoke: #f3f3f4; /* subtle */
-  --bg-bright: #f7f7f8; /* muted */
-  --bg-light: #f3f3f4; /* canvas / site bg */
-  --bg-medium: #e0e0e0; /* line */
+  --white: #fcfcfd; /* surface — Linear bg-base */
+  --bg-whitesmoke: #f5f5f5; /* subtle — Linear sidebar */
+  --bg-bright: #f7f7f7; /* muted — Linear secondary-hover */
+  --bg-light: #f5f5f5; /* canvas / site bg — Linear sidebar */
+  --bg-medium: #e0e0e0; /* line — Linear border */
   --bg-dusk: #8d9898;
   --bg-dark: #647272;
   --body-color: #303031; /* text primary */
-  --body-muted: #717680; /* text secondary */
+  --body-muted: #80858f; /* text secondary — Linear content ~#b0b5c0 too light, mid */
   --light-green: #dbeafe;
-  --primary: #5e6ad2; /* primary */
+  --primary: #5e6ad2; /* primary — Linear accent */
   --primary-soft: #f3f4ff; /* primary-soft */
   --green: #10b981;
   --lime: #34d399;
@@ -121,14 +121,14 @@
   --st-red: #cf7264;    --st-red-bg: rgba(190,90,75,0.14);
   --st-sand: #b29a82;   --st-sand-bg: rgba(156,129,106,0.14);
   --st-stone: #9a938c;  --st-stone-bg: rgba(120,113,108,0.14);
-  --white: #111111;
-  --bg-whitesmoke: #1a1a1a; /* subtle / surface-2 */
-  --bg-bright: #1a1a1a; /* muted */
-  --bg-light: #0a0a0a; /* canvas / page bg — never pure black (enterprise) */
-  --bg-medium: #242424; /* line (inputs) */
-  --body-color: #f5f5f5; /* text primary */
-  --body-muted: #8a8a8a; /* text secondary */
-  --primary: #3b82f6; /* primary — same hue as light, brighter */
+  --white: #0f0f11; /* surface — Linear bg-base-dark */
+  --bg-whitesmoke: #1c1c1d; /* subtle — Linear secondary-bg-dark */
+  --bg-bright: #252627; /* muted — Linear secondary-hover-dark */
+  --bg-light: #090909; /* canvas / page bg — Linear sidebar-dark */
+  --bg-medium: #1c1e21; /* line — Linear border-dark */
+  --body-color: #ffffff; /* text primary — Linear content-highlight-dark */
+  --body-muted: #97979a; /* text secondary — Linear muted-dark */
+  --primary: #6d78d5; /* primary — Linear accent button */
   --primary-soft: #16243a; /* primary-soft (blue tint) */
   --green: #22c55e; /* success — same hue as light */
   --lime: #34d399;
