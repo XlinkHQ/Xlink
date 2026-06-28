@@ -42,15 +42,15 @@
   --white: #ffffff; /* surface */
   --bg-whitesmoke: #f1f5f9; /* subtle */
   --bg-bright: #f1f5f9; /* muted */
-  --bg-light: #fafafa; /* canvas / site bg */
-  --bg-medium: #e2e8f0; /* line */
+  --bg-light: #f6f9fc; /* canvas / site bg — Stripe cool canvas-soft */
+  --bg-medium: #e3e8ee; /* line — Stripe hairline */
   --bg-dusk: #8d9898;
   --bg-dark: #647272;
-  --body-color: #0f172a; /* text primary */
-  --body-muted: #64748b; /* text secondary */
+  --body-color: #0d253d; /* text primary — Stripe deep navy ink */
+  --body-muted: #64748d; /* text secondary — Stripe ink-mute */
   --light-green: #dbeafe;
   --primary: #2645d3; /* primary (blue) */
-  --primary-soft: #eff4ff; /* primary-soft */
+  --primary-soft: #eef2ff; /* primary-soft */
   --green: #10b981;
   --lime: #34d399;
   --orange: #f59e0b;
@@ -65,14 +65,14 @@
   --input-height: 28px;
   --grid-gutter: 12px;
   --disabled-opacity: 0.5;
-  --focus-outline: 2px solid rgba(37, 99, 235, 0.25);
-  --shadow-block: 0 4px 16px 0 rgba(0, 0, 0, 0.1);
+  --focus-outline: 2px solid rgba(38, 69, 211, 0.3);
+  --shadow-block: 0 8px 24px rgba(0, 55, 112, 0.08), 0 2px 6px rgba(0, 55, 112, 0.04);
 
   /* Design system v2 — Control Plane */
   --on-primary: #ffffff; /* text on blue primary (both modes) */
-  --focus-ring: rgba(37, 99, 235, 0.25); /* blue focus glow */
-  --hairline: rgba(15, 23, 42, 0.08); /* low-contrast 1px border (Linear) */
-  --shadow-1: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --focus-ring: rgba(38, 69, 211, 0.3); /* blue focus glow */
+  --hairline: #e3e8ee; /* Stripe hairline */
+  --shadow-1: 0 1px 3px rgba(0, 55, 112, 0.08);
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --s-1: 4px;
   --s-2: 8px;
@@ -4382,10 +4382,10 @@ input.switch:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  border: 1px solid var(--hairline);
   background-color: #fff;
   color: #000;
   font-size: 14px;
