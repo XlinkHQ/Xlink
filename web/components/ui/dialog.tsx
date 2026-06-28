@@ -157,8 +157,7 @@ export function DialogHost() {
                   aria-selected={value === opt.value}
                   disabled={opt.disabled}
                   className={`warp-confirm-option ${value === opt.value ? "is-selected" : ""} ${opt.disabled ? "is-disabled" : ""}`}
-                  onClick={() => !opt.disabled && setValue(opt.value)}
-                  onDoubleClick={() => !opt.disabled && close(opt.value)}
+                  onClick={() => !opt.disabled && close(opt.value)}
                 >
                   <span className="warp-confirm-option-label">{opt.label}</span>
                   {opt.hint ? <span className="warp-confirm-option-hint">{opt.hint}</span> : null}
@@ -171,13 +170,14 @@ export function DialogHost() {
           <button type="button" className="warp-tb-button" onClick={() => close(cancelValue)}>
             {o.cancelLabel ?? "Cancel"}
           </button>
-          <button
-            type="submit"
-            disabled={req.kind === "select" && !value}
-            className={`warp-tb-button ${o.danger ? "warp-tb-button-danger" : "warp-tb-button-primary"}`}
-          >
-            {o.confirmLabel ?? "Confirm"}
-          </button>
+          {req.kind === "select" ? null : (
+            <button
+              type="submit"
+              className={`warp-tb-button ${o.danger ? "warp-tb-button-danger" : "warp-tb-button-primary"}`}
+            >
+              {o.confirmLabel ?? "Confirm"}
+            </button>
+          )}
         </div>
       </form>
     </div>

@@ -133,6 +133,10 @@ body {
   font-size: 14px;
   font-weight: 400;
   line-height: 1.5;
+  letter-spacing: -0.011em;
+  font-feature-settings: "ss01", "cv05", "tnum";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -5649,3 +5653,6 @@ input.switch:focus-visible {
 .xlink-dark .warp-ico-check { background-color: rgba(31,136,61,0.20); }
 .xlink-dark .warp-code-preview { background: #0b0b0b; border-color: rgba(255,255,255,0.12); }
 .xlink-dark .warp-confirm-input:focus { background: #161616; }
+
+/* Stripe-style: thinner, finer icon strokes */
+svg.lucide { stroke-width: 1.75; }
