@@ -1,11 +1,11 @@
 [project]
 name = "xlink"
 version = "1.0.0"
-description = "XLink — production-grade async backend foundation"
+description = "Multi-node VPN management panel (FastAPI + PostgreSQL + Redis)"
 readme = "README.md"
 requires-python = ">=3.13"
-authors = [{ name = "XLink Team" }]
-license = { text = "Proprietary" }
+authors = [{ name = "ParsaGo92" }]
+license = { text = "MIT" }
 
 dependencies = [
     "fastapi>=0.115.0",
