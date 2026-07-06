@@ -196,8 +196,13 @@ class TrafficRepository:
             await self.session.commit()
             if n < batch:
                 break
+        # Keep the idempotency ledger LONGER than the records it guards. If a node
+        # is offline past the record-retention window and still holds buffered WAL,
+        # purging both the records AND its batch_ids at the same cutoff lets the
+        # re-delivered batch look brand-new → double-count. Retain ledger 2× longer.
+        ledger_cutoff = cutoff - (datetime.now(UTC) - cutoff)
         await self.session.execute(
-            delete(ProcessedBatch).where(ProcessedBatch.created_at < cutoff)
+            delete(ProcessedBatch).where(ProcessedBatch.created_at < ledger_cutoff)
         )
         await self.session.commit()
         return deleted

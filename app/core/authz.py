@@ -59,14 +59,22 @@ def owner_scope(actor: User) -> uuid.UUID | None:
 # Substrings marking a settings key as server-side secret material (reality/wg
 # private keys, protocol passwords, uuids). Profile/outbound `settings` are raw
 # dicts holding these; a non-sudo (reseller) admin must never read them.
+# NOTE: deliberately NOT a bare "key" marker — that masks reality's *public*
+# key (publicKey/pbk), which the client legitimately needs, and would break the
+# subscription/config a reseller sees. Only genuinely private material is listed.
 _SECRET_SETTING_MARKERS = (
     "private", "privatekey", "secret", "password", "presharedkey",
-    "preshared", "uuid", "psk", "key",
+    "preshared", "uuid", "psk",
 )
+# Explicit keys that ARE public and must never be masked even if a future marker
+# would catch them.
+_PUBLIC_SETTING_KEYS = {"publickey", "pbk", "shortid", "sid", "spiderx"}
 
 
 def _is_secret_setting(key: str) -> bool:
     k = key.lower().replace("_", "")
+    if k in _PUBLIC_SETTING_KEYS:
+        return False
     return any(m in k for m in _SECRET_SETTING_MARKERS)
 
 

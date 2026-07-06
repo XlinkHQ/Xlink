@@ -231,6 +231,17 @@ class Settings(BaseSettings):
                     "lower XLINK_DB_POOL_SIZE/XLINK_DB_MAX_OVERFLOW, reduce "
                     "XLINK_WEB_CONCURRENCY, or set XLINK_DB_POOL_MODE=transaction (PgBouncer)"
                 )
+            # Host-header hardening: with a real domain configured, "*" trusted
+            # hosts is a poisoning risk. Warn (not fatal — IP-only deployments
+            # legitimately run without a domain and rely on "*").
+            if ("*" in self.trusted_hosts or not self.trusted_hosts) and self.domain:
+                import warnings
+
+                warnings.warn(
+                    "XLINK_TRUSTED_HOSTS is '*' but a domain is set; restrict it to "
+                    f"'{self.domain}' to prevent Host-header poisoning.",
+                    stacklevel=2,
+                )
         return self
 
     @property

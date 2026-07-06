@@ -75,7 +75,15 @@ class IpLimitService:
     async def _recover(self, user_id: uuid.UUID) -> None:
         # Device count is back under the limit — re-activate assignments that WE
         # disabled for an ip-limit breach (never touch admin-disabled ones).
+        from app.domain.user import User
+
         async with self._db.session() as session:
+            # If an admin disabled the user after the ip-limit trip, do NOT
+            # resurrect their assignments — that would silently override the admin
+            # disable. The ip_limited creds flag alone isn't enough to re-activate.
+            user = await session.get(User, user_id)
+            if user is None or not user.is_active or user.removed:
+                return
             rows = (
                 (
                     await session.execute(
