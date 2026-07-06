@@ -17,7 +17,12 @@ function prometheusUrl(): string {
 }
 
 export function MetricsSettingsScreen() {
-  const q = useQuery({ queryKey: ["monitoring-metrics"], queryFn: () => monitoringMetrics(), refetchInterval: 15000 });
+  const q = useQuery({
+    queryKey: ["monitoring-metrics"],
+    queryFn: () => monitoringMetrics(),
+    refetchInterval: 60000,
+    refetchIntervalInBackground: false,
+  });
   const metrics = q.data?.metrics ?? [];
   const url = prometheusUrl();
 

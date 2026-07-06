@@ -4,6 +4,7 @@ import base64
 import re
 import time
 import uuid
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
@@ -92,6 +93,16 @@ class _BlockedSubscriptionError(Exception):
     pass
 
 
+@lru_cache(maxsize=256)
+def _compiled_rule(pattern: str) -> "re.Pattern[str] | None":
+    # Compile once per distinct pattern instead of re.match() recompiling on every
+    # public-subscription hit (highest-traffic endpoint; up to 64 rules/request).
+    try:
+        return re.compile(pattern)
+    except re.error:
+        return None
+
+
 def _match_admin_rules(user_agent: str, rules: list[dict[str, str]]) -> SubscriptionFormat | None:
     # Bound the ReDoS surface: admin patterns run against an attacker-controlled
     # User-Agent on a public endpoint. Cap both lengths so catastrophic
@@ -102,8 +113,11 @@ def _match_admin_rules(user_agent: str, rules: list[dict[str, str]]) -> Subscrip
         result = rule.get("result")
         if not pattern or not result or len(pattern) > 256:
             continue
+        rx = _compiled_rule(pattern)
+        if rx is None:
+            continue
         try:
-            if re.match(pattern, ua):
+            if rx.match(ua):
                 if result == "block":
                     raise _BlockedSubscriptionError
                 fmt = _RULE_RESULT_FORMATS.get(result)

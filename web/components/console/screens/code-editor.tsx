@@ -43,7 +43,13 @@ export function CodeEditor({
   placeholder?: string;
   light?: boolean;
 }) {
-  const tokens = useMemo(() => tokenizeHtml(value), [value]);
+  // Above ~20k chars, re-tokenizing the whole string on every keystroke makes
+  // typing laggy and churns a large token array (GC pressure). Skip highlighting
+  // for very large documents — plain text stays responsive.
+  const tokens = useMemo(
+    () => (value.length > 20000 ? [{ text: value, cls: "" }] : tokenizeHtml(value)),
+    [value],
+  );
   const lineCount = useMemo(() => Math.max(1, value.split("\n").length), [value]);
   const preRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
