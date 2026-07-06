@@ -19,10 +19,13 @@ class FailoverService:
         events: EventBus | None = None,
         *,
         concurrency: int = 5,
+        cache=None,
     ) -> None:
         self._db = db
         self._providers = providers
-        self._executor = FailoverExecutor(db, providers, events, concurrency=concurrency)
+        self._executor = FailoverExecutor(
+            db, providers, events, concurrency=concurrency, cache=cache
+        )
 
     async def plan(
         self,

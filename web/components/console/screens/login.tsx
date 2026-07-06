@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, X } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { ApiError, login } from "@/lib/api";
+import { toast } from "@/components/ui/toast";
 import { getBranding, onBrandingChange } from "@/lib/branding";
 
 export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }) {
@@ -13,22 +13,12 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
   const [totpCode, setTotpCode] = useState("");
   const [needTotp, setNeedTotp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [alert, setAlert] = useState<"success" | "error" | null>(null);
-  const timer = useRef<number | null>(null);
-
-  const showAlert = (kind: "success" | "error") => {
-    setAlert(kind);
-    if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setAlert(null), 4000);
-  };
-  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (submitting) return;
-    setAlert(null);
     if (username.trim().length === 0) {
-      showAlert("error");
+      toast("error", "Please check your username and password and try again.");
       return;
     }
     setSubmitting(true);
@@ -38,8 +28,8 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
     try {
       const res = await login(username.trim(), password, needTotp ? totpCode.trim() : undefined);
       await settle();
-      showAlert("success");
-      window.setTimeout(() => onSuccess(res.user?.username ?? username.trim()), 1000);
+      toast("success", "Signed in successfully.");
+      window.setTimeout(() => onSuccess(res.user?.username ?? username.trim()), 700);
     } catch (caught) {
       await settle();
       if (caught instanceof ApiError && caught.code === "totp_required") {
@@ -47,97 +37,90 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
         setSubmitting(false);
         return;
       }
-      showAlert("error");
+      toast("error", caught instanceof ApiError ? caught.message : "Please check your username and password and try again.");
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="warp-page">
-      <main className="warp-signin">
-        {alert ? (
-          <div className="warp-alert-warpper">
-            {alert === "success" ? (
-              <div className="warp-alert warp-alert-style" role="status">
-                <div>
-                  <span className="warp-ico warp-ico-check">
-                    <Check size={18} />
-                  </span>
-                  <div>
-                    <h4>Successful</h4>
-                    <p>Sign in was successful.</p>
-                  </div>
-                </div>
-                <button type="button" aria-label="Close" onClick={() => setAlert(null)}>
-                  <span><X size={16} /></span>
-                </button>
-              </div>
-            ) : (
-              <div className="warp-alert warp-alert-style" role="alert">
-                <div>
-                  <span className="warp-ico warp-ico-close">
-                    <X size={18} />
-                  </span>
-                  <div>
-                    <h4>Unsuccessful</h4>
-                    <p>Please check your username and password and try again.</p>
-                  </div>
-                </div>
-                <button type="button" aria-label="Close" onClick={() => setAlert(null)}>
-                  <span><X size={16} /></span>
-                </button>
-              </div>
-            )}
-          </div>
-        ) : null}
+    <div className="warp-login-page">
+      {/* SIDE ILLUSTRATION PANEL (DefGuard split layout) */}
+      <aside className="warp-login-aside">
+        <img src="/login.png" alt="" loading="eager" decoding="async" draggable={false} />
+      </aside>
 
-        {/* FORM */}
-        <form className="warp-form-signin" onSubmit={submit} autoCapitalize="off" autoCorrect="off">
+      {/* FORM PANEL */}
+      <div className="warp-login-track">
+        <main className="warp-login-main">
           <img
             src={brand.logo}
             alt={brand.name}
-            className="warp-logo warp-signin-animation-logo"
+            className="warp-login-logo warp-signin-animation-logo"
             draggable={false}
           />
-          <input
-            type="text"
-            placeholder="Username"
-            aria-placeholder="Username"
-            autoComplete="username"
-            autoFocus
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            aria-placeholder="Password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {needTotp ? (
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="Two-factor code"
-              aria-placeholder="Two-factor code"
-              autoComplete="one-time-code"
-              autoFocus
-              value={totpCode}
-              onChange={(e) => setTotpCode(e.target.value)}
-            />
-          ) : null}
-          <input
-            type="submit"
-            className={submitting ? "warp-loader-processor-button" : ""}
-            value={submitting ? "Processing..." : "Sign in"}
-            disabled={submitting}
-          />
-        </form>
-      </main>
 
-      {/* INDICATOR */}
+          <h1 className="warp-login-title">Sign in to your account</h1>
+          <h2 className="warp-login-subtitle">Enter your credentials to continue.</h2>
+
+          {/* FORM */}
+          <form className="warp-login-form" onSubmit={submit} autoCapitalize="off" autoCorrect="off">
+            <div className="warp-login-field">
+              <label htmlFor="warp-login-username">Username</label>
+              <input
+                id="warp-login-username"
+                type="text"
+                placeholder="Username"
+                aria-placeholder="Username"
+                autoComplete="username"
+                autoFocus
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+            <div className="warp-login-field">
+              <label htmlFor="warp-login-password">Password</label>
+              <input
+                id="warp-login-password"
+                type="password"
+                placeholder="Password"
+                aria-placeholder="Password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            {needTotp ? (
+              <div className="warp-login-field">
+                <label htmlFor="warp-login-totp">Two-factor code</label>
+                <input
+                  id="warp-login-totp"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Two-factor code"
+                  aria-placeholder="Two-factor code"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                />
+              </div>
+            ) : null}
+            <button
+              type="submit"
+              className={`warp-login-submit${submitting ? " warp-login-submit-loading" : ""}`}
+              disabled={submitting}
+            >
+              {submitting ? "Processing..." : "Sign in"}
+            </button>
+          </form>
+
+          <footer className="warp-login-footer">
+            <p>Copyright © {new Date().getFullYear()} {brand.name}</p>
+          </footer>
+        </main>
+      </div>
+
+      {/* INDICATOR (rainbow bottom bar) */}
       <div className="warp-indicator-warpper warp-indicator-animation">
         <div className="warp-indicator" />
       </div>

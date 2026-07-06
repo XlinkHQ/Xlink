@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,14 +38,11 @@ class GitOpsRepository:
         await self._session.flush()
         return record
 
-    async def latest(self, *, entity_type: str, entity_id) -> GitOpsRecord | None:
+    async def list_recent(self, *, limit: int = 100) -> list[GitOpsRecord]:
         stmt = (
             select(GitOpsRecord)
-            .where(
-                GitOpsRecord.entity_type == entity_type,
-                GitOpsRecord.entity_id == entity_id,
-            )
             .order_by(GitOpsRecord.created_at.desc(), GitOpsRecord.id.desc())
-            .limit(1)
+            .limit(limit)
         )
-        return (await self._session.execute(stmt)).scalar_one_or_none()
+        return list((await self._session.execute(stmt)).scalars().all())
+

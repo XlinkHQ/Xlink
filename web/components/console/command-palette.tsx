@@ -1,49 +1,40 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { NAV_ITEMS, SearchIcon } from "./nav";
+import { Search } from "lucide-react";
+import { NAV_ITEMS } from "./nav";
 
-export function CommandPalette({
-  onSelect,
-  open,
-  onOpenChange,
-}: {
-  onSelect: (key: string) => void;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-}) {
-  const [internalOpen, setInternalOpen] = useState(false);
+export function CommandPalette({ onSelect }: { onSelect: (key: string) => void }) {
+  const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
-  const isOpen = open ?? internalOpen;
-  const setOpen = onOpenChange ?? setInternalOpen;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setOpen(!isOpen);
+        setOpen((o) => !o);
       } else if (e.key === "Escape") {
         setOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, setOpen]);
+  }, []);
 
   useEffect(() => {
-    if (isOpen) {
+    if (open) {
       setQ("");
       setActive(0);
     }
-  }, [isOpen]);
+  }, [open]);
 
   const items = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return NAV_ITEMS.filter((i) => !needle || i.label.toLowerCase().includes(needle));
   }, [q]);
 
-  if (!isOpen) return null;
+  if (!open) return null;
 
   const choose = (key: string) => {
     onSelect(key);
@@ -60,7 +51,7 @@ export function CommandPalette({
         aria-label="Command palette"
       >
         <div className="warp-cmd-input">
-          <SearchIcon aria-hidden size={14} />
+          <Search aria-hidden size={14} />
           <input
             autoFocus
             value={q}

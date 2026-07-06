@@ -8,6 +8,8 @@ class XrayProtocol(StrEnum):
     VLESS = "vless"
     VMESS = "vmess"
     TROJAN = "trojan"
+    SHADOWSOCKS = "shadowsocks"
+    SHADOWSOCKS2022 = "shadowsocks2022"
 
 
 class XrayNetwork(StrEnum):
@@ -15,6 +17,7 @@ class XrayNetwork(StrEnum):
     WS = "ws"
     GRPC = "grpc"
     HTTPUPGRADE = "httpupgrade"
+    XHTTP = "xhttp"
 
 
 class XraySecurity(StrEnum):
@@ -26,6 +29,39 @@ class XraySecurity(StrEnum):
 SUPPORTED_PROTOCOLS: frozenset[str] = frozenset(p.value for p in XrayProtocol)
 
 UUID_PROTOCOLS: frozenset[str] = frozenset({XrayProtocol.VLESS.value, XrayProtocol.VMESS.value})
+
+PASSWORD_PROTOCOLS: frozenset[str] = frozenset(
+    {XrayProtocol.SHADOWSOCKS.value, XrayProtocol.SHADOWSOCKS2022.value}
+)
+
+SHADOWSOCKS_METHODS: frozenset[str] = frozenset(
+    {
+        "aes-128-gcm",
+        "aes-256-gcm",
+        "chacha20-ietf-poly1305",
+    }
+)
+SHADOWSOCKS2022_METHODS: frozenset[str] = frozenset(
+    {
+        "2022-blake3-aes-128-gcm",
+        "2022-blake3-aes-256-gcm",
+        "2022-blake3-chacha20-poly1305",
+    }
+)
+DEFAULT_SHADOWSOCKS_METHOD = "aes-256-gcm"
+DEFAULT_SHADOWSOCKS2022_METHOD = "2022-blake3-aes-256-gcm"
+
+
+def methods_for(protocol: str) -> frozenset[str]:
+    if protocol == XrayProtocol.SHADOWSOCKS2022.value:
+        return SHADOWSOCKS2022_METHODS
+    return SHADOWSOCKS_METHODS
+
+
+def default_method_for(protocol: str) -> str:
+    if protocol == XrayProtocol.SHADOWSOCKS2022.value:
+        return DEFAULT_SHADOWSOCKS2022_METHOD
+    return DEFAULT_SHADOWSOCKS_METHOD
 
 SUPPORTED_NETWORKS: frozenset[str] = frozenset(n.value for n in XrayNetwork)
 

@@ -27,12 +27,6 @@ class CapabilityNotSupportedError(ProviderError):
     message = "Provider does not support the requested capability."
 
 
-class ProviderConfigurationError(ProviderError):
-    status_code = 422
-    code = "provider_configuration_error"
-    message = "Provider configuration is invalid."
-
-
 class ProviderValidationError(ProviderError):
     status_code = 422
     code = "provider_validation_error"

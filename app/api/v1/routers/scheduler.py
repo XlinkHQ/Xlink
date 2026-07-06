@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.dependencies.auth import AdminUser
+from app.dependencies.auth import AdminUser, SudoAdminUser
 from app.dependencies.services import SchedulerServiceDep
 from app.scheduler.models import SchedulerPolicyName, SchedulerRequest
 from app.scheduler.schemas import NodeScoreRead, SchedulerDecisionRead, SchedulerRequestSchema
@@ -18,7 +18,7 @@ async def scheduler_policies(_admin: AdminUser) -> list[str]:
 @router.post("/run", response_model=SchedulerDecisionRead)
 async def scheduler_run(
     payload: SchedulerRequestSchema,
-    _admin: AdminUser,
+    _admin: SudoAdminUser,
     scheduler: SchedulerServiceDep,
 ) -> SchedulerDecisionRead:
     decision = await scheduler.choose_node(

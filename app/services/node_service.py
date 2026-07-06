@@ -54,6 +54,14 @@ class NodeService:
             node.usage_coefficient = data.usage_coefficient
         if data.metadata is not None:
             node.node_metadata = data.metadata
+        if data.socks_enabled is not None:
+            node.socks_enabled = data.socks_enabled
+        if data.socks_address is not None:
+            node.socks_address = data.socks_address or None
+        if data.socks_username is not None:
+            node.socks_username = data.socks_username or None
+        if data.socks_password is not None:
+            node.socks_password = data.socks_password or None
 
         return await self._flush(node)
 
@@ -65,6 +73,10 @@ class NodeService:
     async def disable(self, node_id: uuid.UUID) -> Node:
         return await self.set_status(node_id, NodeStatus.DISABLED)
 
+    async def delete(self, node_id: uuid.UUID) -> None:
+        node = await self.get(node_id)
+        await self._repo.delete(node)
+
     async def heartbeat(
         self,
         node_id: uuid.UUID,
@@ -72,7 +84,11 @@ class NodeService:
         status: NodeStatus | None = None,
     ) -> Node:
         node = await self.get(node_id)
-        node.current_users = current_users
+        # current_users is DB-authoritative (COUNT of ACTIVE assignments); the
+        # reported value is telemetry only.
+        metadata = dict(node.node_metadata)
+        metadata["agent_reported_users"] = current_users
+        node.node_metadata = metadata
         node.last_seen_at = datetime.now(UTC)
         if status is not None:
             node.status = status

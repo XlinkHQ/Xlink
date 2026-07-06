@@ -35,6 +35,9 @@ class GitOpsService:
     def diff(self, before: GitSnapshot, after: GitSnapshot) -> GitDiff:
         return self._diffs.compare(before.data, after.data)
 
+    async def list_recent(self, *, limit: int = 100) -> list[GitOpsRecord]:
+        return await self._repository.list_recent(limit=limit)
+
     async def commit(
         self,
         *,

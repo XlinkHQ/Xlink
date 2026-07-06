@@ -41,6 +41,10 @@ def transport_params(config: ProviderConfig) -> dict[str, str]:
         params["fp"] = str(setting(config, "fingerprint", "") or "chrome")
         params["pbk"] = str(setting(config, "publicKey", setting(config, "pbk", "")))
         params["sid"] = str(setting(config, "shortId", setting(config, "sid", "")))
+        params["alpn"] = str(setting(config, "alpn", ""))
+        params["spx"] = str(setting(config, "spiderX", ""))
+    if security in ("tls", "reality") and setting(config, "allowInsecure"):
+        params["allowInsecure"] = "1"
     return params
 
 

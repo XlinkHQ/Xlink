@@ -1,21 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict
 
 from app.dependencies.auth import AdminUser
 from app.dependencies.core import ProvidersDep
+from app.providers.schemas import ProviderRead
 
 router = APIRouter(prefix="/providers", tags=["providers"])
-
-
-class ProviderRead(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    name: str
-    kind: str
-    version: str
-    capabilities: list[str]
 
 
 @router.get("", response_model=list[ProviderRead])

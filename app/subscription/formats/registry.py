@@ -18,6 +18,7 @@ from app.subscription.formats import (
     vless,
     vmess,
     wireguard,
+    xray_json,
 )
 from app.subscription.formats.base import FormatRenderError
 from app.subscription.models import ProviderConfig
@@ -27,15 +28,17 @@ FeedRenderFn = Callable[[tuple[ProviderConfig, ...]], str]
 
 
 def _single_protocol_feed(
-    render_one: Callable[[ProviderConfig], str], protocol: str
+    render_one: Callable[[ProviderConfig], str], protocol: str | tuple[str, ...]
 ) -> FeedRenderFn:
+    protocols = (protocol,) if isinstance(protocol, str) else protocol
+
     def _render(configs: tuple[ProviderConfig, ...]) -> str:
-        matching = [c for c in configs if c.protocol == protocol]
+        matching = [c for c in configs if c.protocol in protocols]
         if not matching:
             raise FormatRenderError(
-                f"No '{protocol}' configs available for this format.",
+                f"No '{'/'.join(protocols)}' configs available for this format.",
                 code="subscription_format_incompatible",
-                details={"protocol": protocol},
+                details={"protocol": protocols[0]},
             )
         return "\n".join(render_one(c) for c in matching)
 
@@ -70,6 +73,7 @@ def default_registry() -> RendererRegistry:
     registry = RendererRegistry()
     registry.register(SubscriptionFormat.TEXT, text.render)
     registry.register(SubscriptionFormat.BASE64, base64_format.render)
+    registry.register(SubscriptionFormat.XRAY_JSON, xray_json.render)
     registry.register(SubscriptionFormat.SINGBOX_JSON, singbox.render)
     registry.register(SubscriptionFormat.CLASH_YAML, clash.render)
     registry.register(SubscriptionFormat.MIHOMO_YAML, mihomo.render)
@@ -85,7 +89,7 @@ def default_registry() -> RendererRegistry:
     )
     registry.register(
         SubscriptionFormat.SHADOWSOCKS_URI,
-        _single_protocol_feed(shadowsocks.render, shadowsocks.PROTOCOL),
+        _single_protocol_feed(shadowsocks.render, shadowsocks.PROTOCOLS),
     )
     registry.register(
         SubscriptionFormat.HYSTERIA2_URI,

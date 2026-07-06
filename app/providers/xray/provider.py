@@ -36,10 +36,6 @@ class XrayProvider(Provider):
         self._gateway = gateway
 
     @property
-    def gateway(self) -> XrayGateway:
-        return self._gateway
-
-    @property
     def metadata(self) -> ProviderMetadata:
         return ProviderMetadata(
             name=PROVIDER_NAME,

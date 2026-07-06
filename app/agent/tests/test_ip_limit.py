@@ -17,7 +17,7 @@ async def _seed(app_state: AppState, *, device_limit: int | None) -> dict:
     async with app_state.db.session() as session:
         user = User(
             username=f"u-{uuid.uuid4().hex[:8]}",
-            hashed_password=hash_password("strong-password-1234"),
+            hashed_password=hash_password("strong-password-1234-AB!"),
             role=UserRole.USER,
             device_limit=device_limit,
         )
@@ -84,4 +84,20 @@ async def test_no_limit_never_disables(app_state: AppState):
     svc = IpLimitService(app_state.db, app_state.cache)
     aid = ids["assignment_id"]
     await svc.report([(aid, f"{i}.{i}.{i}.{i}") for i in range(1, 9)])
+    assert await _status(app_state, aid) is AssignmentStatus.ACTIVE
+
+
+async def test_ip_limit_auto_recovers_when_devices_drop(app_state: AppState):
+    from app.agent.ip_limit import _key
+
+    ids = await _seed(app_state, device_limit=2)
+    svc = IpLimitService(app_state.db, app_state.cache)
+    aid = ids["assignment_id"]
+    # Over the limit → disabled.
+    await svc.report([(aid, "1.1.1.1"), (aid, "2.2.2.2"), (aid, "3.3.3.3")])
+    assert await _status(app_state, aid) is AssignmentStatus.DISABLED
+    # Devices drop back under the limit (IP set expires/clears) → next report
+    # re-activates the assignment we disabled.
+    await app_state.cache.client.delete(_key(ids["user_id"]))
+    await svc.report([(aid, "1.1.1.1")])
     assert await _status(app_state, aid) is AssignmentStatus.ACTIVE

@@ -2,10 +2,22 @@
 
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Menu, MoreHorizontal, Plus, Trash } from "lucide-react";
+import { Menu, Plus, Trash } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/lib/icons";
 import { useTheme } from "@/lib/theme";
+
+// exact DefGuard "menu" (3 horizontal dots) icon
+function DotsMenu({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden>
+      <path
+        d="M17 9.56C17 10.42 16.3 11.12 15.44 11.12C14.58 11.12 13.88 10.42 13.88 9.56C13.88 8.7 14.58 8 15.44 8C16.3 8 17 8.7 17 9.56ZM10 8C9.14 8 8.44 8.7 8.44 9.56C8.44 10.42 9.14 11.12 10 11.12C10.86 11.12 11.56 10.42 11.56 9.56C11.56 8.7 10.86 8 10 8ZM4.56 8C3.7 8 3 8.7 3 9.56C3 10.42 3.7 11.12 4.56 11.12C5.42 11.12 6.12 10.42 6.12 9.56C6.12 8.7 5.42 8 4.56 8Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
 
 export type WarpMenuItem = {
   label: string;
@@ -64,7 +76,7 @@ export function WarpMenu({ items, label }: { items: WarpMenuItem[]; label?: stri
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
         >
-          <MoreHorizontal size={12} />
+          <DotsMenu size={18} />
         </button>
       )}
       {open && typeof document !== "undefined"
@@ -107,30 +119,19 @@ export function WarpMenu({ items, label }: { items: WarpMenuItem[]; label?: stri
   );
 }
 
-export function WarpStatRow({ children }: { children: ReactNode }) {
-  return <div className="warp-tb-stats">{children}</div>;
-}
-
-export function WarpStat({ label, value, tone = "green" }: { label: string; value: ReactNode; tone?: BadgeTone }) {
-  return (
-    <div className="warp-tb-stat">
-      <h5>{label}:</h5>
-      <WarpBadge tone={tone}>{value}</WarpBadge>
-    </div>
-  );
-}
-
 export function WarpTableCard({
   toolbar,
   search,
   children,
+  className,
 }: {
   toolbar?: ReactNode;
   search?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="warp-tb-card">
+    <div className={className ? `warp-tb-card ${className}` : "warp-tb-card"}>
       {toolbar ? <div className="warp-tb-toolbar">{toolbar}</div> : null}
       {search ? (
         <>
@@ -181,35 +182,10 @@ export function WarpRow({
   onClick?: () => void;
   menu?: WarpMenuItem[];
 }) {
-  const openMenu = (el: HTMLElement) => {
-    el.closest(".warp-tb-row")?.querySelector<HTMLButtonElement>(".warp-menu button")?.click();
-  };
   return (
     <div
       className="warp-tb-row"
-      onClick={
-        onClick
-          ? (e) => {
-              const row = e.currentTarget as HTMLElement & { _t?: number };
-              if (row._t) window.clearTimeout(row._t);
-              row._t = window.setTimeout(() => onClick(), menu ? 220 : 0);
-            }
-          : undefined
-      }
-      onDoubleClick={
-        menu
-          ? (e) => {
-              const row = e.currentTarget as HTMLElement & { _t?: number };
-              if (row._t) { window.clearTimeout(row._t); row._t = undefined; }
-              openMenu(e.currentTarget as HTMLElement);
-            }
-          : undefined
-      }
-      onContextMenu={
-        menu
-          ? (e) => { e.preventDefault(); openMenu(e.currentTarget as HTMLElement); }
-          : undefined
-      }
+      onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={
@@ -237,75 +213,9 @@ export function WarpRow({
   );
 }
 
-export function WarpIdCell({
-  id,
-  onDelete,
-  onMore,
-  menu,
-}: {
-  id: ReactNode;
-  onDelete?: () => void;
-  onMore?: () => void;
-  menu?: WarpMenuItem[];
-}) {
-  return (
-    <span className="warp-tb-idcell">
-      {id}
-      {onDelete ? (
-        <button
-          type="button"
-          title="Delete"
-          className="warp-tb-rowicon warp-tb-del"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash size={12} />
-        </button>
-      ) : null}
-      {menu ? (
-        <WarpMenu items={menu} />
-      ) : onMore ? (
-        <button
-          type="button"
-          title="More options"
-          className="warp-tb-rowicon"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMore();
-          }}
-        >
-          <MoreHorizontal size={12} />
-        </button>
-      ) : null}
-    </span>
-  );
-}
-
-type BadgeTone = "green" | "red" | "blue" | "orange" | "gray";
+type BadgeTone = "green" | "red" | "blue" | "orange" | "gray" | "teal" | "violet" | "amber";
 export function WarpBadge({ tone = "gray", children }: { tone?: BadgeTone; children: ReactNode }) {
   return <span className={`warp-tb-badge ${tone}`}>{children}</span>;
-}
-
-export function WarpTraffic({
-  pct,
-  label,
-  tone,
-}: {
-  pct: number;
-  label: ReactNode;
-  tone?: "default" | "unlimited" | "danger";
-}) {
-  const w = Math.min(100, Math.max(0, pct));
-  return (
-    <span className="warp-tb-traffic">
-      <span className={cn("warp-tb-bar", tone === "unlimited" && "is-unlimited", tone === "danger" && "is-danger")}>
-        <div style={{ width: `${w}%` }} />
-      </span>
-      <span className="warp-tb-traffic-val">{label}</span>
-    </span>
-  );
 }
 
 export function WarpRadial({

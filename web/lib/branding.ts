@@ -3,7 +3,7 @@
 export type Branding = { name: string; logo: string };
 
 const KEY = "xlink.branding";
-const DEFAULTS: Branding = { name: "XLink", logo: "/warp/logo/WarpProxy_Logo_I.svg" };
+const DEFAULTS: Branding = { name: "XLink", logo: "/xlink-logo.png" };
 const EVENT = "xlink-branding";
 
 export function getBranding(): Branding {

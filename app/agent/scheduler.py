@@ -7,11 +7,13 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 
 from app.agent.heartbeat import NodeHeartbeatService
+from app.core.leader import LeaderElector
 from app.core.logging import get_logger
 from app.db.session import Database
 from app.domain.node import Node, NodeStatus
 from app.events.bus import EventBus
 from app.repositories.node import NodeRepository
+from app.webhooks.dispatcher import WebhookDispatcher
 
 logger = get_logger("xlink.agent.scheduler")
 
@@ -22,13 +24,17 @@ class NodeAgentScheduler:
         db: Database,
         *,
         events: EventBus | None = None,
+        dispatcher: WebhookDispatcher | None = None,
         interval_seconds: int = 30,
         offline_after_seconds: int = 90,
+        leader: LeaderElector | None = None,
     ) -> None:
         self._db = db
         self._events = events
+        self._dispatcher = dispatcher
         self._interval = interval_seconds
         self._offline_after = offline_after_seconds
+        self._leader = leader
         self._task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
 
@@ -65,7 +71,9 @@ class NodeAgentScheduler:
                 Node.last_seen_at < threshold,
             )
             nodes = (await session.execute(stmt)).scalars().all()
-            heartbeat = NodeHeartbeatService(NodeRepository(session), self._events)
+            heartbeat = NodeHeartbeatService(
+                NodeRepository(session), self._events, self._dispatcher
+            )
             for node in nodes:
                 await heartbeat.mark_stale_offline(node)
             return len(nodes)
@@ -76,6 +84,8 @@ class NodeAgentScheduler:
                 await asyncio.wait_for(self._stopping.wait(), timeout=self._interval)
             if self._stopping.is_set():
                 break
+            if self._leader is not None and not self._leader.is_leader:
+                continue
             try:
                 offline = await self.detect_offline_once()
                 if offline:

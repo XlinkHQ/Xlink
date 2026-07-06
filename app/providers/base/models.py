@@ -20,6 +20,35 @@ class ProviderKind(StrEnum):
     WIREGUARD = "wireguard"
 
 
+# Which client protocols each provider can actually create. Single source of
+# truth shared by the profile validator and (mirrored in) the web UI's
+# protocolsFor(); keep the two in sync.
+PROVIDER_PROTOCOLS: dict[ProviderKind, frozenset[str]] = {
+    ProviderKind.XRAY: frozenset(
+        {"vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022"}
+    ),
+    ProviderKind.SING_BOX: frozenset(
+        {
+            "vless",
+            "vmess",
+            "trojan",
+            "shadowsocks",
+            "shadowsocks2022",
+            "shadowtls",
+            "hysteria2",
+            "tuic",
+            "naive",
+        }
+    ),
+    ProviderKind.HYSTERIA: frozenset({"hysteria2"}),
+    ProviderKind.WIREGUARD: frozenset({"wireguard"}),
+}
+
+
+def protocols_for(kind: ProviderKind) -> frozenset[str]:
+    return PROVIDER_PROTOCOLS.get(kind, frozenset())
+
+
 class ProviderMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 

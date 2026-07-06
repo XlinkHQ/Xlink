@@ -59,7 +59,6 @@ class NodeSyncService:
                     import asyncio
 
                     await asyncio.sleep(self._retry.delay_for(attempt))
-        assert last_error is not None
         raise last_error
 
     def _sync_item(self, assignment: ClientAssignment, profile: Profile) -> AssignmentSyncItem:

@@ -81,7 +81,7 @@ class ClientAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1)
 
-    user: Mapped[User] = relationship(back_populates="assignments", lazy="selectin")
+    user: Mapped[User] = relationship(back_populates="assignments", lazy="noload")
     profile: Mapped[Profile] = relationship(back_populates="assignments", lazy="noload")
     node: Mapped[Node] = relationship(back_populates="assignments", lazy="noload")
 

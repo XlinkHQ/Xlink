@@ -15,6 +15,7 @@ import {
   listGroups,
   listNodes,
   listProfiles,
+  listUserTemplates,
   type ProfileRead,
   updateUser,
   type UserRead,
@@ -97,7 +98,7 @@ export function EditUserDialog({
       <Field label="Full name (optional)">
         <Input value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="off" />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="warp-dlg-2col">
         <Field label="Data limit (GiB)">
           <Input
             type="number"
@@ -117,9 +118,10 @@ export function EditUserDialog({
             <option value="day">Daily</option>
             <option value="week">Weekly</option>
             <option value="month">Monthly</option>
+            <option value="year">Yearly</option>
           </Select>
         </Field>
-        <Field label="Device limit">
+        <Field label="Device limit (HWID)">
           <Input
             type="number"
             min="0"
@@ -134,7 +136,7 @@ export function EditUserDialog({
         On-hold — start the expiry countdown on first connection
       </label>
       {onHold ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="warp-dlg-2col">
           <Field label="Hold duration (days)">
             <Input
               type="number"
@@ -154,7 +156,7 @@ export function EditUserDialog({
         </div>
       ) : null}
       <Field label="Pinned nodes (empty = all nodes)">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="warp-dlg-chipbox">
           {nodes.length === 0 ? (
             <span className="text-[11px] text-fg-muted">No nodes yet.</span>
           ) : (
@@ -165,7 +167,7 @@ export function EditUserDialog({
                 onClick={() => togglePin(n.id)}
                 className={`warp-pin-chip ${pinned.includes(n.id) ? "is-on" : ""}`}
               >
-                {pinned.includes(n.id) ? <Check size={13} /> : null}
+                {pinned.includes(n.id) ? <Check size={10} /> : null}
                 {n.name}
               </button>
             ))
@@ -184,8 +186,10 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
   const qc = useQueryClient();
   const groupsQ = useQuery({ queryKey: ["groups"], queryFn: () => listGroups() });
   const profilesQ = useQuery({ queryKey: ["profiles"], queryFn: () => listProfiles() });
+  const templatesQ = useQuery({ queryKey: ["user-templates"], queryFn: () => listUserTemplates() });
   const groups = (groupsQ.data ?? []) as GroupRead[];
   const profiles = (profilesQ.data?.items ?? []) as ProfileRead[];
+  const templates = templatesQ.data ?? [];
 
   const [username, setUsername] = useState("");
   const [note, setNote] = useState("");
@@ -196,7 +200,6 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
   const toggleProfile = (id: string) =>
     setProfileIds((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const [limitGib, setLimitGib] = useState("");
-  const [reset, setReset] = useState("no_reset");
   const [devices, setDevices] = useState("");
   const [expireStrategy, setExpireStrategy] = useState<"never" | "fixed_date" | "start_on_first_use">(
     "never",
@@ -204,6 +207,22 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [expire, setExpire] = useState("");
   const [usageDays, setUsageDays] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const applyTemplate = (id: string) => {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    setLimitGib(t.data_limit_bytes ? (t.data_limit_bytes / 1024 ** 3).toString() : "");
+    setDevices(t.device_limit != null ? String(t.device_limit) : "");
+    if (t.expire_days && t.expire_days > 0) {
+      setExpireStrategy("fixed_date");
+      const d = new Date();
+      d.setDate(d.getDate() + t.expire_days);
+      setExpire(d.toISOString().slice(0, 10));
+    }
+    if (t.username_prefix && !username) {
+      setUsername(`${t.username_prefix}${Math.floor(1000 + Math.random() * 9000)}`);
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -213,7 +232,6 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
         username: username.trim(),
         full_name: note.trim() || null,
         data_limit_bytes: limitGib ? Math.round(Number(limitGib) * 1024 ** 3) : null,
-        data_reset_strategy: reset,
         device_limit: devices ? Number(devices) : null,
         expire_strategy: expireStrategy,
         expire_at:
@@ -282,7 +300,8 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
 
   return (
     <Modal
-      title="Add User"
+      title="Add user"
+      width="sm:w-[40rem]"
       onClose={onClose}
       onSubmit={submit}
       footer={
@@ -293,45 +312,61 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
           <Button
             type="submit"
             variant="primary"
-            disabled={
-              busy ||
-              !/^[a-zA-Z0-9_]{3,64}$/.test(username.trim()) ||
-              (expireStrategy === "fixed_date" && !expire) ||
-              (expireStrategy === "start_on_first_use" && (!usageDays || Number(usageDays) < 1))
-            }
+            disabled={busy || !/^[a-zA-Z0-9_]{3,64}$/.test(username.trim())}
           >
-            {busy ? "Creating…" : "Create"}
+            {busy ? "Adding…" : "Add user"}
           </Button>
         </>
       }
     >
-      <Field label="Username" hint="3–64 chars · letters, numbers, _">
-        <Input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus autoComplete="off" />
-      </Field>
-      <Field label="Data limit (GiB)">
-        <Input type="number" min="0" step="0.1" value={limitGib} onChange={(e) => setLimitGib(e.target.value)} placeholder="unlimited" />
-      </Field>
-      <Field label="Auto-reset usage">
-        <Select value={reset} onChange={(e) => setReset(e.target.value)}>
-          <option value="no_reset">No reset</option>
-          <option value="day">Daily</option>
-          <option value="week">Weekly</option>
-          <option value="month">Monthly</option>
-        </Select>
-      </Field>
-      <Field label="Device limit">
-        <Input type="number" min="0" value={devices} onChange={(e) => setDevices(e.target.value)} placeholder="unlimited" />
-      </Field>
-      <Field label="Expiration">
-        <Select
-          value={expireStrategy}
-          onChange={(e) => setExpireStrategy(e.target.value as "never" | "fixed_date" | "start_on_first_use")}
-        >
-          <option value="never">Never</option>
-          <option value="fixed_date">Fixed Date</option>
-          <option value="start_on_first_use">On first use</option>
-        </Select>
-      </Field>
+      {templates.length > 0 ? (
+        <Field label="Template" hint="Prefill limits/expiry from a preset (optional).">
+          <Select defaultValue="" onChange={(e) => applyTemplate(e.target.value)}>
+            <option value="">No template</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
+
+      <p className="warp-dlg-section-title">Login information</p>
+      <div className="warp-dlg-2col">
+        <Field label="Username" hint="3–64 chars · letters, numbers, _">
+          <Input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus autoComplete="off" />
+          {username.trim() && !/^[a-zA-Z0-9_]{3,64}$/.test(username.trim()) ? (
+            <p className="text-[12px] text-danger" style={{ marginTop: 4 }}>
+              Only letters, numbers and _ (3–64 chars). No spaces or other characters.
+            </p>
+          ) : null}
+        </Field>
+        <Field label="Full name" hint="Optional display name.">
+          <Input value={note} onChange={(e) => setNote(e.target.value)} autoComplete="off" />
+        </Field>
+      </div>
+
+      <div className="warp-dlg-divider" />
+      <p className="warp-dlg-section-title">Account details</p>
+      <div className="warp-dlg-2col">
+        <Field label="Data limit (GiB)">
+          <Input type="number" min="0" step="0.1" value={limitGib} onChange={(e) => setLimitGib(e.target.value)} placeholder="unlimited" />
+        </Field>
+        <Field label="Device limit (HWID)" hint="max simultaneous devices/IPs">
+          <Input type="number" min="0" value={devices} onChange={(e) => setDevices(e.target.value)} placeholder="unlimited" />
+        </Field>
+        <Field label="Expiration">
+          <Select
+            value={expireStrategy}
+            onChange={(e) => setExpireStrategy(e.target.value as "never" | "fixed_date" | "start_on_first_use")}
+          >
+            <option value="never">Never</option>
+            <option value="fixed_date">Fixed Date</option>
+            <option value="start_on_first_use">On first use</option>
+          </Select>
+        </Field>
+      </div>
       {expireStrategy === "fixed_date" ? (
         <Field label="Expire date">
           <Input type="date" value={expire} onChange={(e) => setExpire(e.target.value)} />
@@ -342,11 +377,11 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
           <Input type="number" min="1" value={usageDays} onChange={(e) => setUsageDays(e.target.value)} placeholder="e.g. 30" />
         </Field>
       ) : null}
-      <Field label="Full name (optional)">
-        <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={255} autoComplete="off" />
-      </Field>
-      <Field label="Services" hint="pick one or more — grants their inbounds on create">
-        <div className="flex flex-wrap gap-1.5">
+
+      <div className="warp-dlg-divider" />
+      <p className="warp-dlg-section-title">Access</p>
+      <Field label="Services" hint="grants their inbounds on create">
+        <div className="warp-dlg-chipbox">
           {groups.length === 0 ? (
             <span className="text-[11px] text-fg-muted">No services yet.</span>
           ) : (
@@ -357,15 +392,15 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                 onClick={() => toggleGroup(g.id)}
                 className={`warp-pin-chip ${groupIds.includes(g.id) ? "is-on" : ""}`}
               >
-                {groupIds.includes(g.id) ? <Check size={13} /> : null}
+                {groupIds.includes(g.id) ? <Check size={10} /> : null}
                 {g.name} · {g.profile_ids.length}
               </button>
             ))
           )}
         </div>
       </Field>
-      <Field label="Inbounds" hint="pick individual inbounds — combine multiple in one sub">
-        <div className="flex flex-wrap gap-1.5">
+      <Field label="Inbounds" hint="combine multiple in one sub">
+        <div className="warp-dlg-chipbox">
           {profiles.length === 0 ? (
             <span className="text-[11px] text-fg-muted">No inbounds yet.</span>
           ) : (
@@ -376,7 +411,7 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                 onClick={() => toggleProfile(p.id)}
                 className={`warp-pin-chip ${profileIds.includes(p.id) ? "is-on" : ""}`}
               >
-                {profileIds.includes(p.id) ? <Check size={13} /> : null}
+                {profileIds.includes(p.id) ? <Check size={10} /> : null}
                 {p.name} · {p.protocol}
               </button>
             ))

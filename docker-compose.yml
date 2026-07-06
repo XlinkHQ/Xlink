@@ -2,22 +2,38 @@ name: xlink
 
 services:
   api:
+    image: ghcr.io/${XLINK_IMAGE_OWNER:-theok09}/xlink-api:${XLINK_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile
       target: runtime
     restart: unless-stopped
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       XLINK_POSTGRES_HOST: postgres
+      XLINK_POSTGRES_PORT: 5432
+      XLINK_POSTGRES_USER: ${XLINK_POSTGRES_USER:-xlink}
+      XLINK_POSTGRES_PASSWORD: ${XLINK_POSTGRES_PASSWORD:?set XLINK_POSTGRES_PASSWORD in .env (run xlink install)}
+      XLINK_POSTGRES_DB: ${XLINK_POSTGRES_DB:-xlink}
       XLINK_REDIS_HOST: redis
+      XLINK_REDIS_PORT: 6379
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+      XLINK_WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
     ports:
       - "${XLINK_PORT:-8000}:8000"
+      - "${XLINK_GRPC_PORT:-50051}:50051"
+    volumes:
+      - /etc/os-release:/host/os-release:ro
+      - /usr/lib/os-release:/host/usr/lib/os-release:ro
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/api/v1/health/live').status==200 else sys.exit(1)"]
       interval: 15s
@@ -25,15 +41,37 @@ services:
       retries: 5
       start_period: 20s
 
+  web:
+    image: ghcr.io/${XLINK_IMAGE_OWNER:-theok09}/xlink-web:${XLINK_IMAGE_TAG:-latest}
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      XLINK_API_URL: http://api:8000
+    ports:
+      - "${XLINK_WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
   migrate:
+    image: ghcr.io/${XLINK_IMAGE_OWNER:-theok09}/xlink-api:${XLINK_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: docker/Dockerfile
       target: runtime
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       XLINK_POSTGRES_HOST: postgres
+      XLINK_POSTGRES_PORT: 5432
+      XLINK_POSTGRES_USER: ${XLINK_POSTGRES_USER:-xlink}
+      XLINK_POSTGRES_PASSWORD: ${XLINK_POSTGRES_PASSWORD:?set XLINK_POSTGRES_PASSWORD in .env (run xlink install)}
+      XLINK_POSTGRES_DB: ${XLINK_POSTGRES_DB:-xlink}
       XLINK_REDIS_HOST: redis
+      XLINK_REDIS_PORT: 6379
     command: ["alembic", "upgrade", "head"]
     depends_on:
       postgres:
@@ -47,8 +85,8 @@ services:
       POSTGRES_USER: ${XLINK_POSTGRES_USER:-xlink}
       POSTGRES_PASSWORD: ${XLINK_POSTGRES_PASSWORD:-change_me_in_production}
       POSTGRES_DB: ${XLINK_POSTGRES_DB:-xlink}
-    ports:
-      - "${XLINK_POSTGRES_PORT:-5432}:5432"
+    expose:
+      - "5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -61,8 +99,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
-    ports:
-      - "${XLINK_REDIS_PORT:-6379}:6379"
+    expose:
+      - "6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -71,6 +109,35 @@ services:
       timeout: 5s
       retries: 5
 
+  # Edge proxy with automatic HTTPS. Enabled only with the "tls" compose profile
+  # (deploy.sh turns it on when a domain is configured); without it the stack
+  # serves plain ports for local/IP use.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["tls"]
+    environment:
+      XLINK_DOMAIN: ${XLINK_DOMAIN:-}
+      XLINK_ACME_EMAIL: ${XLINK_ACME_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      web:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   pgdata:
   redisdata:
+  caddydata:
+  caddyconfig:

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.domain.profile import SLUG_PATTERN
 from app.providers.base.models import ProviderKind
@@ -13,8 +13,35 @@ from app.schemas.base import APIModel, InputModel
 NAME_MAX_LEN = 255
 PROTOCOL_MAX_LEN = 64
 
+VALID_PROTOCOLS = frozenset(
+    {
+        "vless",
+        "vmess",
+        "trojan",
+        "shadowsocks",
+        "shadowsocks2022",
+        "shadowtls",
+        "hysteria2",
+        "wireguard",
+        "tuic",
+    }
+)
 
-class ProfileCreate(InputModel):
+
+class _ProtocolValidatorMixin:
+    @field_validator("protocol")
+    @classmethod
+    def _validate_protocol(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if v.lower() not in VALID_PROTOCOLS:
+            raise ValueError(
+                f"Unknown protocol '{v}'. Must be one of: {', '.join(sorted(VALID_PROTOCOLS))}"
+            )
+        return v.lower()
+
+
+class ProfileCreate(_ProtocolValidatorMixin, InputModel):
     name: str = Field(min_length=1, max_length=NAME_MAX_LEN)
     slug: str = Field(pattern=SLUG_PATTERN, max_length=64)
     provider_kind: ProviderKind
@@ -23,7 +50,7 @@ class ProfileCreate(InputModel):
     settings: dict[str, Any] = Field(default_factory=dict)
 
 
-class ProfileUpdate(InputModel):
+class ProfileUpdate(_ProtocolValidatorMixin, InputModel):
     name: str | None = Field(default=None, min_length=1, max_length=NAME_MAX_LEN)
     protocol: str | None = Field(default=None, min_length=1, max_length=PROTOCOL_MAX_LEN)
     settings: dict[str, Any] | None = Field(default=None)

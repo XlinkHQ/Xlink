@@ -35,7 +35,7 @@ async def snapshot_from_summary(
             return False
 
     results = await asyncio.gather(*[_check(p) for p in provs]) if provs else []
-    for provider, healthy in zip(provs, results):
+    for provider, healthy in zip(provs, results, strict=False):
         meta = provider.metadata
         metrics.append(
             Metric(

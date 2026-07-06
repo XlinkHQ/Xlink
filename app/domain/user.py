@@ -96,6 +96,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     password_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    sessions_revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     data_reset_strategy: Mapped[DataResetStrategy] = mapped_column(
         Enum(
@@ -146,6 +149,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     modify_users_access: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     subscription_url_prefix: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    admin_user_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    admin_traffic_limit_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
     users_data_usage: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
 

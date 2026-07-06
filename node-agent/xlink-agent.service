@@ -1,0 +1,18 @@
+[Unit]
+Description=XLink Node Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Edit these three values:
+Environment=XLINK_PANEL_URL=https://panel.example.com
+Environment=XLINK_NODE_ID=PASTE_NODE_ID
+Environment=XLINK_AGENT_TOKEN=PASTE_AGENT_TOKEN
+Environment=XLINK_INTERVAL=30
+ExecStart=/usr/bin/python3 /opt/xlink/xlink-agent.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

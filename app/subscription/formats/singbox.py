@@ -35,21 +35,47 @@ def _tls_block(config: ProviderConfig) -> dict[str, Any] | None:
             "public_key": public_key,
             "short_id": short_id,
         }
+    alpn = str(setting(config, "alpn", "") or "").strip()
+    if alpn:
+        block["alpn"] = [a.strip() for a in alpn.split(",") if a.strip()]
+    if setting(config, "allowInsecure"):
+        block["insecure"] = True
     return block
 
 
 def _transport_block(config: ProviderConfig) -> dict[str, Any] | None:
     network = str(setting(config, "network", "tcp"))
+    host = str(setting(config, "host", "") or "").strip()
     if network == "ws":
-        return {"type": "ws", "path": str(setting(config, "path", "/"))}
+        path = str(setting(config, "path", "/"))
+        max_early_data = None
+        if "?ed=" in path:
+            path, ed = path.split("?ed=", 1)
+            try:
+                max_early_data = int(ed.split("/")[0])
+            except ValueError:
+                max_early_data = None
+        t: dict[str, Any] = {"type": "ws", "path": path}
+        if host:
+            t["headers"] = {"Host": host}
+        if max_early_data is not None:
+            t["max_early_data"] = max_early_data
+            t["early_data_header_name"] = "Sec-WebSocket-Protocol"
+        return t
     if network == "grpc":
-        t: dict[str, Any] = {"type": "grpc"}
+        g: dict[str, Any] = {"type": "grpc"}
         svc = str(setting(config, "serviceName", "") or "").strip()
         if svc:
-            t["service_name"] = svc
-        return t
+            g["service_name"] = svc
+        return g
     if network == "httpupgrade":
-        return {"type": "httpupgrade", "path": str(setting(config, "path", "/"))}
+        path = str(setting(config, "path", "/"))
+        if "?ed=" in path:
+            path = path.split("?ed=", 1)[0]
+        h: dict[str, Any] = {"type": "httpupgrade", "path": path}
+        if host:
+            h["host"] = host
+        return h
     return None
 
 

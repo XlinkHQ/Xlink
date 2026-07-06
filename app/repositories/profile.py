@@ -36,9 +36,6 @@ class ProfileRepository(BaseRepository[Profile]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
 
-    async def get_by_slug(self, slug: str) -> Profile | None:
-        return await self.get_by(slug=slug)
-
     async def create_profile(self, profile: Profile) -> Profile:
         try:
             async with self.session.begin_nested():

@@ -1,13 +1,17 @@
+# syntax=docker/dockerfile:1.7
 FROM node:22-slim AS builder
 
 WORKDIR /app
 
+ENV NEXT_TELEMETRY_DISABLED=1
+
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline --no-audit --no-fund
 
 COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN --mount=type=cache,target=/app/.next/cache \
+    npm run build
 
 
 FROM node:22-slim AS runtime

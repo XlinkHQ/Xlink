@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from app.core.exceptions import ValidationError
 from app.domain.node import Node
 from app.scheduler.models import NodeScore, SchedulerPolicyName
 from app.scheduler.scoring import score_inputs
@@ -18,7 +19,7 @@ class WeightedPolicy(SchedulerPolicy):
     name = SchedulerPolicyName.CUSTOM_WEIGHTED
 
     def __init__(self, weights: dict[str, float] | None = None) -> None:
-        self._weights = weights or {
+        self._weights = weights if weights is not None else {
             "load": 0.35,
             "capacity": 0.35,
             "region": 0.2,
@@ -77,5 +78,10 @@ def policy_for(
     if name is SchedulerPolicyName.REGION_FIRST:
         return RegionFirstPolicy()
     if name is SchedulerPolicyName.CUSTOM_WEIGHTED:
+        if weights is None:
+            raise ValidationError(
+                "CUSTOM_WEIGHTED policy requires weights to be specified.",
+                code="scheduler_weights_required",
+            )
         return WeightedPolicy(weights)
     return BalancedPolicy()

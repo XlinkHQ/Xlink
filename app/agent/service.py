@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +39,7 @@ class NodeAgentService:
         self._nodes = NodeRepository(session)
         self._heartbeat = NodeHeartbeatService(self._nodes, events)
         self._sync = NodeSyncService(session, retry)
-        self._traffic = TrafficService(session, events=events)
+        self._traffic = TrafficService(session, events=events, cache=cache)
         self._config_sync = ConfigSyncService(session)
         self._provider_health = ProviderHealthService(session, events=events)
         self._signer = signer
@@ -97,6 +99,11 @@ class NodeAgentService:
         batch: TrafficBatch,
     ) -> TrafficIngestResult:
         await self.authenticate(node_id, token)
+        return await self.ingest_traffic(node_id, batch)
+
+    async def ingest_traffic(
+        self, node_id: uuid.UUID, batch: TrafficBatch
+    ) -> TrafficIngestResult:
         if batch.node_id != node_id:
             batch = TrafficBatch(node_id=node_id, batch_id=batch.batch_id, samples=batch.samples)
         return await self._traffic.ingest(batch)
@@ -116,6 +123,10 @@ class NodeAgentService:
         provider_status: dict,
     ) -> NodeDriftReport:
         node = await self.authenticate(node_id, token)
+
+        node.last_seen_at = datetime.now(UTC)
+        if node.status is NodeStatus.OFFLINE:
+            node.status = NodeStatus.ACTIVE
         await self._config_sync.record_reported_state(
             node,
             config_version_value=config_version,
@@ -165,7 +176,7 @@ class NodeAgentService:
         await self.authenticate(node_id, token)
         self._require_commands()
         return await self._commands.report_result(
-            command_id, lease_token=lease_token, success=success, result=result
+            command_id, node_id=node_id, lease_token=lease_token, success=success, result=result
         )
 
     async def ensure_upgrade(
@@ -214,5 +225,5 @@ class NodeAgentService:
         if self._stream is None:
             raise RuntimeError("stream cache is not configured")
 
-    async def with_retry[T](self, operation):
+    async def with_retry[T](self, operation: Callable[[], Awaitable[T]]) -> T:
         return await self._sync.with_retry(operation)

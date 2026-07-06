@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.logging import get_logger
@@ -26,8 +26,6 @@ if __import__("typing").TYPE_CHECKING:
     from app.subscription.service import SubscriptionService
 
 logger = get_logger("xlink.assignments")
-
-_INACTIVE_STATUSES = {AssignmentStatus.DISABLED, AssignmentStatus.EXPIRED}
 
 
 class ClientAssignmentService:
@@ -53,7 +51,10 @@ class ClientAssignmentService:
 
         if data.node_id is None:
             data = data.model_copy(update={"node_id": profile.node_id})
-        assert data.node_id is not None
+        if data.node_id is None:
+            raise ValidationError(
+                "A node id is required and the profile has none.", code="node_id_required"
+            )
 
         node = await self._validate_node(data.node_id)
 
@@ -138,43 +139,39 @@ class ClientAssignmentService:
         assignment = await self.get(assignment_id)
         if data.expected_version is not None and data.expected_version != assignment.version:
             raise ConflictError("Assignment was modified concurrently.", code="version_conflict")
+        status_changed = data.status is not None and data.status != assignment.status
         if data.status is not None:
-            old_status = assignment.status
-            new_status = data.status
-            assignment.status = new_status
-            if old_status != new_status:
-                if old_status is AssignmentStatus.ACTIVE and new_status in _INACTIVE_STATUSES:
-                    await self._adjust_node_users_by_id(assignment.node_id, -1)
-                elif old_status in _INACTIVE_STATUSES and new_status is AssignmentStatus.ACTIVE:
-                    await self._adjust_node_users_by_id(assignment.node_id, 1)
+            assignment.status = data.status
         if data.expires_at is not None:
             assignment.expires_at = data.expires_at
         if data.traffic_limit_bytes is not None:
             assignment.traffic_limit_bytes = data.traffic_limit_bytes
         result = await self._flush(assignment)
+        if status_changed:
+            await self._resync_node_counts(assignment.node_id)
         await self._invalidate_subscription_cache(assignment.node_id)
         return result
 
     async def disable(self, assignment_id: uuid.UUID) -> ClientAssignment:
         assignment = await self.get(assignment_id)
-        was_active = assignment.status is AssignmentStatus.ACTIVE
+        node_id = assignment.node_id
         assignment.status = AssignmentStatus.DISABLED
-        if was_active:
-            await self._adjust_node_users_by_id(assignment.node_id, -1)
         result = await self._flush(assignment)
-        await self._invalidate_subscription_cache(assignment.node_id)
+        await self._resync_node_counts(node_id)
+        await self._invalidate_subscription_cache(node_id)
         return result
 
     async def delete(self, assignment_id: uuid.UUID) -> None:
         assignment = await self.get(assignment_id)
-        was_active = assignment.status is AssignmentStatus.ACTIVE
+        node_id = assignment.node_id
+        user_id = assignment.user_id
         provider = self._get_provider(assignment.provider_kind)
         if assignment.provider_client_id is not None:
             await self._deprovision(provider, assignment.provider_client_id)
-        if was_active:
-            await self._adjust_node_users_by_id(assignment.node_id, -1)
         await self._repo.remove(assignment)
-        await self._invalidate_subscription_cache(assignment.node_id)
+        await self._resync_node_counts(node_id)
+        await self._resync_user_usage(user_id)
+        await self._invalidate_subscription_cache(node_id)
 
     async def sync_group(
         self, group_id: uuid.UUID, target_profile_ids: list[uuid.UUID]
@@ -229,6 +226,7 @@ class ClientAssignmentService:
         params: CursorParams,
         *,
         user_id: uuid.UUID | None = None,
+        owner_id: uuid.UUID | None = None,
         profile_id: uuid.UUID | None = None,
         node_id: uuid.UUID | None = None,
         provider_kind: ProviderKind | None = None,
@@ -245,6 +243,7 @@ class ClientAssignmentService:
                 limit=params.limit + 1,
                 cursor=cursor,
                 user_id=user_id,
+                owner_id=owner_id,
                 profile_id=profile_id,
                 node_id=node_id,
                 provider_kind=provider_kind,
@@ -332,18 +331,53 @@ class ClientAssignmentService:
             )
         return node
 
-    def _adjust_node_users(self, node: Node, delta: int) -> None:
-        node.current_users = max(0, node.current_users + delta)
+    async def _resync_node_counts(self, node_id: uuid.UUID | None) -> None:
+        if node_id is None:
+            return
+        active_count = (
+            select(func.count())
+            .select_from(ClientAssignment)
+            .where(
+                ClientAssignment.node_id == Node.id,
+                ClientAssignment.status == AssignmentStatus.ACTIVE,
+            )
+            .scalar_subquery()
+        )
+        await self._repo.session.execute(
+            update(Node)
+            .where(Node.id == node_id)
+            .values(current_users=active_count)
+            .execution_options(synchronize_session=False)
+        )
+        await self._repo.session.flush()
 
-    async def _adjust_node_users_by_id(self, node_id: uuid.UUID, delta: int) -> None:
-        node = await self._nodes.get(node_id)
-        if node is not None:
-            self._adjust_node_users(node, delta)
-            await self._repo.session.flush()
+    async def _resync_user_usage(self, user_id: uuid.UUID | None) -> None:
+        if user_id is None:
+            return
+        from app.domain.user import User
+
+        total = (
+            select(func.coalesce(func.sum(ClientAssignment.used_bytes), 0))
+            .where(ClientAssignment.user_id == User.id)
+            .scalar_subquery()
+        )
+        await self._repo.session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(users_data_usage=total)
+            .execution_options(synchronize_session=False)
+        )
+        await self._repo.session.flush()
 
     async def _allocate_wireguard_address(
         self, node_id: uuid.UUID, server_address: object
     ) -> str:
+        # Serialize concurrent WG allocations on the same node: lock the node row
+        # so the read-existing-then-pick-free-octet sequence can't race two
+        # creates into the same /32.
+        await self._repo.session.execute(
+            select(Node.id).where(Node.id == node_id).with_for_update()
+        )
         prefix = "10.8.0"
         if isinstance(server_address, str) and "." in server_address:
             head = server_address.split("/")[0].strip().rsplit(".", 1)[0]

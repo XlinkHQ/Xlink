@@ -1,0 +1,28 @@
+# XLink edge — automatic HTTPS via Let's Encrypt (ACME).
+#
+# All traffic enters here on 80/443. The Next.js web container already reverse-
+# proxies /api/* to the API, so a single upstream (web:3000) serves the console,
+# the REST API, and the subscription links — one domain, one certificate.
+#
+# Driven entirely by env: XLINK_DOMAIN (required for TLS) and XLINK_ACME_EMAIL.
+# Caddy obtains and renews the certificate automatically; nothing to run by hand.
+{
+	admin off
+}
+
+{$XLINK_DOMAIN} {
+	encode zstd gzip
+
+	# Long-lived, automatically-renewed Let's Encrypt certificate (default).
+	# Caddy redirects http→https on its own.
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Caddy forwards Host + X-Forwarded-* to the upstream by default.
+	reverse_proxy web:3000
+}

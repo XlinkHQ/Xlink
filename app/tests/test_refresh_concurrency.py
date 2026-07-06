@@ -89,8 +89,57 @@ async def test_concurrent_refresh_only_one_succeeds(
     )
 
     statuses = [r[0] for r in results]
-    assert statuses.count("ok") == 1
-    assert statuses.count("error") == 1
+    assert statuses.count("ok") == 2
+    assert statuses.count("error") == 0
+
+
+class _FakeCache:
+    def __init__(self, *, fail: bool = False) -> None:
+        self._store: dict = {}
+        self._fail = fail
+
+    async def get_json(self, key: str):
+        if self._fail:
+            raise RuntimeError("redis down")
+        return self._store.get(key)
+
+    async def set_json(self, key: str, value, ttl: int | None = None) -> None:
+        if self._fail:
+            raise RuntimeError("redis down")
+        self._store[key] = value
+
+
+async def test_redis_down_refresh_still_works(
+    shared_db: async_sessionmaker, settings: Settings
+) -> None:
+    # Regression: a cache error must NOT break /refresh — fall through to DB.
+    user_id = await _seed_user(shared_db)
+    user = await _load_user(shared_db, user_id)
+    refresh = await _issue_refresh(shared_db, settings, user)
+    async with shared_db() as session:
+        svc = TokenService(RefreshTokenRepository(session), settings, cache=_FakeCache(fail=True))
+        pair = await svc.rotate(refresh, user)
+        await session.commit()
+        assert pair.refresh_token and pair.refresh_token != refresh
+
+
+async def test_cache_grace_replay_returns_same_successor(
+    shared_db: async_sessionmaker, settings: Settings
+) -> None:
+    user_id = await _seed_user(shared_db)
+    user = await _load_user(shared_db, user_id)
+    refresh = await _issue_refresh(shared_db, settings, user)
+    cache = _FakeCache()
+    async with shared_db() as session:
+        svc = TokenService(RefreshTokenRepository(session), settings, cache=cache)
+        first = await svc.rotate(refresh, user)
+        await session.commit()
+    async with shared_db() as session:
+        svc = TokenService(RefreshTokenRepository(session), settings, cache=cache)
+        replay = await svc.rotate(refresh, user)
+        await session.commit()
+    # Idempotent: replay within grace returns the SAME successor, not a new family.
+    assert replay.refresh_token == first.refresh_token
 
 
 async def test_reused_refresh_token_is_rejected(
@@ -103,6 +152,8 @@ async def test_reused_refresh_token_is_rejected(
     first = await _rotate_in_own_session(shared_db, settings, refresh, user)
     assert first[0] == "ok"
 
+    grace = await _rotate_in_own_session(shared_db, settings, refresh, user)
+    assert grace[0] == "ok"
     replayed = await _rotate_in_own_session(shared_db, settings, refresh, user)
     assert replayed == ("error", "token_reuse")
 
@@ -118,6 +169,8 @@ async def test_reuse_revokes_whole_family(
     assert rotated[0] == "ok"
     fresh_refresh = rotated[1].refresh_token
 
+    grace = await _rotate_in_own_session(shared_db, settings, refresh, user)
+    assert grace[0] == "ok"
     replayed = await _rotate_in_own_session(shared_db, settings, refresh, user)
     assert replayed == ("error", "token_reuse")
 

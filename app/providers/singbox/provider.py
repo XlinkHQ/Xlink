@@ -26,8 +26,27 @@ _CAPABILITIES = frozenset(
 )
 
 _PASSWORD_PROTOCOLS = frozenset(
-    {"trojan", "shadowsocks", "shadowsocks2022", "shadowtls", "hysteria2", "tuic"}
+    {"trojan", "shadowsocks", "shadowsocks2022", "shadowtls", "hysteria2", "tuic", "naive"}
 )
+
+# Shadowsocks-2022 requires a base64 PSK whose decoded length matches the AEAD
+# key size (16B for aes-128, 32B otherwise). A random urlsafe string is rejected
+# by the core, so mint a correctly-sized key.
+_SS2022_KEY_BYTES = {"2022-blake3-aes-128-gcm": 16}
+
+
+def _ss2022_password(method: str) -> str:
+    import base64
+
+    n = _SS2022_KEY_BYTES.get(method, 32)
+    return base64.b64encode(secrets.token_bytes(n)).decode("ascii")
+
+
+def _gen_password(protocol: str, settings: dict | None) -> str:
+    method = str((settings or {}).get("method", "")).strip().lower()
+    if protocol == "shadowsocks2022" or method.startswith("2022-"):
+        return _ss2022_password(method or "2022-blake3-aes-256-gcm")
+    return secrets.token_urlsafe(24)
 
 
 class SingBoxProvider(Provider):
@@ -79,22 +98,26 @@ class SingBoxProvider(Provider):
         existing: dict[str, str] | None = None,
     ) -> ClientResult:
         protocol = str(spec.attributes.get("protocol", "vless")).strip().lower()
+        settings = spec.attributes.get("settings")
+        settings = settings if isinstance(settings, dict) else {}
 
         if existing is not None:
             record: dict[str, str] = {
-                "uuid": existing["uuid"],
+                "uuid": existing.get("uuid") or str(uuid.uuid4()),
                 "protocol": protocol,
             }
             if protocol in _PASSWORD_PROTOCOLS:
-                record["password"] = existing.get("password") or secrets.token_urlsafe(24)
+                record["password"] = (
+                    existing["password"]
+                    if "password" in existing
+                    else _gen_password(protocol, settings)
+                )
         else:
             record = {"uuid": str(uuid.uuid4()), "protocol": protocol}
             if protocol in _PASSWORD_PROTOCOLS:
-                record["password"] = secrets.token_urlsafe(24)
+                record["password"] = _gen_password(protocol, settings)
 
-        settings = spec.attributes.get("settings")
-        if isinstance(settings, dict):
-            for key, value in settings.items():
-                record[str(key)] = str(value)
+        for key, value in settings.items():
+            record[str(key)] = str(value)
         self._clients[spec.client_id] = record
         return ClientResult(client_id=spec.client_id, provider=PROVIDER_NAME, raw=dict(record))

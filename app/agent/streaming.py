@@ -46,12 +46,13 @@ class AgentStreamService:
             return 0, 0
         client = self._cache.client
         before = await client.llen(key)
-        accepted = 0
-        for item in items:
-            await client.lpush(key, orjson.dumps(item))
-            accepted += 1
-        await client.ltrim(key, 0, cap - 1)
-        await client.expire(key, self._ttl)
+        encoded = [orjson.dumps(item) for item in items]
+        async with client.pipeline(transaction=True) as pipe:
+            pipe.lpush(key, *encoded)
+            pipe.ltrim(key, 0, cap - 1)
+            pipe.expire(key, self._ttl)
+            await pipe.execute()
+        accepted = len(encoded)
         dropped = max(0, before + accepted - cap)
         return accepted, dropped
 

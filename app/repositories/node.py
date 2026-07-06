@@ -35,9 +35,6 @@ class NodeRepository(BaseRepository[Node]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
 
-    async def get_by_slug(self, slug: str) -> Node | None:
-        return await self.get_by(slug=slug)
-
     async def save(self, node: Node) -> Node:
         await self.session.flush()
         await self.session.refresh(node)

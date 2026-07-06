@@ -11,6 +11,8 @@ from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+)
+from app.core.security import (
     hash_token as _hash_token,
 )
 from app.domain.refresh_token import RefreshToken
@@ -18,14 +20,14 @@ from app.domain.user import User
 from app.repositories.refresh_token import RefreshTokenRepository
 from app.schemas.auth import TokenPair
 
-
 _REUSE_GRACE_SECONDS = 10
 
 
 class TokenService:
-    def __init__(self, repo: RefreshTokenRepository, settings: Settings) -> None:
+    def __init__(self, repo: RefreshTokenRepository, settings: Settings, cache=None) -> None:
         self._repo = repo
         self._settings = settings
+        self._cache = cache
 
     async def issue_pair(self, user: User) -> TokenPair:
         subject = str(user.id)
@@ -48,12 +50,40 @@ class TokenService:
             expires_in=self._settings.access_token_expire_minutes * 60,
         )
 
+    def _grace_key(self, jti: str) -> str:
+        return f"refresh-grace:{jti}"
+
     async def rotate(self, refresh_token: str, user: User) -> TokenPair:
+        payload = decode_token(refresh_token, self._settings, TokenType.REFRESH)
+        jti = payload.get("jti", "")
+        # Idempotent grace replay: if this exact token was already rotated within
+        # the grace window, return the SAME successor pair (cached ephemerally) —
+        # not a new independent family. A thief replaying gets only the token the
+        # legitimate client already holds, so theft can't mint a live family.
+        if self._cache is not None and jti:
+            # Redis being down must NOT break refresh — fall through to the DB
+            # path (which still tolerates a grace replay) on any cache error.
+            with __import__("contextlib").suppress(Exception):
+                cached = await self._cache.get_json(self._grace_key(jti))
+                if cached:
+                    return TokenPair(**cached)
         record = await self._consume(refresh_token)
         if record.user_id != user.id:
             await self._repo.revoke_all_for_user(record.user_id)
             raise AuthenticationError("Token does not belong to user.", code="token_invalid")
-        return await self.issue_pair(user)
+        pair = await self.issue_pair(user)
+        if self._cache is not None and jti:
+            with __import__("contextlib").suppress(Exception):
+                await self._cache.set_json(
+                    self._grace_key(jti),
+                    {
+                        "access_token": pair.access_token,
+                        "refresh_token": pair.refresh_token,
+                        "expires_in": pair.expires_in,
+                    },
+                    ttl=_REUSE_GRACE_SECONDS,
+                )
+        return pair
 
     async def revoke(self, refresh_token: str) -> None:
         try:
@@ -86,6 +116,11 @@ class TokenService:
                 if revoked_at is not None and revoked_at.tzinfo is None:
                     revoked_at = revoked_at.replace(tzinfo=UTC)
                 grace_cutoff = datetime.now(UTC) - timedelta(seconds=_REUSE_GRACE_SECONDS)
+                # DB grace-mint is the always-on correctness fallback for legit
+                # concurrent double-submits / mid-rotate crashes that miss the
+                # Redis idempotency cache (which only exists AFTER the first
+                # rotate commits). grace_used guards against a true replay minting
+                # twice; only genuine reuse past the window revokes the family.
                 if revoked_at is not None and revoked_at >= grace_cutoff:
                     if existing.grace_used:
                         await self._repo.revoke_all_for_user(existing.user_id)

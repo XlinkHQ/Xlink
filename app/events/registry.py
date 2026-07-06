@@ -35,14 +35,15 @@ class EventRegistry:
         ]
 
     def handlers_for(self, event: DomainEvent) -> tuple[EventHandler, ...]:
+        seen: set[EventHandler] = set()
         handlers: list[EventHandler] = []
         for event_type, registered in self._handlers.items():
             if isinstance(event, event_type):
-                handlers.extend(registered)
+                for h in registered:
+                    if h not in seen:
+                        seen.add(h)
+                        handlers.append(h)
         return tuple(handlers)
-
-    def clear(self) -> None:
-        self._handlers.clear()
 
     def count(self, event_type: type[DomainEvent]) -> int:
         return len(self._handlers.get(event_type, ()))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import delete, update
@@ -28,17 +29,26 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
         )
         return result.scalars().one_or_none()
 
+    async def mark_grace_used(self, jti: str) -> None:
+        await self.session.execute(
+            update(RefreshToken).where(RefreshToken.jti == jti).values(grace_used=True)
+        )
+
     async def revoke_by_jti(self, jti: str) -> int:
+
         result = await self.session.execute(
-            update(RefreshToken).where(RefreshToken.jti == jti).values(revoked=True)
+            update(RefreshToken)
+            .where(RefreshToken.jti == jti)
+            .values(revoked=True, grace_used=True)
         )
         return result.rowcount or 0
 
-    async def revoke_all_for_user(self, user_id) -> int:
+    async def revoke_all_for_user(self, user_id: uuid.UUID) -> int:
+
         result = await self.session.execute(
             update(RefreshToken)
             .where(RefreshToken.user_id == user_id, RefreshToken.revoked.is_(False))
-            .values(revoked=True)
+            .values(revoked=True, grace_used=True)
         )
         return result.rowcount or 0
 

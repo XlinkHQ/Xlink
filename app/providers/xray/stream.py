@@ -64,6 +64,14 @@ def _network_settings(network: str, attrs: Mapping[str, Any]) -> dict[str, Any]:
                 "multiMode": bool(attrs.get("multiMode", False)),
             }
         }
+    if network == XrayNetwork.XHTTP.value:
+        xhttp: dict[str, Any] = {"path": str(attrs.get("path", "/"))}
+        if attrs.get("host"):
+            xhttp["host"] = str(attrs.get("host"))
+        mode = str(attrs.get("mode", "")).strip().lower()
+        if mode in ("auto", "packet-up", "stream-up", "stream-one"):
+            xhttp["mode"] = mode
+        return {"xhttpSettings": xhttp}
     return {
         "tcpSettings": {
             "header": {"type": str(attrs.get("headerType", "none"))},

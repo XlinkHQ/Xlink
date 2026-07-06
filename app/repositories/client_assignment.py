@@ -20,7 +20,7 @@ def _conflict_from_integrity(exc: IntegrityError) -> ConflictError:
         exc,
         [
             (
-                ("uq_client_assignments_triplet", "user_id"),
+                ("uq_client_assignments_triplet",),
                 "Assignment already exists for this user, profile and node.",
                 "assignment_exists",
             ),
@@ -71,6 +71,7 @@ class ClientAssignmentRepository(BaseRepository[ClientAssignment]):
         limit: int,
         cursor: tuple[datetime, uuid.UUID] | None = None,
         user_id: uuid.UUID | None = None,
+        owner_id: uuid.UUID | None = None,
         profile_id: uuid.UUID | None = None,
         node_id: uuid.UUID | None = None,
         provider_kind: ProviderKind | None = None,
@@ -79,6 +80,14 @@ class ClientAssignmentRepository(BaseRepository[ClientAssignment]):
         stmt = select(ClientAssignment)
         if user_id is not None:
             stmt = stmt.where(ClientAssignment.user_id == user_id)
+        if owner_id is not None:
+            from app.domain.user import User
+
+            stmt = stmt.where(
+                ClientAssignment.user_id.in_(
+                    select(User.id).where(User.owner_id == owner_id)
+                )
+            )
         if profile_id is not None:
             stmt = stmt.where(ClientAssignment.profile_id == profile_id)
         if node_id is not None:

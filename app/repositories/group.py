@@ -33,9 +33,6 @@ class GroupRepository(BaseRepository[Group]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
 
-    async def get_by_slug(self, slug: str) -> Group | None:
-        return await self.get_by(slug=slug)
-
     async def create_group(self, group: Group) -> Group:
         try:
             async with self.session.begin_nested():

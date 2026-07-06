@@ -4,8 +4,7 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Plus, QrCode as QrIcon, Trash } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
-import { Badge, toneForStatus } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { toneForStatus } from "@/components/ui/badge";
 import { Select } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
@@ -48,6 +47,17 @@ const TAG_TONE: Record<string, string> = {
 
 function tagTone(name: string): string {
   return TAG_TONE[name.toLowerCase()] ?? "bg-muted text-fg-muted";
+}
+
+/** Map a status string to a .warp-badge variant class. */
+function badgeClassForStatus(status: string): string {
+  switch (toneForStatus(status)) {
+    case "success": return "success";
+    case "warning": return "warning";
+    case "danger": return "critical";
+    case "muted": return "neutral";
+    default: return "info";
+  }
 }
 
 function QrImage({ value, size = 180 }: { value: string; size?: number }) {
@@ -197,144 +207,124 @@ export function AccessManager({ userId }: { userId: string }) {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-3 pb-4">
-        <h3 className="text-xl font-medium leading-none tracking-tight text-fg">Services</h3>
+    <div className="warp-svc">
+      <div className="warp-svc-toolbar">
         {available.length > 0 ? (
-          <Button variant="outline" onClick={() => setAdding((v) => !v)}>
-            <Plus className="h-4 w-4" />
+          <button type="button" className="warp-dg-btn secondary" onClick={() => setAdding((v) => !v)}>
+            <Plus size={14} strokeWidth={1.8} aria-hidden />
             Add inbound
-          </Button>
+          </button>
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-4">
-        {groups.length > 0 ? (
-          <div>
-            <div className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-muted">
-              Service bundles
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {groups.map((g) => {
-                const granted =
-                  g.profile_ids.length > 0 &&
-                  g.profile_ids.every((pid) => {
-                    const prof = profiles.find((p) => p.id === pid);
-                    return prof
-                      ? mine.some((a) => a.profile_id === prof.id && a.node_id === prof.node_id)
-                      : false;
-                  });
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    disabled={granted}
-                    onClick={() => grantGroup(g.id)}
-                    className={cn(
-                      "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors",
-                      granted
-                        ? "border-hairline bg-muted text-fg-muted"
-                        : "border-primary/30 text-primary hover:bg-primary-soft",
-                    )}
-                  >
-                    {granted ? null : <Plus className="h-3.5 w-3.5" />}
-                    {g.name}
-                    {granted ? " ✓" : ""}
-                  </button>
-                );
-              })}
-            </div>
+      {groups.length > 0 ? (
+        <div className="warp-svc-group">
+          <p className="warp-svc-label">Service bundles</p>
+          <div className="warp-svc-bundles">
+            {groups.map((g) => {
+              const granted =
+                g.profile_ids.length > 0 &&
+                g.profile_ids.every((pid) => {
+                  const prof = profiles.find((p) => p.id === pid);
+                  return prof
+                    ? mine.some((a) => a.profile_id === prof.id && a.node_id === prof.node_id)
+                    : false;
+                });
+              return (
+                <button
+                  key={g.id}
+                  type="button"
+                  disabled={granted}
+                  onClick={() => grantGroup(g.id)}
+                  className={cn("warp-svc-bundle", granted && "is-granted")}
+                >
+                  {granted ? null : <Plus size={14} strokeWidth={1.8} aria-hidden />}
+                  {g.name}
+                  {granted ? " ✓" : ""}
+                </button>
+              );
+            })}
           </div>
-        ) : null}
-
-        {/* Add a single inbound */}
-        {adding ? (
-          <div className="flex flex-col gap-2 rounded-md border border-hairline p-3">
-            <Select value={profileId} onChange={(e) => setProfileId(e.target.value)} className="h-9">
-              <option value="">Select inbound…</option>
-              {available.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} · {p.protocol} @ {nodeName(p.node_id)}
-                </option>
-              ))}
-            </Select>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-widest text-fg-muted">
-                Traffic limit (GiB)
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={limitGiB}
-                  onChange={(e) => setLimitGiB(e.target.value)}
-                  placeholder="Unlimited"
-                  className="h-9 rounded-md border border-hairline bg-transparent px-2.5 text-sm font-normal text-fg outline-none focus:border-primary"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-widest text-fg-muted">
-                Expiry date
-                <input
-                  type="date"
-                  value={expiry}
-                  onChange={(e) => setExpiry(e.target.value)}
-                  className="h-9 rounded-md border border-hairline bg-transparent px-2.5 text-sm font-normal text-fg outline-none focus:border-primary"
-                />
-              </label>
-            </div>
-            <p className="text-[11px] text-fg-muted">Leave blank to inherit the user-level quota and expiry.</p>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={resetForm}>
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={grant} disabled={!profileId}>
-                Grant
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Granted inbounds */}
-        <div>
-          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-fg-muted">
-            Granted inbounds
-          </div>
-          {mine.length === 0 ? (
-            <p className="py-4 text-center text-sm text-fg-muted">No inbounds granted yet.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <tbody>
-                {mine.map((a) => (
-                  <tr key={a.id} className="border-b border-hairline last:border-0">
-                    <td className="py-3 pr-3 align-middle">
-                      <div className="font-medium text-fg">{profName(a.profile_id)}</div>
-                      <div className="text-xs text-fg-muted">@ {nodeName(a.node_id)}</div>
-                    </td>
-                    <td className="py-3 align-middle text-sm text-fg-muted">
-                      {bytes(usedFor(a.id))}
-                      {a.traffic_limit_bytes ? ` / ${bytes(a.traffic_limit_bytes)}` : " used"}
-                      {a.expires_at ? (
-                        <span className="block text-xs">exp {a.expires_at.slice(0, 10)}</span>
-                      ) : null}
-                    </td>
-                    <td className="py-3 align-middle">
-                      <Badge tone={toneForStatus(a.status)}>{a.status}</Badge>
-                    </td>
-                    <td className="py-3 pl-3 text-right align-middle">
-                      <button
-                        type="button"
-                        onClick={() => revoke(a.id)}
-                        aria-label="Remove access"
-                        className="text-fg-muted transition-colors hover:text-danger"
-                      >
-                        <Trash className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </div>
+      ) : null}
+
+      {/* Add a single inbound */}
+      {adding ? (
+        <div className="warp-svc-add">
+          <Select value={profileId} onChange={(e) => setProfileId(e.target.value)} className="h-9">
+            <option value="">Select inbound…</option>
+            {available.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · {p.protocol} @ {nodeName(p.node_id)}
+              </option>
+            ))}
+          </Select>
+          <div className="warp-svc-add-grid">
+            <label className="warp-svc-field">
+              <span>Traffic limit (GiB)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={limitGiB}
+                onChange={(e) => setLimitGiB(e.target.value)}
+                placeholder="Unlimited"
+              />
+            </label>
+            <label className="warp-svc-field">
+              <span>Expiry date</span>
+              <input
+                type="date"
+                value={expiry}
+                onChange={(e) => setExpiry(e.target.value)}
+              />
+            </label>
+          </div>
+          <p className="warp-svc-hint">Leave blank to inherit the user-level quota and expiry.</p>
+          <div className="warp-svc-add-actions">
+            <button type="button" className="warp-dg-btn secondary" onClick={resetForm}>
+              Cancel
+            </button>
+            <button type="button" className="warp-dg-btn primary" onClick={grant} disabled={!profileId}>
+              Grant
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Granted inbounds */}
+      <div className="warp-svc-group">
+        <p className="warp-svc-label">Granted inbounds</p>
+        {mine.length === 0 ? (
+          <p className="warp-svc-empty">No inbounds granted yet.</p>
+        ) : (
+          <div className="warp-svc-rows">
+            {mine.map((a) => (
+              <div key={a.id} className="warp-svc-row">
+                <div className="warp-svc-row-main">
+                  <span className="warp-svc-row-name">{profName(a.profile_id)}</span>
+                  <span className="warp-svc-row-node">@ {nodeName(a.node_id)}</span>
+                </div>
+                <div className="warp-svc-row-usage">
+                  {bytes(usedFor(a.id))}
+                  {a.traffic_limit_bytes ? ` / ${bytes(a.traffic_limit_bytes)}` : " used"}
+                  {a.expires_at ? (
+                    <span className="warp-svc-row-exp">exp {a.expires_at.slice(0, 10)}</span>
+                  ) : null}
+                </div>
+                <span className={`warp-badge ${badgeClassForStatus(a.status)}`}>{a.status}</span>
+                <button
+                  type="button"
+                  onClick={() => revoke(a.id)}
+                  aria-label="Remove access"
+                  className="warp-svc-row-remove"
+                >
+                  <Trash size={16} strokeWidth={1.8} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -463,6 +453,7 @@ function QrItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+
 export function UserSubscriptionPanel({ userId }: { userId: string }) {
   const qc = useQueryClient();
   const urlQ = useQuery({ queryKey: ["sub-url", userId], queryFn: () => userSubscriptionUrl(userId) });
@@ -485,38 +476,32 @@ export function UserSubscriptionPanel({ userId }: { userId: string }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <div className="pb-4">
-          <h3 className="text-xl font-medium leading-none tracking-tight text-fg">
-            Subscription QRCode
-          </h3>
-        </div>
-        <div className="grid place-items-center py-10">
-          {subUrl ? (
-            <QrImage value={subUrl} size={280} />
-          ) : (
-            <span className="text-sm text-fg-muted">No subscription link.</span>
-          )}
-        </div>
+    <div className="warp-sub">
+      <div className="warp-sub-qr">
+        {subUrl ? (
+          <QrImage value={subUrl} size={260} />
+        ) : (
+          <span className="warp-sub-empty">No subscription link.</span>
+        )}
       </div>
 
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          className="flex-1"
+      <div className="warp-sub-actions">
+        <button
+          type="button"
+          className="warp-dg-btn secondary"
           disabled={!subUrl}
           onClick={async () => {
             await copyText(subUrl);
             toast("success", "Subscription link copied.");
           }}
         >
-          <Copy className="h-4 w-4" />
+          <Copy size={14} strokeWidth={1.8} aria-hidden />
           Subscription Link
-        </Button>
-        <Button variant="danger" className="flex-1" disabled={busy} onClick={revoke}>
+        </button>
+        <button type="button" className="warp-dg-btn critical" disabled={busy} onClick={revoke}>
+          <Trash size={14} strokeWidth={1.8} aria-hidden />
           Revoke Subscription
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -542,77 +527,51 @@ export function UserNodesUsagePanel({ userId }: { userId: string }) {
   ];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <div className="flex items-end justify-between gap-3 pb-4">
-          <div>
-            <h3 className="text-xl font-medium leading-none tracking-tight text-fg">
-              Nodes Usage
-            </h3>
-            <div className="mt-2 flex gap-1">
-              {RANGES.map(([d, label]) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDays(d)}
-                  className={cn(
-                    "h-7 rounded-md px-2.5 text-xs font-medium transition-colors",
-                    days === d ? "bg-primary-soft text-primary" : "text-fg-muted hover:bg-muted",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col items-end">
-            <span className="text-2xl font-medium leading-none text-fg">{bytes(total)}</span>
-            <span className="text-sm text-fg-muted">Total</span>
-          </div>
+    <div className="warp-nu">
+      <div className="warp-nu-head">
+        <div className="warp-nu-ranges">
+          {RANGES.map(([d, label]) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDays(d)}
+              className={cn("warp-nu-range", days === d && "is-active")}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <div className="py-2">
-          <UsageAreaChart
-            series={series.map((p) => ({ ts: p.date, total_bytes: p.total_bytes, upload_bytes: p.upload_bytes, download_bytes: p.download_bytes }))}
-            loading={seriesQ.isLoading}
-            height={240}
-            empty="No measured traffic in this range."
-          />
+        <div className="warp-nu-total">
+          <span className="warp-nu-total-val">{bytes(total)}</span>
+          <span className="warp-nu-total-label">Total</span>
         </div>
       </div>
 
+      <div className="warp-nu-chart">
+        <UsageAreaChart
+          series={series.map((p) => ({ ts: p.date, total_bytes: p.total_bytes, upload_bytes: p.upload_bytes, download_bytes: p.download_bytes }))}
+          loading={seriesQ.isLoading}
+          height={240}
+          empty="No measured traffic in this range."
+        />
+      </div>
+
       {rows.length > 0 ? (
-        <div>
-          <div className="pb-3">
-            <h4 className="text-sm font-medium uppercase tracking-wide text-fg-muted">
-              Per node
-            </h4>
-          </div>
-          <div className="py-1">
-            <table className="w-full text-sm">
-              <tbody>
-                {rows.map((r) => {
-                  const pct = total > 0 ? Math.round((r.total_bytes / total) * 100) : 0;
-                  return (
-                    <tr key={r.node_id}>
-                      <td className="w-40 py-2.5 pr-4 align-middle font-normal text-fg">
-                        {r.node_name}
-                      </td>
-                      <td className="py-2.5 align-middle">
-                        <div className="h-2 w-full overflow-hidden rounded-full" style={{ background: "var(--primary-soft)" }}>
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${pct}%`, background: "var(--primary)" }}
-                          />
-                        </div>
-                      </td>
-                      <td className="w-28 py-2.5 pl-4 text-right align-middle font-medium text-fg">
-                        {bytes(r.total_bytes)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div className="warp-nu-pernode">
+          <p className="warp-svc-label">Per node</p>
+          <div className="warp-nu-rows">
+            {rows.map((r) => {
+              const pct = total > 0 ? Math.round((r.total_bytes / total) * 100) : 0;
+              return (
+                <div key={r.node_id} className="warp-nu-row">
+                  <span className="warp-nu-row-name">{r.node_name}</span>
+                  <span className="warp-nu-bar">
+                    <span className="warp-nu-bar-fill" style={{ width: `${pct}%` }} />
+                  </span>
+                  <span className="warp-nu-row-val">{bytes(r.total_bytes)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}

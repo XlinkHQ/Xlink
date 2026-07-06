@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any, ClassVar
 
 from sqlalchemy import BigInteger, DateTime, Integer, MetaData, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -20,6 +21,8 @@ NAMING_CONVENTION = {
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
+
+    __mapper_args__: ClassVar[dict[str, Any]] = {"eager_defaults": True}
 
 
 class UUIDPrimaryKeyMixin:

@@ -13,7 +13,8 @@ PG_PASS = "a-very-strong-pg-pass-9"
 
 
 def _settings(**kw) -> Settings:
-    base = {"jwt_secret_key": STRONG}
+
+    base = {"jwt_secret_key": STRONG, "_env_file": None}
     base.update(kw)
     return Settings(**base)
 

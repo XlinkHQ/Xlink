@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
 import { DialogHost } from "@/components/ui/dialog";
 import { Toaster } from "@/components/ui/toast";
@@ -9,22 +10,26 @@ import { useTheme } from "@/lib/theme";
 import { CommandPalette } from "./command-palette";
 import { NAV_ITEMS } from "./nav";
 import { Sidebar } from "./sidebar";
+import { TopBar } from "./topbar";
 import { DashboardScreen } from "./screens/dashboard";
 import { LoginScreen } from "./screens/login";
 import { AdminsScreen } from "./screens/admins";
+import { AuditLogScreen } from "./screens/audit-log";
 import { GroupsScreen } from "./screens/groups";
 import { NodesScreen } from "./screens/nodes";
 import { ProfilesScreen } from "./screens/profiles";
+import { RoutingScreen } from "./screens/routing";
+import { OutboundsScreen } from "./screens/outbounds";
 import { SettingsScreen } from "./screens/settings";
 import { UsersScreen } from "./screens/users";
+import { ApiKeysScreen } from "./screens/api-keys";
 
 const SCREEN_KEYS = NAV_ITEMS.map((i) => i.key);
 
 function keyFromPath(): string {
   if (typeof window === "undefined") return "Overview";
-  // support legacy #hash links by redirecting them to a real path
-  const hash = window.location.hash.replace(/^#\/?/, "").toLowerCase();
-  const slug = hash || window.location.pathname.replace(/^\/+/, "").toLowerCase();
+  const slug = window.location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+  if (!slug) return "Overview";
   return SCREEN_KEYS.find((k) => k.toLowerCase() === slug) ?? "Overview";
 }
 
@@ -36,12 +41,7 @@ export function ConsoleV2() {
   const [active, setActiveState] = useState("Overview");
 
   useEffect(() => {
-    const initial = keyFromPath();
-    setActiveState(initial);
-    // migrate any legacy #hash URL to a clean path
-    if (window.location.hash) {
-      window.history.replaceState(null, "", pathForKey(initial));
-    }
+    setActiveState(keyFromPath());
     const onPop = () => setActiveState(keyFromPath());
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
@@ -49,13 +49,17 @@ export function ConsoleV2() {
 
   const setActive = (key: string) => {
     setActiveState(key);
-    if (typeof window !== "undefined" && keyFromPath() !== key) {
-      window.history.pushState(null, "", pathForKey(key));
+    if (typeof window !== "undefined") {
+      const path = pathForKey(key);
+      if (window.location.pathname !== path) {
+        window.history.pushState(null, "", path);
+      }
     }
   };
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [identity, setIdentity] = useState("xlink.local");
   const [navOpen, setNavOpen] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
   const theme = useTheme();
 
   useEffect(() => {
@@ -85,7 +89,7 @@ export function ConsoleV2() {
   if (authed === null) {
     return (
       <div className="grid h-screen place-items-center bg-canvas font-sans text-fg-muted">
-        <Loader2 className="h-5 w-5 animate-spin" />
+        <Spinner size={22} />
       </div>
     );
   }
@@ -120,19 +124,17 @@ export function ConsoleV2() {
           onClick={() => setNavOpen(false)}
         />
       ) : null}
-      <Sidebar
-        active={active}
-        open={navOpen}
-        onSelect={(k) => {
-          setActive(k);
-          setNavOpen(false);
-        }}
-        onLogout={async () => {
-          await logout();
-          clearTokens();
-          setAuthed(false);
-        }}
-      />
+      {navCollapsed ? null : (
+        <Sidebar
+          active={active}
+          open={navOpen}
+          onClose={() => setNavCollapsed(true)}
+          onSelect={(k) => {
+            setActive(k);
+            setNavOpen(false);
+          }}
+        />
+      )}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <header className="warp-mobilebar">
           <button
@@ -146,7 +148,18 @@ export function ConsoleV2() {
           <span className="warp-mobilebar-title">{active}</span>
         </header>
         <main className="min-h-0 flex-1 overflow-auto overscroll-none bg-canvas">
-          <div className="w-full p-4 sm:p-6">
+          <TopBar
+            active={active}
+            identity={identity}
+            navCollapsed={navCollapsed}
+            onReopenNav={() => setNavCollapsed(false)}
+            onLogout={async () => {
+              await logout();
+              clearTokens();
+              setAuthed(false);
+            }}
+          />
+          <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-6">
           {active === "Overview" ? (
             <DashboardScreen />
           ) : active === "Admins" ? (
@@ -157,10 +170,20 @@ export function ConsoleV2() {
             <ProfilesScreen />
           ) : active === "Groups" ? (
             <GroupsScreen />
+          ) : active === "Routing" ? (
+            <RoutingScreen />
+          ) : active === "Outbounds" ? (
+            <OutboundsScreen />
           ) : active === "Users" ? (
             <UsersScreen />
-          ) : (
+          ) : active === "Activity" ? (
+            <AuditLogScreen />
+          ) : active === "ApiKeys" ? (
+            <ApiKeysScreen />
+          ) : active === "Settings" ? (
             <SettingsScreen />
+          ) : (
+            <DashboardScreen />
           )}
           </div>
         </main>

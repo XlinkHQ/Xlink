@@ -9,7 +9,20 @@ from uuid import UUID
 from app.gitops.models import GitSnapshot
 
 _REDACTED = "<redacted>"
-_SENSITIVE_FRAGMENTS = ("password", "secret", "token", "credential", "private_key")
+_SENSITIVE_FRAGMENTS = (
+    "password",
+    "secret",
+    "token",
+    "credential",
+    "private_key",
+    "api_key",
+    "apikey",
+    "access_key",
+    "secret_key",
+    "auth_key",
+    "signing_key",
+    "ssh_key",
+)
 
 
 class SnapshotBuilder:

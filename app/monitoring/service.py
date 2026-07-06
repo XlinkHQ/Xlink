@@ -32,10 +32,10 @@ class MonitoringService:
         if self._summary_cache is not None:
             cached = await self._summary_cache.read()
             if cached is not None:
-                return self._summary_cache.snapshot(cached)
+                return await self._summary_cache.snapshot(cached)
             summary = await self._collector.collect_summary()
             await self._summary_cache.write(summary)
-            return self._summary_cache.snapshot(summary)
+            return await self._summary_cache.snapshot(summary)
         return await self._collector.collect()
 
     async def prometheus(self) -> str:

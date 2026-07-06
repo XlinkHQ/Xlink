@@ -12,7 +12,7 @@ from app.domain.user import User, UserRole
 
 LOGIN = "/api/v1/auth/login"
 NODES = "/api/v1/nodes"
-ADMIN_PASSWORD = "admin-strong-password-1234"
+ADMIN_PASSWORD = "admin-strong-password-1234-AB!"
 
 NODE_PAYLOAD = {
     "name": "Frankfurt 1",
@@ -32,6 +32,7 @@ async def _seed_admin(app_state: AppState) -> None:
                 username="admin",
                 hashed_password=hash_password(ADMIN_PASSWORD),
                 role=UserRole.ADMIN,
+                is_sudo=True,
             )
         )
 
@@ -143,7 +144,9 @@ async def test_heartbeat_update(client: AsyncClient, admin_headers: dict) -> Non
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["current_users"] == 42
+    # current_users is DB-authoritative (COUNT of ACTIVE assignments); a
+    # heartbeat updates liveness/status but never overwrites the counter.
+    assert body["current_users"] == 0
     assert body["status"] == "active"
     assert body["last_seen_at"] is not None
 

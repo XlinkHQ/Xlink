@@ -101,14 +101,22 @@ export function HostDialog({
   };
 
   return (
-    <div className="warp-dlg-overlay" onMouseDown={onClose}>
-      <form className="warp-dlg" onMouseDown={(e) => e.stopPropagation()} onSubmit={submit}>
-        <div className="warp-dlg-header">
-          <span className="warp-dlg-grab" />
-          <p>{editing ? "Edit address" : "Add address"}</p>
-        </div>
-
-        <div className="warp-dlg-body warp-dlg-body-flow">
+    <Modal
+      title={editing ? "Edit address" : "Add address"}
+      onClose={onClose}
+      onSubmit={submit}
+      width="sm:w-[40rem]"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy || !remark.trim()}>
+            {busy ? "Saving…" : editing ? "Save" : "Create"}
+          </Button>
+        </>
+      }
+    >
       {/* Name (with enable switch + universal, like marzneshin's remark row) */}
       <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
         <span className="flex items-center justify-between gap-3">
@@ -146,7 +154,7 @@ export function HostDialog({
       {/* Accordion sections — marzneshin order: network, camouflage, mux, security */}
       <div>
         <Section title="Network settings" defaultOpen>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="warp-dlg-2col">
             <Field label="Host">
               <Input value={hostHeader} onChange={(e) => setHostHeader(e.target.value)} placeholder="cdn domain" />
             </Field>
@@ -166,7 +174,7 @@ export function HostDialog({
         </Section>
 
         <Section title="Camouflage settings">
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3.5">
             <Field label="Fragment (len,interval,packets)">
               <Input value={fragment} onChange={(e) => setFragment(e.target.value)} placeholder="100-200,10-20,tlshello" />
             </Field>
@@ -191,11 +199,11 @@ export function HostDialog({
             </Select>
           </Field>
           {extraSecurity ? (
-            <div className="mt-3 flex flex-col gap-3">
+            <div className="mt-3 flex flex-col gap-3.5">
               <Field label="SNI">
                 <Input value={sni} onChange={(e) => setSni(e.target.value)} />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="warp-dlg-2col">
                 <Field label="ALPN">
                   <Select value={alpn} onChange={(e) => setAlpn(e.target.value)}>
                     {ALPN_OPTIONS.map((a) => (
@@ -220,16 +228,7 @@ export function HostDialog({
           ) : null}
         </Section>
       </div>
-        </div>
-
-        <div className="warp-dlg-footer">
-          <button type="button" className="warp-tb-button" onClick={onClose}>Cancel</button>
-          <button type="submit" className="warp-tb-button warp-tb-button-primary" disabled={busy || !remark.trim()}>
-            {busy ? "Saving…" : editing ? "Save" : "Create"}
-          </button>
-        </div>
-      </form>
-    </div>
+    </Modal>
   );
 }
 

@@ -42,6 +42,7 @@ class GroupService:
 
         async def _save(g: Group) -> Group:
             await self._repo.session.flush()
+            await self._repo.session.refresh(g)
             return g
 
         return await save_or_conflict(_save, group, "Group")

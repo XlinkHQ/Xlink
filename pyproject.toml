@@ -1,6 +1,6 @@
 [project]
 name = "xlink"
-version = "0.1.0"
+version = "1.0.0"
 description = "XLink — production-grade async backend foundation"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -25,6 +25,13 @@ dependencies = [
     "python-multipart>=0.0.12",
     "email-validator>=2.2.0",
     "pyyaml>=6.0.0",
+    "cryptography>=43.0.0",
+    "segno>=1.6.0",
+    "acme>=2.11.0",
+    "grpcio>=1.66.0",
+    "grpcio-health-checking>=1.66.0",
+    "grpcio-reflection>=1.66.0",
+    "protobuf>=5.28.0",
 ]
 
 [project.optional-dependencies]
@@ -58,6 +65,13 @@ extend-exclude = ["scale_audit.py", "load_audit.py", "pg_concurrency_audit.py"]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "ASYNC", "RUF"]
 ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
 
+[tool.ruff.lint.per-file-ignores]
+# Tests may do blocking disk I/O in async bodies and ignore unpacked values.
+"**/tests/**" = ["ASYNC230", "ASYNC240", "RUF059"]
+# Inline HTML/CSS/JS templates and User-Agent literals can't be wrapped.
+"app/subscription/page.py" = ["E501"]
+"app/subscription/formats/xray_json.py" = ["E501"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
@@ -80,7 +94,6 @@ testpaths = [
     "app/monitoring/tests",
     "app/backup/tests",
     "app/gitops/tests",
-    "app/provider_sdk/tests",
     "app/traffic/tests",
     "app/providers/xray/tests",
 ]

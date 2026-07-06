@@ -147,3 +147,47 @@ async def test_concurrent_optimistic_node_update(writers: int):
     assert tally.get("conflict", 0) >= 1
     assert tally.get("ok", 0) + tally.get("conflict", 0) == writers
     assert not any(k.startswith("err:") for k in tally)
+
+
+@pytest.mark.parametrize("writers,capacity", [(50, 10), (100, 30)])
+async def test_concurrent_capacity_never_oversubscribes(writers: int, capacity: int):
+    from sqlalchemy import select, update
+
+    db = await _make_db()
+    async with db.session() as session:
+        node = Node(
+            name="cap",
+            slug="cap-node",
+            host="10.0.0.2",
+            port=443,
+            max_users=capacity,
+            current_users=0,
+            status=NodeStatus.ACTIVE,
+            node_metadata={},
+        )
+        session.add(node)
+        await session.flush()
+        node_id = node.id
+
+    async def reserve(_i: int) -> str:
+        try:
+            async with db.session() as session:
+                result = await session.execute(
+                    update(Node)
+                    .where(Node.id == node_id, Node.current_users < Node.max_users)
+                    .values(current_users=Node.current_users + 1)
+                    .execution_options(synchronize_session=False)
+                )
+                return "ok" if (result.rowcount or 0) > 0 else "full"
+        except Exception as exc:
+            return f"err:{type(exc).__name__}"
+
+    tally = _tally(await asyncio.gather(*[reserve(i) for i in range(writers)]))
+    async with db.session() as session:
+        final = await session.scalar(select(Node.current_users).where(Node.id == node_id))
+    await db.dispose()
+
+    assert tally.get("ok", 0) == capacity
+    assert tally.get("full", 0) == writers - capacity
+    assert final == capacity
+    assert not any(k.startswith("err:") for k in tally)

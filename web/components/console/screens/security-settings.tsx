@@ -1,15 +1,16 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy } from "lucide-react";
+import { Copy, LogOut, ShieldCheck } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { toast } from "@/components/ui/toast";
-import { ApiError, currentUser, totpConfirm, totpDisable, totpEnroll } from "@/lib/api";
-import { promptDialog } from "@/components/ui/dialog";
+import { ApiError, currentUser, logoutAll, totpConfirm, totpDisable, totpEnroll } from "@/lib/api";
+import { confirmDialog, promptDialog } from "@/components/ui/dialog";
 import { copyText } from "@/lib/clipboard";
-import { Drawer } from "./parts";
+import { Modal } from "@/components/ui/modal";
 import { SettingsRow } from "./settings";
+import { SettingsSection } from "./settings-kit";
 
 function TotpQr({ value }: { value: string }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -50,6 +51,7 @@ export function SecuritySettingsScreen() {
   const [enroll, setEnroll] = useState<{ secret: string; otpauth_uri: string } | null>(null);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const start = async () => {
     setBusy(true);
@@ -105,10 +107,14 @@ export function SecuritySettingsScreen() {
 
   return (
     <div className="w-full">
-      <div className="warp-set-list">
+      <SettingsSection
+        icon={ShieldCheck}
+        title="Two-factor authentication"
+        description="Require a one-time code at sign-in, in addition to your password."
+      >
         <SettingsRow
-          label="Two-factor authentication"
-          hint="Require a TOTP code (Google Authenticator, Authy, 1Password) at sign-in."
+          label="Authenticator app"
+          hint="Use Google Authenticator, Authy or 1Password."
         >
           {enabled ? (
             <button type="button" className="warp-tb-button warp-tb-button-danger" onClick={disable} disabled={busy}>
@@ -120,66 +126,47 @@ export function SecuritySettingsScreen() {
             </button>
           )}
         </SettingsRow>
-      </div>
+      </SettingsSection>
+
+      <SettingsSection
+        divider
+        icon={LogOut}
+        title="Sessions"
+        description="Sign out of every device where this admin account is logged in."
+      >
+        <SettingsRow
+          label="Active sessions"
+          hint="Revoke all sessions — you and any other device will need to sign in again."
+        >
+          <button
+            type="button"
+            className="warp-tb-button warp-tb-button-danger"
+            disabled={signingOut}
+            onClick={async () => {
+              if (!(await confirmDialog({ title: "Sign out everywhere?", message: "All sessions for this account are revoked immediately.", confirmLabel: "Sign out", danger: true }))) return;
+              setSigningOut(true);
+              try {
+                await logoutAll();
+                toast("success", "Signed out of all sessions.");
+              } catch (e) {
+                toast("error", e instanceof ApiError ? e.message : "Request failed.");
+              } finally {
+                setSigningOut(false);
+              }
+            }}
+          >
+            {signingOut ? "Signing out…" : "Sign out everywhere"}
+          </button>
+        </SettingsRow>
+      </SettingsSection>
 
       {enroll && !enabled ? (
-        <Drawer
-          title={<span className="text-lg font-medium">Enable two-factor auth</span>}
-          width="w-[460px]"
-          panelClassName="bg-canvas"
+        <Modal
+          title="Enable two-factor authentication"
+          width="sm:w-[460px]"
           onClose={cancelEnroll}
-        >
-          <div className="warp-2fa">
-            <ol className="warp-2fa-steps">
-              <li>
-                <span className="warp-2fa-step">1</span>
-                <div>
-                  <p className="warp-2fa-h">Scan the QR code</p>
-                  <p className="warp-2fa-sub">Google Authenticator · Authy · 1Password</p>
-                  <div className="warp-2fa-qr">
-                    <TotpQr value={enroll.otpauth_uri} />
-                  </div>
-                </div>
-              </li>
-              <li>
-                <span className="warp-2fa-step">2</span>
-                <div className="min-w-0">
-                  <p className="warp-2fa-h">Or add the key manually</p>
-                  <button
-                    type="button"
-                    className="warp-2fa-key"
-                    title="Copy"
-                    onClick={async () => {
-                      await copyText(enroll.secret);
-                      toast("success", "Setup key copied.");
-                    }}
-                  >
-                    <code>{enroll.secret.replace(/(.{4})/g, "$1 ").trim()}</code>
-                    <Copy size={14} />
-                  </button>
-                </div>
-              </li>
-              <li>
-                <span className="warp-2fa-step">3</span>
-                <div className="min-w-0 flex-1">
-                  <p className="warp-2fa-h">Enter the 6-digit code</p>
-                  <input
-                    className="warp-set-input mt-2"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="123456"
-                    value={code}
-                    autoFocus
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && code.trim().length === 6 && !busy) confirm();
-                    }}
-                  />
-                </div>
-              </li>
-            </ol>
-
-            <div className="warp-2fa-actions">
+          footer={
+            <>
               <button type="button" className="warp-tb-button" onClick={cancelEnroll} disabled={busy}>
                 Cancel
               </button>
@@ -189,11 +176,65 @@ export function SecuritySettingsScreen() {
                 onClick={confirm}
                 disabled={busy || code.trim().length < 6}
               >
-                {busy ? "Verifying…" : "Enable"}
+                {busy ? "Verifying…" : "Verify code"}
               </button>
-            </div>
+            </>
+          }
+        >
+          <div className="warp-totp">
+            <section className="warp-totp-section">
+              <header className="warp-totp-head">
+                <span className="warp-badge success">Step 1</span>
+                <p className="warp-totp-title">Scan the QR code</p>
+              </header>
+              <p className="warp-totp-desc">
+                Open your authenticator app (Google Authenticator, Authy, 1Password)
+                and scan the code below to add this account.
+              </p>
+              <div className="warp-totp-qr">
+                <TotpQr value={enroll.otpauth_uri} />
+                <p className="warp-totp-qr-hint">Can’t scan the code?</p>
+                <button
+                  type="button"
+                  className="warp-totp-copy"
+                  title="Copy setup key"
+                  onClick={async () => {
+                    await copyText(enroll.secret);
+                    toast("success", "Setup key copied.");
+                  }}
+                >
+                  <code>{enroll.secret.replace(/(.{4})/g, "$1 ").trim()}</code>
+                  <Copy size={14} aria-hidden />
+                </button>
+              </div>
+            </section>
+
+            <div className="warp-totp-divider" />
+
+            <section className="warp-totp-section">
+              <header className="warp-totp-head">
+                <span className="warp-badge success">Step 2</span>
+                <p className="warp-totp-title">Enter the authentication code</p>
+              </header>
+              <label className="warp-totp-field">
+                <span className="warp-totp-label">Authentication code</span>
+                <input
+                  className="warp-set-input"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={code}
+                  autoFocus
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && code.trim().length === 6 && !busy) confirm();
+                  }}
+                />
+                <span className="warp-totp-helper">Enter the 6-digit code from your authenticator app.</span>
+              </label>
+            </section>
           </div>
-        </Drawer>
+        </Modal>
       ) : null}
     </div>
   );

@@ -47,7 +47,7 @@ async def _seed(
         user = User(
             email=f"u-{uuid.uuid4().hex[:8]}@x.io",
             username=f"u-{uuid.uuid4().hex[:8]}",
-            hashed_password=hash_password("strong-password-1234"),
+            hashed_password=hash_password("strong-password-1234-AB!"),
             role=UserRole.USER,
         )
         session.add(user)
@@ -318,3 +318,36 @@ async def test_reconcile_once_detects_and_heals(app_state: AppState):
     kinds = {c.kind.value for c in commands}
     assert "apply_config" in kinds
     assert "upgrade" in kinds
+
+
+def test_agent_credentials_forward_per_client_auth_secrets():
+    from app.agent.config_sync import _agent_credentials
+
+    creds = {
+        "uuid": "u-123",
+        "password": "REAL_SECRET",
+        "private_key": "wg-priv",
+        "public_key": "wg-pub",
+        "preshared_key": "psk",
+        "obfs_password": "obfs-pw",
+        "short_id": "abcd",
+        "method": "2022-blake3-aes-256-gcm",
+        "flow": "xtls-rprx-vision",
+        "address": "10.8.0.2/32",
+        "api_token": "PANEL_ONLY",
+    }
+    out = _agent_credentials(creds)
+    for k in (
+        "uuid",
+        "password",
+        "private_key",
+        "public_key",
+        "preshared_key",
+        "obfs_password",
+        "short_id",
+        "method",
+        "flow",
+        "address",
+    ):
+        assert out.get(k) == creds[k], f"{k} must reach the node to build the inbound"
+    assert "api_token" not in out

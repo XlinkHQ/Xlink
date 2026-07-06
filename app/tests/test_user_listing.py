@@ -11,7 +11,7 @@ from app.domain.user import User, UserRole
 
 LOGIN = "/api/v1/auth/login"
 USERS = "/api/v1/users"
-ADMIN_PASSWORD = "admin-strong-password-1234"
+ADMIN_PASSWORD = "admin-strong-password-1234-AB!"
 
 
 async def _seed_users(app_state: AppState, count: int) -> None:
@@ -23,6 +23,7 @@ async def _seed_users(app_state: AppState, count: int) -> None:
                 username="admin",
                 hashed_password=hash_password(ADMIN_PASSWORD),
                 role=UserRole.ADMIN,
+                is_sudo=True,
                 created_at=base,
             )
         )
@@ -77,6 +78,28 @@ async def test_keyset_pagination_walks_all_users(client: AsyncClient, admin_head
     assert "admin" in seen
     assert len([u for u in seen if u.startswith("user")]) == 5
     assert len(seen) == len(set(seen))
+
+
+async def test_keyset_sort_by_name_walks_ordered(
+    client: AsyncClient, admin_headers: dict
+) -> None:
+    seen: list[str] = []
+    cursor = None
+    for _ in range(10):
+        params: dict = {"size": 2, "sort": "name"}
+        if cursor:
+            params["cursor"] = cursor
+        resp = await client.get(USERS, headers=admin_headers, params=params)
+        assert resp.status_code == 200
+        body = resp.json()
+        seen.extend(u["username"] for u in body["items"])
+        cursor = body["next_cursor"]
+        if cursor is None:
+            break
+    # All users, no dupes, and globally sorted by username across page boundaries.
+    assert len(seen) == 6
+    assert len(seen) == len(set(seen))
+    assert seen == sorted(seen)
 
 
 async def test_explicit_page_returns_offset_shape(client: AsyncClient, admin_headers: dict) -> None:

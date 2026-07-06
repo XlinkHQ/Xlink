@@ -19,7 +19,7 @@ from app.providers.xray.provider import XrayProvider
 
 LOGIN = "/api/v1/auth/login"
 ASSIGN = "/api/v1/assignments"
-PW = "admin-strong-password-1234"
+PW = "admin-strong-password-1234-AB!"
 
 
 @dataclass
@@ -40,6 +40,7 @@ async def _seed(app_state: AppState) -> dict:
             username="admin",
             hashed_password=hash_password(PW),
             role=UserRole.ADMIN,
+            is_sudo=True,
         )
         session.add(admin)
         await session.flush()
@@ -137,6 +138,15 @@ async def test_create_assignment(client: AsyncClient, ctx: Ctx) -> None:
     assert body["version"] == 1
 
 
+async def test_create_auto_selects_node_when_omitted(client: AsyncClient, ctx: Ctx) -> None:
+
+    payload = _payload(ctx)
+    payload.pop("node_id")
+    resp = await client.post(ASSIGN, json=payload, headers=ctx.headers)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["node_id"] == str(ctx.node_id)
+
+
 async def test_create_requires_admin(client: AsyncClient, ctx: Ctx) -> None:
     resp = await client.post(ASSIGN, json=_payload(ctx))
     assert resp.status_code == 401
@@ -151,8 +161,8 @@ async def test_duplicate_assignment(client: AsyncClient, ctx: Ctx) -> None:
 
 async def test_invalid_user(client: AsyncClient, ctx: Ctx) -> None:
     resp = await _create(client, ctx, user_id="99999999-9999-9999-9999-999999999999")
-    assert resp.status_code == 422
-    assert resp.json()["error"]["code"] == "invalid_user"
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "user_not_found"
 
 
 async def test_invalid_profile(client: AsyncClient, ctx: Ctx) -> None:

@@ -3,7 +3,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, UniqueConstraint, text
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,3 +61,27 @@ class TrafficRecord(IntPrimaryKeyMixin, Base):
             f"<TrafficRecord id={self.id} assignment={self.assignment_id} "
             f"total={self.total_bytes} at={self.collected_at}>"
         )
+
+
+class ProcessedBatch(IntPrimaryKeyMixin, Base):
+    """Idempotency ledger for traffic batches. The agent resends a batch with a
+    deterministic batch_id on retry; recording (node_id, batch_id) with a unique
+    constraint lets a resent or concurrently-duplicated batch be detected and
+    skipped instead of double-counting usage deltas."""
+
+    __tablename__ = "processed_batches"
+
+    node_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    batch_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("node_id", "batch_id", name="uq_processed_batches_node_batch"),
+        Index("ix_processed_batches_created_at", "created_at"),
+    )

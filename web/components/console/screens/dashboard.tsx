@@ -2,12 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import type { ApexOptions } from "apexcharts";
-import { ArrowUpDown, Podcast } from "lucide-react";
+import { ArrowDown, ArrowUp, Clock, Cpu, HardDrive, MemoryStick, Monitor, Package, Podcast, Radio, RotateCw, Users, Zap } from "lucide-react";
 import dynamic from "next/dynamic";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, listNodes, type NodeRead, restartPanel, systemStats, trafficSummary } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
-import { useTheme } from "@/lib/theme";
 import { isNodeOnline, relativeTime } from "./nodes/util";
 
 const OS_LOGOS: Record<string, string> = {
@@ -33,38 +32,58 @@ function fmtUptime(s: number): string {
   return `${m}m`;
 }
 
-function Card({
-  dot,
+const ICON_STROKE = 1.8;
+
+/** DefGuard-style flat hairline card with a header row + divider. */
+function OverviewCard({
   title,
-  action,
+  right,
   children,
 }: {
-  dot: string;
   title: string;
-  action?: ReactNode;
+  right?: ReactNode;
   children: ReactNode;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
   return (
-    <div className={`warp-card ${collapsed ? "warp-card-collapsed" : ""}`}>
-      <div className="warp-card-header">
-        <div>
-          <span className={`warp-card-dot ${dot}`} />
-          <h4>{title}</h4>
-        </div>
-        <div className="warp-card-head-right">
-          {action}
-          <button
-            type="button"
-            className="warp-card-toggle"
-            aria-label={collapsed ? "Expand" : "Collapse"}
-            onClick={() => setCollapsed((c) => !c)}
-          >
-            <ArrowUpDown size={13} />
-          </button>
-        </div>
+    <div className="warp-overview-card">
+      <div className="warp-overview-head">
+        <p className="warp-overview-title">{title}</p>
+        {right ? <div className="warp-overview-right">{right}</div> : null}
       </div>
-      <div className="warp-card-body">{children}</div>
+      <div className="warp-overview-divider" />
+      {children}
+    </div>
+  );
+}
+
+/** A single stat tile inside the vertical-hairline stat track. */
+function Stat({
+  icon,
+  label,
+  count,
+  sub,
+  children,
+}: {
+  icon: ReactNode;
+  label: string;
+  count?: ReactNode;
+  sub?: { label: string; value: string };
+  children?: ReactNode;
+}) {
+  return (
+    <div className="warp-stat">
+      <div className="label">
+        {icon}
+        <span>{label}</span>
+      </div>
+      {count !== undefined ? <div className="count">{count}</div> : null}
+      {sub ? (
+        <div className="warp-stat-sub">
+          <span>{sub.label}:</span>
+          <span className="warp-stat-badge">{sub.value}</span>
+        </div>
+      ) : null}
+      {children}
     </div>
   );
 }
@@ -81,37 +100,45 @@ function FootRow({ k, v }: { k: string; v: string }) {
   );
 }
 
-function RadialCard({
-  dot,
+/** Resource card (CPU/RAM/Disk) restyled as a hairline card with a progress bar. */
+function ResourceCard({
+  icon,
   title,
   status,
   pct,
   rows,
 }: {
-  dot: string;
+  icon: ReactNode;
   title: string;
   status: string;
   pct: number;
   rows: Array<[string, string]>;
 }) {
   return (
-    <Card dot={dot} title={title} action={<span className="warp-card-status">{status}</span>}>
-      <div className="warp-radial-pct">{pct}%</div>
-      <div className="warp-radial-bar">
-        <div className="warp-radial-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+    <div className="warp-overview-card warp-res-card">
+      <div className="warp-overview-head">
+        <p className="warp-overview-title">
+          {icon}
+          <span>{title}</span>
+        </p>
+        <span className="warp-res-status">{status}</span>
+      </div>
+      <div className="warp-overview-divider" />
+      <div className="warp-res-pct">{pct}%</div>
+      <div className="warp-res-bar">
+        <div className="warp-res-fill" style={{ width: `${Math.min(100, pct)}%` }} />
       </div>
       <div className="warp-card-footer">
         {rows.map(([k, v]) => (
           <FootRow key={k} k={k} v={v} />
         ))}
       </div>
-    </Card>
+    </div>
   );
 }
 
 export function DashboardScreen() {
-  const theme = useTheme();
-  const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 3000 });
+  const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 8000 });
   const nodesQ = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes(), refetchInterval: 10000 });
   const trafficQ = useQuery({ queryKey: ["traffic"], queryFn: () => trafficSummary(), refetchInterval: 5000 });
 
@@ -123,8 +150,16 @@ export function DashboardScreen() {
   const diskPct = s && s.disk_total_bytes > 0 ? Math.round((s.disk_used_bytes / s.disk_total_bytes) * 100) : 0;
   const cpuPct = Math.round(s?.cpu_percent ?? 0);
 
-  const [down, setDown] = useState<{ x: number; y: number }[]>([]);
-  const [up, setUp] = useState<{ x: number; y: number }[]>([]);
+  const WINDOW = 60;
+  const seed = () => {
+    const now = Date.now();
+    return Array.from({ length: WINDOW }, (_, i) => ({
+      x: now - (WINDOW - 1 - i) * 5000,
+      y: 0,
+    }));
+  };
+  const [down, setDown] = useState<{ x: number; y: number }[]>(seed);
+  const [up, setUp] = useState<{ x: number; y: number }[]>(seed);
   const prevTotals = useRef<{ d: number; u: number; at: number } | null>(null);
   useEffect(() => {
     if (!t) return;
@@ -132,23 +167,28 @@ export function DashboardScreen() {
     const dBytes = t.download_bytes;
     const uBytes = t.upload_bytes;
     const prev = prevTotals.current;
-    if (prev) {
-      const dt = Math.max(1, (now - prev.at) / 1000);
-      const dMbps = +((Math.max(0, dBytes - prev.d) * 8) / 1e6 / dt).toFixed(2);
-      const uMbps = +((Math.max(0, uBytes - prev.u) * 8) / 1e6 / dt).toFixed(2);
-      setDown((s) => [...s.slice(-59), { x: now, y: dMbps }]);
-      setUp((s) => [...s.slice(-59), { x: now, y: uMbps }]);
-    } else {
-      setDown([{ x: now, y: 0 }]);
-      setUp([{ x: now, y: 0 }]);
-    }
     prevTotals.current = { d: dBytes, u: uBytes, at: now };
+    if (!prev) return;
+    const dt = Math.max(1, (now - prev.at) / 1000);
+    const dMbps = +((Math.max(0, dBytes - prev.d) * 8) / 1e6 / dt).toFixed(2);
+    const uMbps = +((Math.max(0, uBytes - prev.u) * 8) / 1e6 / dt).toFixed(2);
+    setDown((s) => [...s.slice(-(WINDOW - 1)), { x: now, y: dMbps }]);
+    setUp((s) => [...s.slice(-(WINDOW - 1)), { x: now, y: uMbps }]);
   }, [trafficQ.dataUpdatedAt]);
 
-  const activity = [...nodes]
-    .filter((n) => n.last_seen_at)
-    .sort((a, b) => Date.parse(b.last_seen_at ?? "") - Date.parse(a.last_seen_at ?? ""))
-    .slice(0, 8);
+  const activity = useMemo(
+    () =>
+      [...nodes]
+        .filter((n) => n.last_seen_at)
+        .sort((a, b) => Date.parse(b.last_seen_at ?? "") - Date.parse(a.last_seen_at ?? ""))
+        .slice(0, 12),
+    [nodes],
+  );
+
+  const onlineNodes = useMemo(() => nodes.filter((n) => isNodeOnline(n.status)).length, [nodes]);
+
+  const peakDown = useMemo(() => down.reduce((m, p) => Math.max(m, p.y), 0), [down]);
+  const peakUp = useMemo(() => up.reduce((m, p) => Math.max(m, p.y), 0), [up]);
 
   const onRestart = async () => {
     try {
@@ -164,7 +204,7 @@ export function DashboardScreen() {
     chart: {
       id: "net-throughput",
       type: "area",
-      height: 176,
+      height: 250,
       toolbar: { show: false },
       animations: { enabled: true, dynamicAnimation: { speed: 350 } },
       fontFamily: "var(--warp-font)",
@@ -175,7 +215,7 @@ export function DashboardScreen() {
       type: "gradient",
       gradient: { shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05, stops: [0, 100] },
     },
-    colors: ["#008ffb", "#5564be"],
+    colors: ["#3961DB", "#CC3C3C"],
     markers: { size: 0, hover: { size: 5 } },
     grid: { borderColor: "rgba(128,128,128,0.15)", strokeDashArray: 4 },
     legend: { show: true, position: "top", horizontalAlign: "right" },
@@ -201,40 +241,70 @@ export function DashboardScreen() {
 
   return (
     <div className="warp-panel">
-      <Card
-        dot="span-blue"
-        title="Network Traffic"
-        action={
-          <span className="warp-traffic-legend">
-            <span><i className="warp-legend-down" /> Download {gb(t?.download_bytes ?? 0)} GB</span>
-            <span><i className="warp-legend-up" /> Upload {gb(t?.upload_bytes ?? 0)} GB</span>
-          </span>
-        }
-      >
-        {down.length > 0 ? (
-          <ReactApexChart options={chartOptions} series={chartSeries} type="area" height={176} />
-        ) : (
-          <div className="warp-chart-empty">Collecting traffic…</div>
-        )}
-      </Card>
+      <OverviewCard title="Overview">
+        <div className="warp-stats-summary">
+          <div className="warp-stats-track">
+            <Stat
+              icon={<Radio size={20} strokeWidth={ICON_STROKE} />}
+              label="Nodes online"
+              count={onlineNodes}
+              sub={{ label: "Total nodes", value: `${nodes.length}` }}
+            />
+            <Stat
+              icon={<Users size={20} strokeWidth={ICON_STROKE} />}
+              label="Recent activity"
+              count={activity.length}
+            />
+            <Stat icon={<ArrowUp size={20} strokeWidth={ICON_STROKE} />} label="Network usage">
+              <div className="warp-transfer-bar download">
+                <div className="left">
+                  <ArrowDown size={20} strokeWidth={ICON_STROKE} />
+                  <p>In</p>
+                </div>
+                <div className="right">{gb(t?.download_bytes ?? 0)} GB</div>
+              </div>
+              <div className="warp-transfer-bar upload">
+                <div className="left">
+                  <ArrowUp size={20} strokeWidth={ICON_STROKE} />
+                  <p>Out</p>
+                </div>
+                <div className="right">{gb(t?.upload_bytes ?? 0)} GB</div>
+              </div>
+            </Stat>
+          </div>
+
+          <div className="warp-transfer-section">
+            <div className="warp-transfer-top">
+              <p>Network Traffic</p>
+              <div className="right">
+                <span className="peak">Peak</span>
+                <span className="warp-peak-down">{fmtRate(peakDown)}</span>
+                <span className="sep">/</span>
+                <span className="warp-peak-up">{fmtRate(peakUp)}</span>
+              </div>
+            </div>
+            <ReactApexChart options={chartOptions} series={chartSeries} type="area" height={250} />
+          </div>
+        </div>
+      </OverviewCard>
 
       <div className="warp-grid-3">
-        <RadialCard
-          dot="span-green"
+        <ResourceCard
+          icon={<Cpu size={16} strokeWidth={ICON_STROKE} />}
           title="CPU"
           status={s ? "Running" : "…"}
           pct={cpuPct}
           rows={[["Cores", `${s?.cpu_cores ?? 0}`], ["Processes", `${s?.process_count ?? 0}`], ["Load", `${(s?.load_avg_1 ?? 0).toFixed(2)}`]]}
         />
-        <RadialCard
-          dot="span-blue"
+        <ResourceCard
+          icon={<MemoryStick size={16} strokeWidth={ICON_STROKE} />}
           title="RAM"
           status={s ? "Running" : "…"}
           pct={ramPct}
           rows={[["Used", `${gb(s?.ram_used_bytes ?? 0)} GB`], ["Total", `${gb(s?.ram_total_bytes ?? 0)} GB`], ["Free", `${gb((s?.ram_total_bytes ?? 0) - (s?.ram_used_bytes ?? 0))} GB`]]}
         />
-        <RadialCard
-          dot="span-orange"
+        <ResourceCard
+          icon={<HardDrive size={16} strokeWidth={ICON_STROKE} />}
           title="Disk"
           status={s ? "Running" : "…"}
           pct={diskPct}
@@ -243,10 +313,10 @@ export function DashboardScreen() {
       </div>
 
       <div className="warp-grid-2">
-        <Card dot="span-pink" title="System Info">
+        <OverviewCard title="System Info">
           <div className="warp-si-grid">
             <div className="warp-si-box">
-              <Podcast className="warp-si-iconchip" size={13} aria-hidden />
+              <Podcast className="warp-si-rowicon" size={15} aria-hidden />
               <span className="warp-si-ip">
                 <h4>{s?.ip_address || "—"}</h4>
                 <p>{s?.ip6_address || s?.mac_address || "—"}</p>
@@ -254,7 +324,8 @@ export function DashboardScreen() {
             </div>
 
             <div className="warp-si-box">
-              <h5>OS:</h5>
+              <Monitor className="warp-si-rowicon" size={15} aria-hidden />
+              <h5>OS</h5>
               <span className="warp-si-badge">
                 {osLogo(s?.os_slug) ? <img src={osLogo(s?.os_slug) as string} alt="" /> : null}
                 <span>{s?.os_name || "—"}</span>
@@ -262,41 +333,41 @@ export function DashboardScreen() {
             </div>
 
             <div className="warp-si-box">
-              <h5>Kernel:</h5>
+              <Cpu className="warp-si-rowicon" size={15} aria-hidden />
+              <h5>Kernel</h5>
               <span className="warp-si-badge">
                 {s?.kernel ? `${s.kernel} (${s.arch})` : "—"}
               </span>
             </div>
 
             <div className="warp-si-box">
-              <h5>Panel Version:</h5>
+              <Package className="warp-si-rowicon" size={15} aria-hidden />
+              <h5>Panel Version</h5>
               <span className="warp-si-badge">
-                <img
-                  src={theme === "dark" ? "/warp/logo/WarpProxy_Logo_I_W.svg" : "/warp/logo/WarpProxy_Logo_I.svg"}
-                  alt=""
-                />
                 <span>{s?.app_version ? `v${s.app_version}` : "—"}</span>
               </span>
             </div>
 
             <div className="warp-si-box">
-              <h5>Status:</h5>
-              <span className={`warp-si-badge ${s ? "warp-si-bg-green" : ""}`}>
+              <Zap className="warp-si-rowicon" size={15} aria-hidden />
+              <h5>Status</h5>
+              <span className={`warp-si-status ${s ? "is-on" : "is-off"}`}>
                 {s ? "Running" : "Offline"}
               </span>
-              <button type="button" className="warp-si-badge warp-si-bg-blue" onClick={onRestart}>
-                Restart
+              <button type="button" className="warp-si-restart" onClick={onRestart}>
+                <RotateCw size={13} aria-hidden /> Restart
               </button>
             </div>
 
             <div className="warp-si-box">
-              <h5>Uptime:</h5>
+              <Clock className="warp-si-rowicon" size={15} aria-hidden />
+              <h5>Uptime</h5>
               <span className="warp-si-badge">{fmtUptime(s?.uptime_seconds ?? 0)}</span>
             </div>
           </div>
-        </Card>
+        </OverviewCard>
 
-        <Card dot="span-yellow" title="Node Activity">
+        <OverviewCard title="Node Activity">
           {activity.length === 0 ? (
             <p className="warp-log-empty">No recent node activity.</p>
           ) : (
@@ -316,7 +387,7 @@ export function DashboardScreen() {
               })}
             </div>
           )}
-        </Card>
+        </OverviewCard>
       </div>
     </div>
   );

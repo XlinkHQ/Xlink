@@ -16,7 +16,7 @@ from app.providers.base.models import ProviderKind
 
 LOGIN = "/api/v1/auth/login"
 PROFILES = "/api/v1/profiles"
-ADMIN_PASSWORD = "admin-strong-password-1234"
+ADMIN_PASSWORD = "admin-strong-password-1234-AB!"
 
 
 @dataclass
@@ -34,6 +34,7 @@ async def _seed(app_state: AppState) -> tuple[uuid.UUID, uuid.UUID]:
                 username="admin",
                 hashed_password=hash_password(ADMIN_PASSWORD),
                 role=UserRole.ADMIN,
+                is_sudo=True,
             )
         )
         await session.flush()
@@ -124,10 +125,32 @@ async def test_invalid_node(client: AsyncClient, ctx: Ctx) -> None:
     assert resp.json()["error"]["code"] == "invalid_node"
 
 
-async def test_invalid_provider(client: AsyncClient, ctx: Ctx) -> None:
-    resp = await _create(client, ctx, provider_kind="wireguard")
-    assert resp.status_code == 422
-    assert resp.json()["error"]["code"] == "invalid_provider"
+async def test_registered_providers_accepted(client: AsyncClient, ctx: Ctx) -> None:
+    cases = {
+        "xray": ("vless", {"flow": "vision"}),
+        # WireGuard requires an interface address in settings.
+        "wireguard": ("wireguard", {"address": "10.8.0.2/32"}),
+        "sing-box": ("trojan", {}),
+        "hysteria": ("hysteria2", {}),
+    }
+    for kind, (protocol, settings) in cases.items():
+        resp = await _create(
+            client,
+            ctx,
+            provider_kind=kind,
+            protocol=protocol,
+            slug=f"prof-{kind}",
+            name=f"Profile {kind}",
+            settings=settings,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["provider_kind"] == kind
+
+
+async def test_protocol_provider_mismatch_rejected(client: AsyncClient, ctx: Ctx) -> None:
+    resp = await _create(client, ctx, provider_kind="hysteria", protocol="vless", slug="bad")
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["error"]["code"] == "protocol_provider_mismatch"
 
 
 async def test_update_profile(client: AsyncClient, ctx: Ctx) -> None:

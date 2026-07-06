@@ -15,6 +15,15 @@ IPNetwork = IPv4Network | IPv6Network
 _EXCLUDED_PATH_MARKERS = ("/health/", "/health", "/ready")
 _WINDOW_SECONDS = 60
 
+# Auth endpoints get a much tighter, fail-closed limit to blunt credential
+# brute-force. Keyed per-IP + per-path (not shared with the coarse method bucket).
+_AUTH_PATH_MARKERS = ("/auth/login", "/auth/refresh", "/auth/register")
+_AUTH_LIMIT = 10
+
+
+def is_auth_path(path: str) -> bool:
+    return any(marker in path for marker in _AUTH_PATH_MARKERS)
+
 
 def parse_proxy_networks(values: list[str]) -> tuple[IPNetwork, ...]:
     return tuple(ip_network(value, strict=False) for value in values)
@@ -58,8 +67,26 @@ def resolve_client_ip(scope: Scope, trusted_proxies: tuple[IPNetwork, ...]) -> s
     return str(forwarded_chain[0])
 
 
+def _normalize_path(path: str) -> str:
+    # Collapse id-like segments (UUIDs, numbers) to a placeholder so a client
+    # can't evade the per-route limit by varying the id, and the keyspace stays
+    # bounded to the number of real routes rather than one bucket per id. The
+    # route template isn't available at outer-middleware time, so approximate it.
+    out = []
+    for seg in path.split("/"):
+        if not seg:
+            continue
+        if seg.isdigit() or (len(seg) >= 16 and any(c.isdigit() for c in seg) and "-" in seg):
+            out.append(":id")
+        else:
+            out.append(seg)
+    return "/" + "/".join(out)
+
+
 def route_rate_limit_key(scope: Scope) -> str:
-    return f"{scope.get('method', '')}:{scope.get('path', '')}"
+    # Route-aware: method + normalized path, so a flood on one route doesn't
+    # exhaust the shared bucket for every other route from the same IP.
+    return f"{scope.get('method', '')}:{_normalize_path(scope.get('path', ''))}"
 
 
 def is_excluded_path(path: str) -> bool:
@@ -125,15 +152,23 @@ class RateLimitMiddleware:
             await _send_json(send, 400, "invalid_forwarded_for", "Invalid X-Forwarded-For header.")
             return
 
-        key = f"rl:{client_ip}:{route_rate_limit_key(scope)}"
+        auth_path = is_auth_path(scope.get("path", ""))
+        if auth_path:
+            key = f"rl:auth:{client_ip}:{scope.get('path', '')}"
+            limit = _AUTH_LIMIT
+        else:
+            key = f"rl:{client_ip}:{route_rate_limit_key(scope)}"
+            limit = self._limit
         redis = state.cache.client
         try:
             count = await incr_window(redis, key)
         except Exception:
-            await self._handle_redis_failure(scope, receive, send)
+            # Auth endpoints fail CLOSED: a limiter outage must not open the door
+            # to unlimited credential brute-force.
+            await self._handle_redis_failure(scope, receive, send, force_closed=auth_path)
             return
 
-        if count > self._limit:
+        if count > limit:
             logger.warning(
                 "rate_limited", client_ip=client_ip, route=route_rate_limit_key(scope), count=count
             )
@@ -146,20 +181,22 @@ class RateLimitMiddleware:
             )
             return
 
-        remaining = str(max(0, self._limit - count)).encode("latin-1")
+        remaining = str(max(0, limit - count)).encode("latin-1")
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = message.setdefault("headers", [])
-                headers.append((b"x-ratelimit-limit", str(self._limit).encode("latin-1")))
+                headers.append((b"x-ratelimit-limit", str(limit).encode("latin-1")))
                 headers.append((b"x-ratelimit-remaining", remaining))
             await send(message)
 
         await self.app(scope, receive, send_with_headers)
 
-    async def _handle_redis_failure(self, scope: Scope, receive: Receive, send: Send) -> None:
-        logger.warning("rate_limit_redis_unavailable", fail_open=self._fail_open)
-        if self._fail_open:
+    async def _handle_redis_failure(
+        self, scope: Scope, receive: Receive, send: Send, *, force_closed: bool = False
+    ) -> None:
+        logger.warning("rate_limit_redis_unavailable", fail_open=self._fail_open and not force_closed)
+        if self._fail_open and not force_closed:
             await self.app(scope, receive, send)
             return
         await _send_json(send, 503, "rate_limit_unavailable", "Rate limiter unavailable.")

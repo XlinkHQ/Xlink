@@ -5,7 +5,7 @@ import base64
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import x25519
 
-from app.providers.base.exceptions import ClientNotFoundError
+from app.providers.base.exceptions import ClientAlreadyExistsError, ClientNotFoundError
 from app.providers.base.models import (
     ClientResult,
     ClientSpec,
@@ -62,7 +62,7 @@ class WireGuardProvider(Provider):
     async def create_client(self, spec: ClientSpec) -> ClientResult:
         self.ensure_capability(ProviderCapability.CREATE_CLIENT)
         if spec.client_id in self._clients:
-            return self._store(spec, existing=self._clients[spec.client_id])
+            raise ClientAlreadyExistsError(details={"client_id": spec.client_id})
         return self._store(spec)
 
     async def update_client(self, spec: ClientSpec) -> ClientResult:

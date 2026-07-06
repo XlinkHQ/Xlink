@@ -20,13 +20,12 @@ class TrafficRetention:
         return reference - timedelta(days=self._retention_days)
 
     async def purge(self, now: datetime | None = None) -> int:
+        # Purge only the historical record rows. used_bytes/users_data_usage are
+        # monotonic enforcement counters (incremented at ingest, zeroed only by
+        # explicit resets) and must NOT be reduced when old history is trimmed,
+        # otherwise a data-limited user silently regains quota over time.
         cutoff = self.cutoff(now)
-        byte_sums = await self._repo.sum_bytes_before(cutoff)
         deleted = await self._repo.delete_before(cutoff)
-        if byte_sums:
-            reduction = {aid: -total for aid, total in byte_sums.items()}
-            await self._repo.apply_usage_deltas(reduction)
-            await self._repo.resync_user_usage_for_assignments(list(byte_sums))
         if deleted:
             logger.info("traffic_purged", deleted=deleted, cutoff=cutoff.isoformat())
         return deleted

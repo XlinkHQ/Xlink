@@ -18,6 +18,10 @@ PANEL_URL = os.environ.get("XLINK_PANEL_URL", "http://localhost:8000").rstrip("/
 NODE_ID = os.environ.get("XLINK_NODE_ID", "")
 TOKEN = os.environ.get("XLINK_AGENT_TOKEN", "")
 INTERVAL = int(os.environ.get("XLINK_INTERVAL", "10"))
+# Fast data-limit enforcement: a lightweight loop that only reads usage and
+# drops over-limit users, without the full config pull / health round-trip. Cuts
+# over-quota users in ~FAST_INTERVAL instead of a whole INTERVAL cycle.
+FAST_INTERVAL = int(os.environ.get("XLINK_FAST_ENFORCE_INTERVAL", "3"))
 DRY_RUN = os.environ.get("XLINK_DRY_RUN", "") not in ("", "0", "false")
 
 XRAY_CONFIG_PATH = os.environ.get("XLINK_XRAY_CONFIG", "/usr/local/etc/xray/config.json")
@@ -65,13 +69,107 @@ _last_active_kinds: set[str] = set()
 _core_hash: dict[str, str] = {}
 _usage_acc: dict[str, int] = {}
 _over_users: set[str] = set()
+# Last applied config, cached so the fast-enforce loop can re-collect usage and
+# re-apply (dropping over-limit users) without a full config pull.
+_last_clients: list[dict] = []
+_last_kinds: set[str] = set()
+_last_effective_version: str | None = None
+_enforce_lock = threading.Lock()
 _wg_prev: dict[str, tuple[int, int]] = {}
 _wake = threading.Event()
 _xray_core: dict = {}
 _singbox_core: dict = {}
 _hysteria_core: dict = {}
-_pending_traffic: list[dict] = []
 _log_offset: int = 0
+
+# Write-ahead log for traffic: deltas are persisted to disk BEFORE the core
+# stats are reset, and only cleared after the panel acks them. Guarantees no
+# byte of usage is lost across agent crashes or network outages.
+WAL_PATH = os.environ.get("XLINK_TRAFFIC_WAL", "/var/lib/xlink/traffic.wal")
+_WAL_MAX = 20000
+# Serializes WAL access: the main cycle and the fast-enforce loop both append,
+# and the cycle loads+clears. Without this a clear could drop lines appended by
+# the fast loop after the load, losing usage.
+_wal_lock = threading.Lock()
+
+
+def _wal_append(samples: list[dict]) -> None:
+    if not samples:
+        return
+    with _wal_lock:
+        try:
+            os.makedirs(os.path.dirname(WAL_PATH) or ".", exist_ok=True)
+            with open(WAL_PATH, "a") as fh:
+                for s in samples:
+                    fh.write(json.dumps(s) + "\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+        except OSError as exc:
+            _log(f"wal append failed: {exc}")
+
+
+_WAL_INFLIGHT = WAL_PATH + ".inflight"
+
+
+def _read_wal_file(path: str) -> list[dict]:
+    out: list[dict] = []
+    try:
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    try:
+                        out.append(json.loads(line))
+                    except ValueError:
+                        pass
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        _log(f"wal read failed: {exc}")
+    return out
+
+
+def _wal_rotate() -> list[dict]:
+    # Atomically claim the current WAL for delivery: rename it aside so any
+    # concurrent append lands in a fresh WAL and can't be lost by a later clear.
+    # A leftover .inflight (crash mid-delivery) is folded back in.
+    # Deliver the OLDEST _WAL_MAX lines (FIFO) so a large backlog drains over
+    # several cycles instead of dropping the tail.
+    with _wal_lock:
+        pending = _read_wal_file(_WAL_INFLIGHT)
+        try:
+            if os.path.exists(WAL_PATH):
+                if pending:
+                    with open(WAL_PATH) as fh, open(_WAL_INFLIGHT, "a") as out:
+                        out.write(fh.read())
+                    os.remove(WAL_PATH)
+                else:
+                    os.replace(WAL_PATH, _WAL_INFLIGHT)
+        except OSError as exc:
+            # Panel dedups delivered samples, so a partial merge (write ok, remove
+            # failed) only risks a re-send next cycle, not data loss — but surface
+            # it so a persistent disk/permission fault isn't silent.
+            _log(f"wal rotate failed: {exc}")
+        return _read_wal_file(_WAL_INFLIGHT)[:_WAL_MAX]
+
+
+def _wal_commit(delivered: int) -> None:
+    # Drop only the delivered (oldest) lines; keep any remainder for the next
+    # cycle so a >_WAL_MAX backlog is never destroyed.
+    with _wal_lock, contextlib.suppress(OSError):
+        if not os.path.exists(_WAL_INFLIGHT):
+            return
+        remaining = _read_wal_file(_WAL_INFLIGHT)[delivered:]
+        if not remaining:
+            os.remove(_WAL_INFLIGHT)
+            return
+        tmp = _WAL_INFLIGHT + ".tmp"
+        with open(tmp, "w") as fh:
+            for s in remaining:
+                fh.write(json.dumps(s) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, _WAL_INFLIGHT)
 
 
 def _xray_level(line: str) -> str:
@@ -103,6 +201,46 @@ def read_core_logs() -> list[str]:
     return [ln for ln in chunk.splitlines() if ln.strip()][-50:]
 
 
+def _journal_level(line: str) -> str:
+    low = line.lower()
+    if "error" in low or "fatal" in low or "panic" in low:
+        return "error"
+    if "warn" in low:
+        return "warning"
+    return "info"
+
+
+def read_service_logs(service: str) -> list[str]:
+    # Incremental read of a systemd unit's journal via a per-service cursor file:
+    # journalctl advances the cursor only over lines it emits, so each cycle ships
+    # only new lines with no offset bookkeeping of our own.
+    state_dir = os.path.dirname(WAL_PATH) or "/var/lib/xlink"
+    with contextlib.suppress(OSError):
+        os.makedirs(state_dir, exist_ok=True)
+    cur = os.path.join(state_dir, f".journal-{service.replace('@', '_').replace('/', '_')}")
+    args = [
+        "journalctl",
+        "-u",
+        service,
+        "--no-pager",
+        "-o",
+        "cat",
+        "--cursor-file",
+        cur,
+    ]
+    if not os.path.exists(cur):
+        args += ["-n", "50"]
+    try:
+        out = subprocess.run(
+            args, timeout=8, capture_output=True, text=True, errors="replace"
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if out.returncode != 0:
+        return []
+    return [ln for ln in out.stdout.splitlines() if ln.strip()][-50:]
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -111,16 +249,201 @@ def _log(msg: str) -> None:
     print(f"[{_now()}] {msg}", flush=True)
 
 
-def _call(method: str, path: str, body: dict | None = None):
+# Direct opener: urllib's default is proxy-aware (honors http_proxy/https_proxy
+# from the environment). The agent→panel link is node-local and must NEVER go
+# through a shell/system proxy — a stale/broken proxy env made every request
+# time out while a plain `curl` (no -x) worked. Force an empty ProxyHandler.
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def _http_call(method: str, path: str, body: dict | None = None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(f"{BASE}{path}", data=data, headers=HEADERS, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with _OPENER.open(req, timeout=15) as resp:
             return resp.status, json.loads(resp.read() or "{}")
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read().decode()[:300]
     except Exception as exc:
         return 0, str(exc)
+
+
+# --- gRPC transport (opt-in via XLINK_GRPC=1) --------------------------------
+GRPC_ENABLED = os.environ.get("XLINK_GRPC", "0") in ("1", "true", "True")
+GRPC_ADDR = os.environ.get("XLINK_GRPC_ADDR", "")  # host:port; default derives from PANEL_URL host
+GRPC_TLS = os.environ.get("XLINK_GRPC_TLS", "0") in ("1", "true", "True")
+GRPC_TLS_CA = os.environ.get("XLINK_GRPC_TLS_CA", "")
+GRPC_TLS_CERT = os.environ.get("XLINK_GRPC_TLS_CERT", "")
+GRPC_TLS_KEY = os.environ.get("XLINK_GRPC_TLS_KEY", "")
+
+_grpc = None
+_grpc_stub = None
+_grpc_pb = None
+
+
+def _grpc_ready() -> bool:
+    global _grpc, _grpc_stub, _grpc_pb
+    if not GRPC_ENABLED:
+        return False
+    if _grpc_stub is not None:
+        return True
+    try:
+        import grpc  # type: ignore
+        from app.agent.grpc import agent_pb2 as pb  # type: ignore
+        from app.agent.grpc import agent_pb2_grpc as pbg  # type: ignore
+    except Exception as exc:
+        _log(f"grpc unavailable, falling back to HTTP: {exc}")
+        return False
+    addr = GRPC_ADDR or (PANEL_URL.split("://", 1)[-1].split(":", 1)[0] + ":50051")
+    try:
+        if GRPC_TLS:
+            def _read_bytes(p):
+                if not p:
+                    return None
+                with open(p, "rb") as fh:
+                    return fh.read()
+
+            ca = _read_bytes(GRPC_TLS_CA)
+            cert = _read_bytes(GRPC_TLS_CERT)
+            key = _read_bytes(GRPC_TLS_KEY)
+            creds = grpc.ssl_channel_credentials(
+                root_certificates=ca, private_key=key, certificate_chain=cert
+            )
+            channel = grpc.secure_channel(addr, creds)
+        else:
+            channel = grpc.insecure_channel(addr)
+        _grpc = grpc
+        _grpc_pb = pb
+        _grpc_stub = pbg.NodeAgentStub(channel)
+        _log(f"grpc transport → {addr} tls={GRPC_TLS}")
+        return True
+    except Exception as exc:
+        _log(f"grpc channel init failed, HTTP fallback: {exc}")
+        return False
+
+
+def _grpc_meta():
+    return (("x-agent-token", TOKEN),)
+
+
+def _grpc_ms(iso: str) -> int:
+    try:
+        return int(datetime.fromisoformat(iso).timestamp() * 1000)
+    except Exception:
+        return int(time.time() * 1000)
+
+
+def _grpc_call(path: str, body: dict | None):
+    global _grpc_stub
+    pb = _grpc_pb
+    stub = _grpc_stub
+    md = _grpc_meta()
+    try:
+        if path == "/config":
+            resp = stub.GetConfig(pb.ConfigRequest(node_id=NODE_ID), metadata=md, timeout=15)
+            return 200, {
+                "node_id": resp.node_id,
+                "config_version": resp.config_version,
+                "config": json.loads(resp.config_json or "{}"),
+                "assignment_count": resp.assignment_count,
+            }
+        if path == "/traffic":
+            samples = [
+                pb.TrafficSample(
+                    assignment_id=s["assignment_id"],
+                    upload_bytes=int(s["upload_bytes"]),
+                    download_bytes=int(s["download_bytes"]),
+                    collected_at_unix_ms=_grpc_ms(s["collected_at"]),
+                )
+                for s in body.get("samples", [])
+            ]
+            batch = pb.TrafficBatch(node_id=NODE_ID, batch_id=body["batch_id"], samples=samples)
+            acks = list(stub.StreamTraffic(iter([batch]), metadata=md, timeout=30))
+            if any(a.batch_id == body["batch_id"] for a in acks):
+                return 200, {}
+            return 0, "no ack for traffic batch"
+        if path == "/metrics":
+            batch = pb.MetricBatch(
+                node_id=NODE_ID,
+                samples=[
+                    pb.MetricSample(name=s["name"], value=float(s["value"]), observed_at_unix_ms=_grpc_ms(s["observed_at"]))
+                    for s in body.get("samples", [])
+                ],
+            )
+            list(stub.StreamMetrics(iter([batch]), metadata=md, timeout=15))
+            return 200, {}
+        if path == "/logs":
+            batch = pb.LogBatch(
+                node_id=NODE_ID,
+                lines=[
+                    pb.LogLine(level=l["level"], message=l["message"], observed_at_unix_ms=_grpc_ms(l["observed_at"]))
+                    for l in body.get("lines", [])
+                ],
+            )
+            list(stub.StreamLogs(iter([batch]), metadata=md, timeout=15))
+            return 200, {}
+        if path == "/connections":
+            batch = pb.ConnectionBatch(
+                node_id=NODE_ID,
+                samples=[pb.ConnectionSample(assignment_id=s["assignment_id"], source_ip=s["source_ip"]) for s in body.get("samples", [])],
+            )
+            stub.ReportConnections(batch, metadata=md, timeout=15)
+            return 200, {}
+        if path == "/provider-health":
+            batch = pb.ProviderHealthBatch(
+                node_id=NODE_ID,
+                checks=[
+                    pb.ProviderHealth(provider_name=c["provider_name"], status=c["status"], latency_ms=float(c.get("latency_ms") or 0), detail=c.get("detail") or "")
+                    for c in body.get("checks", [])
+                ],
+            )
+            stub.ReportProviderHealth(batch, metadata=md, timeout=15)
+            return 200, {}
+        if path == "/state":
+            resp = stub.ReportState(
+                pb.ReportedState(
+                    node_id=NODE_ID,
+                    config_version=body.get("config_version") or "",
+                    agent_version=body.get("agent_version") or "",
+                    applied_json=json.dumps(body.get("applied", {})),
+                    provider_status=body.get("provider_status", {}),
+                ),
+                metadata=md,
+                timeout=15,
+            )
+            return 200, {"remediated": resp.remediated}
+        # unknown path → signal HTTP fallback
+        return None
+    except Exception as exc:
+        _log(f"grpc call {path} failed, falling back to HTTP: {exc}")
+        _grpc_stub = None
+        return None
+
+
+def _call(method: str, path: str, body: dict | None = None):
+    if _grpc_ready():
+        res = _grpc_call(path, body)
+        if res is not None:
+            return res
+    return _http_call(method, path, body)
+
+
+TLS_CERT_DIR = os.environ.get("XLINK_TLS_DIR", "/etc/ssl/xlink")
+
+
+def _write_cert(sni: str, cert_pem: str, key_pem: str) -> tuple[str, str]:
+    safe = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in (sni or "default"))
+    os.makedirs(TLS_CERT_DIR, exist_ok=True)
+    cert_path = os.path.join(TLS_CERT_DIR, safe + ".cert.pem")
+    key_path = os.path.join(TLS_CERT_DIR, safe + ".key.pem")
+    for p, data in ((cert_path, cert_pem), (key_path, key_pem)):
+        with open(p, "w") as f:
+            f.write(data)
+            f.flush()
+            with contextlib.suppress(OSError):
+                os.fsync(f.fileno())
+    os.chmod(key_path, 0o600)
+    return cert_path, key_path
 
 
 def _stream_settings(s: dict) -> dict:
@@ -153,14 +476,25 @@ def _stream_settings(s: dict) -> dict:
             tls["serverName"] = s["sni"]
         if str(s.get("allowInsecure", "")).lower() in ("1", "true"):
             tls["allowInsecure"] = True
+        cert_pem = s.get("cert_pem")
+        key_pem = s.get("key_pem")
+        if cert_pem and key_pem:
+            try:
+                cert_path, key_path = _write_cert(s.get("sni") or "", cert_pem, key_pem)
+                tls["certificates"] = [
+                    {"certificateFile": cert_path, "keyFile": key_path}
+                ]
+            except OSError as exc:
+                _log(f"tls_cert_write_failed sni={s.get('sni')} err={exc}")
         stream["tlsSettings"] = tls
     elif security == "reality":
+        short = s.get("shortId") or s.get("short_id") or ""
         stream["realitySettings"] = {
             "show": False,
             "dest": s.get("dest") or ((s.get("sni") or "www.microsoft.com") + ":443"),
             "serverNames": [s["sni"]] if s.get("sni") else [],
-            "privateKey": s.get("privateKey", ""),
-            "shortIds": [s.get("shortId", "")],
+            "privateKey": s.get("privateKey") or s.get("private_key") or "",
+            "shortIds": [short] if short else [""],
         }
     return stream
 
@@ -184,7 +518,10 @@ def _client_id(cl: dict) -> str:
     creds = cl.get("credentials") or {}
     s = cl.get("settings") or {}
     protocol = (cl.get("protocol") or "vless").lower()
-    if protocol in ("trojan", "shadowsocks", "hysteria2", "hysteria", "tuic"):
+    if protocol in (
+        "trojan", "shadowsocks", "shadowsocks2022", "shadowtls",
+        "hysteria2", "hysteria", "tuic", "naive",
+    ):
         secret = creds.get("password") or s.get("password")
     else:
         secret = creds.get("uuid") or s.get("uuid")
@@ -262,14 +599,55 @@ def _singbox_user(protocol: str, cid: str, email: str, s: dict) -> dict:
     if protocol == "vmess":
         return {"uuid": cid, "name": email, "alterId": int(s.get("alterId", 0) or 0)}
     if protocol == "tuic":
-        return {"uuid": cid, "password": cid, "name": email}
+        # tuic auth is uuid + a SEPARATE password (panel emits both distinctly).
+        # cid here is the uuid; pull the real password from credentials/settings.
+        pw = s.get("password") or cid
+        return {"uuid": cid, "password": pw, "name": email}
+    if protocol == "naive":
+        # NaïveProxy authenticates with username:password; name tags it for stats.
+        return {"username": str(email), "password": cid, "name": str(email)}
+    if protocol == "shadowtls":
+        # ShadowTLS v3 user (name+password); the real proxy runs in the ss detour.
+        return {"name": str(email), "password": cid}
     return {"password": cid, "name": email}
 
 
 def _singbox_tls(s: dict) -> dict:
-    tls = {"enabled": True, "certificate_path": TLS_CERT_PATH, "key_path": TLS_KEY_PATH}
+    security = (s.get("security") or "none").lower()
+    if security == "reality":
+        sni = s.get("sni") or "www.microsoft.com"
+        short = s.get("shortId") or s.get("short_id") or ""
+        dest = s.get("dest") or f"{sni}:443"
+        host, _, port = dest.rpartition(":")
+        return {
+            "enabled": True,
+            "server_name": sni,
+            "reality": {
+                "enabled": True,
+                "handshake": {
+                    "server": host or sni,
+                    "server_port": int(port) if port.isdigit() else 443,
+                },
+                "private_key": s.get("privateKey") or s.get("private_key") or "",
+                "short_id": [short] if short else [""],
+            },
+        }
+    tls: dict = {"enabled": True}
     if s.get("sni"):
         tls["server_name"] = s["sni"]
+    # Resolve the cert: prefer panel-supplied inline PEM (write it to disk), else
+    # a pre-existing default cert. sing-box `check` reads the cert at load, so
+    # pointing at a missing file makes EVERY tls inbound fail — only set the
+    # paths when real files exist.
+    cert_pem, key_pem = s.get("cert_pem"), s.get("key_pem")
+    if cert_pem and key_pem:
+        try:
+            cp, kp = _write_cert(s.get("sni") or s.get("host") or "default", cert_pem, key_pem)
+            tls["certificate_path"], tls["key_path"] = cp, kp
+        except OSError as exc:
+            _log(f"tls_cert_write_failed sni={s.get('sni')} err={exc}")
+    elif os.path.exists(TLS_CERT_PATH) and os.path.exists(TLS_KEY_PATH):
+        tls["certificate_path"], tls["key_path"] = TLS_CERT_PATH, TLS_KEY_PATH
     return tls
 
 
@@ -289,12 +667,20 @@ _SB_TLS_MANDATORY = {"hysteria2", "tuic"}
 
 def build_singbox_config(clients: list[dict]) -> dict:
     inbounds: dict[tuple, dict] = {}
+    detours: dict[str, dict] = {}
     for cl in clients:
         protocol = cl.get("protocol", "vless")
         s = cl.get("settings") or {}
         port = int(s.get("port", 443) or 443)
         secure = (s.get("security") or "none").lower() in ("tls", "reality")
-        key = (port, protocol, secure, json.dumps(_singbox_transport(s) or {}, sort_keys=True))
+        # Include method in the key: shadowsocks users with different methods
+        # (esp. ss2022 16B vs 32B keys) must NOT collapse into one inbound, or the
+        # second user's password is invalid for the first user's method.
+        key = (
+            port, protocol, secure,
+            str(s.get("method", "")),
+            json.dumps(_singbox_transport(s) or {}, sort_keys=True),
+        )
         cid = _client_id(cl)
         if key not in inbounds:
             ib: dict = {
@@ -304,8 +690,39 @@ def build_singbox_config(clients: list[dict]) -> dict:
                 "listen_port": port,
                 "users": [],
             }
-            if protocol == "shadowsocks":
-                ib["method"] = s.get("method", "aes-256-gcm")
+            if protocol in ("shadowsocks", "shadowsocks2022"):
+                ib["type"] = "shadowsocks"
+                # ss2022 needs a 2022 method; default MUST match the panel's
+                # ss2022 default (2022-blake3-aes-256-gcm) or the PSK key size
+                # (32B vs 16B) disagrees and the cipher fails.
+                default_method = (
+                    "2022-blake3-aes-256-gcm" if protocol == "shadowsocks2022" else "aes-256-gcm"
+                )
+                ib["method"] = s.get("method", default_method)
+            elif protocol == "shadowtls":
+                # ShadowTLS v3 wraps a shadowsocks detour: the public inbound does
+                # the TLS handshake to a real host, then hands the connection to a
+                # loopback shadowsocks inbound that carries the actual proxy. The
+                # detour inbound needs its own listen_port + users, and the ss
+                # method must match the password format (non-2022 for arbitrary pw).
+                sni = s.get("sni") or s.get("handshake") or "www.microsoft.com"
+                ss_tag = f"sstls-ss-{port}-{len(inbounds)}"
+                detour_port = 40000 + (port % 20000)
+                ib["version"] = 3
+                ib["handshake"] = {"server": sni, "server_port": 443}
+                ib["detour"] = ss_tag
+                detours[ss_tag] = {
+                    "type": "shadowsocks",
+                    "tag": ss_tag,
+                    "listen": "127.0.0.1",
+                    "listen_port": detour_port,
+                    "method": s.get("method", "aes-128-gcm"),
+                    "users": [],
+                    "_key": key,
+                }
+            elif protocol == "naive":
+                # NaïveProxy is HTTP/2 CONNECT over mandatory TLS, no transport.
+                ib["tls"] = _singbox_tls(s)
             else:
                 tls_required = protocol in _SB_TLS_MANDATORY
                 if (secure or tls_required) and protocol in _SB_TLS_OK:
@@ -314,22 +731,49 @@ def build_singbox_config(clients: list[dict]) -> dict:
                 if transport and protocol in _SB_TRANSPORT_OK:
                     ib["transport"] = transport
             inbounds[key] = ib
-        inbounds[key]["users"].append(_singbox_user(protocol, cid, cl.get("assignment_id"), s))
+        email = cl.get("assignment_id")
+        # Merge credentials over settings so per-client auth (password, etc.) that
+        # lives in credentials is visible to the user builder, not just profile
+        # settings.
+        user_view = {**s, **(cl.get("credentials") or {})}
+        inbounds[key]["users"].append(_singbox_user(protocol, cid, email, user_view))
+        # shadowtls: the actual proxy user lives in the ss detour — add it there
+        # too (named, so v2ray_api counts its traffic).
+        if protocol == "shadowtls":
+            for d in detours.values():
+                if d.get("_key") == key:
+                    d["users"].append({"name": str(email), "password": cid})
+                    break
     core = _singbox_core if isinstance(_singbox_core, dict) else {}
-    user_names = sorted({u["name"] for ib in inbounds.values() for u in ib["users"] if u.get("name")})
-    experimental: dict = {}
+    # Strip the internal _key marker before emitting detour inbounds.
+    for d in detours.values():
+        d.pop("_key", None)
+    all_inbounds = list(inbounds.values()) + list(detours.values())
+    # Collect stats user names from BOTH inbounds and detours (shadowtls traffic
+    # flows through the ss detour), so every user is tagged for v2ray_api stats.
+    user_names = sorted(
+        {
+            u["name"]
+            for ib in all_inbounds
+            for u in ib.get("users", [])
+            if isinstance(u, dict) and u.get("name")
+        }
+    )
+    # MERGE the template's experimental — never let it replace the v2ray_api
+    # stats listener, otherwise per-user traffic is never collected.
+    experimental: dict = dict(core.get("experimental") or {})
     if _v2ray_enabled():
         experimental["v2ray_api"] = {
             "listen": SINGBOX_V2RAY_API_ADDR,
             "stats": {"enabled": True, "users": user_names},
         }
     else:
-        experimental["clash_api"] = {"external_controller": SINGBOX_API_ADDR}
+        experimental.setdefault("clash_api", {"external_controller": SINGBOX_API_ADDR})
     config: dict = {
         "log": core.get("log", {"level": "warn"}),
-        "inbounds": list(inbounds.values()),
+        "inbounds": all_inbounds,
         "outbounds": core.get("outbounds", [{"type": "direct"}]),
-        "experimental": core.get("experimental", experimental),
+        "experimental": experimental,
     }
     for key_name in ("dns", "route", "ntp"):
         if core.get(key_name):
@@ -420,7 +864,7 @@ def build_hysteria_config(clients: list[dict]) -> dict:
         "trafficStats": {"listen": HYSTERIA_API_ADDR, "secret": HYSTERIA_API_SECRET},
     }
     for c in clients:
-        cs = c.get("settings") or {}
+        cs = {**(c.get("settings") or {}), **(c.get("credentials") or {})}
         obfs_pw = cs.get("obfsPassword") or cs.get("obfs_password")
         if cs.get("obfs") and obfs_pw:
             config["obfs"] = {"type": "salamander", "salamander": {"password": str(obfs_pw)}}
@@ -526,29 +970,46 @@ def _xray_api_ok(retries: int = 6, delay: float = 0.5) -> bool:
     return False
 
 
-def check_provider_health(active_kinds: set[str]) -> dict[str, str]:
+def check_provider_health(
+    health_kinds: set[str], serving_kinds: set[str] | None = None
+) -> dict[str, str]:
+    # serving_kinds = cores that actually have clients this cycle. A core that is
+    # installed but has no clients is intentionally left un-started by apply_one
+    # (systemd unit dead). That is idle, not a fault — don't report it unhealthy
+    # or the panel flags a perfectly fine node as broken.
+    serving = serving_kinds if serving_kinds is not None else health_kinds
     status: dict[str, str] = {}
-    for kind in active_kinds:
+    for kind in health_kinds:
         core = CORES.get(kind)
         if core is None:
             continue
-        if not _core_installed(kind, core):
-            status[kind] = "not_installed"
-            continue
-        if kind == "xray":
-            healthy = _xray_api_ok()
-            if not healthy:
-                active = _systemd_active(core.get("service", "xray"))
-                if active:
-                    healthy = True
-        elif kind == "wireguard":
-            iface = os.environ.get("XLINK_WG_INTERFACE", "wg0")
-            rc, _ = _run(f"ip link show {iface}")
-            healthy = rc == 0
-        else:
-            active = _systemd_active(core.get("service", ""))
-            healthy = os.path.exists(core["path"]) if active is None else active
-        status[kind] = "healthy" if healthy else "unhealthy"
+        # Each core is checked in isolation: a crash while probing one core must
+        # not drop the health report for the others. A failed probe = unhealthy.
+        try:
+            if not _core_installed(kind, core):
+                status[kind] = "not_installed"
+                continue
+            if kind == "xray":
+                healthy = _xray_api_ok()
+                if not healthy:
+                    active = _systemd_active(core.get("service", "xray"))
+                    if active:
+                        healthy = True
+            elif kind == "wireguard":
+                iface = os.environ.get("XLINK_WG_INTERFACE", "wg0")
+                rc, _ = _run(f"ip link show {iface}")
+                healthy = rc == 0
+            else:
+                active = _systemd_active(core.get("service", ""))
+                healthy = os.path.exists(core["path"]) if active is None else active
+            if not healthy and kind not in serving:
+                # Installed, no clients, unit not running → idle, treat as healthy.
+                status[kind] = "healthy"
+                continue
+            status[kind] = "healthy" if healthy else "unhealthy"
+        except Exception as exc:  # noqa: BLE001 - never let one core sink the rest
+            _log(f"{kind}: health probe failed: {exc}")
+            status[kind] = "unhealthy"
     return status
 
 
@@ -590,6 +1051,11 @@ def _wireguard_traffic(clients: list[dict]) -> list[dict]:
                     "collected_at": ts,
                 }
             )
+    # Prune counters for peers no longer assigned — otherwise _wg_prev grows for
+    # the life of the process as users/keys churn (unbounded memory). Runs under
+    # _enforce_lock (every collect_traffic caller holds it).
+    for dead in set(_wg_prev) - set(peer_to_assignment):
+        del _wg_prev[dead]
     return samples
 
 
@@ -599,6 +1065,9 @@ def _write(path: str, built, fmt: str) -> None:
             json.dump(built, fh, indent=2)
         else:
             fh.write(built)
+        fh.flush()
+        with contextlib.suppress(OSError):
+            os.fsync(fh.fileno())
 
 
 def _run(cmd: str) -> tuple[int, str]:
@@ -651,6 +1120,11 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
     if not _core_installed(kind, core):
         if core_clients:
             _log(f"{kind}: not installed on this node — skipping {len(core_clients)} client(s)")
+        return True
+    # No clients for this core → nothing to serve. Skip building (wireguard's
+    # builder would raise on an empty client list, spamming errors and stalling
+    # the config version every cycle).
+    if not core_clients:
         return True
     path = core["path"]
     root, ext = os.path.splitext(path)
@@ -778,7 +1252,7 @@ def _xray_traffic() -> list[dict]:
 
 def _http_get_json(url: str, headers: dict | None = None, timeout: int = 8):
     req = urllib.request.Request(url, headers=headers or {})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _OPENER.open(req, timeout=timeout) as resp:
         return json.loads(resp.read() or b"{}")
 
 
@@ -921,36 +1395,205 @@ def _local_enforce(clients: list[dict], samples: list[dict]) -> list[dict]:
     return [c for c in clients if c.get("user_id") not in over]
 
 
+_XLINK_CLI = os.environ.get("XLINK_CLI", "/usr/local/bin/xlink")
+_UPGRADE_TIMEOUT = 900
+
+
+def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
+    # Execute an operator command leased from the panel. Returns (success, result).
+    if kind == "apply_config":
+        # Config is owned by the normal pull cycle; just wake it.
+        _wake.set()
+        return True, {"note": "config refresh scheduled"}
+    if kind == "restart":
+        core = str(payload.get("core") or "").lower()
+        spec = CORES.get(core)
+        if spec is None:
+            return False, {"error": f"unknown core {core}"}
+        if not _core_installed(core, spec):
+            return True, {"core": core, "note": "core not installed — nothing to restart"}
+        # Use the systemd unit restart, NOT the config-reapply reload pipeline:
+        # for wireguard the reload bounces the tunnel + rewrites iptables, far
+        # heavier than an operator "restart" should be. Plain restart is safe and
+        # idempotent even for an idle (no-client) core.
+        service = spec.get("service", core)
+        rc, out = _run(f"systemctl restart {service}")
+        return rc == 0, {"core": core, "rc": rc, "output": out[-500:] if out else ""}
+    if kind == "upgrade":
+        core = str(payload.get("core") or "").lower()
+        if core not in CORES:
+            return False, {"error": f"unknown or missing core {core!r}"}
+        alias = {"sing-box": "singbox", "wireguard": "wg"}.get(core, core)
+        if not os.path.exists(_XLINK_CLI):
+            return False, {"error": "xlink CLI not found"}
+        target = str(payload.get("target_version") or "").strip()
+        cmd = [_XLINK_CLI, "core-update", alias]
+        if target:
+            cmd.append(target)
+        try:
+            proc = subprocess.run(
+                cmd,
+                timeout=_UPGRADE_TIMEOUT,
+                capture_output=True,
+                text=True,
+                errors="replace",
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, {"error": str(exc)}
+        return proc.returncode == 0, {
+            "core": core,
+            "rc": proc.returncode,
+            "output": (proc.stdout + proc.stderr)[-500:],
+        }
+    return False, {"error": f"unsupported command kind {kind}"}
+
+
+_cmd_lock = threading.Lock()
+
+
+def poll_commands() -> None:
+    # Run command execution in a background thread so a long upgrade (up to the
+    # 900s timeout) never blocks the main cycle — otherwise config pulls and
+    # traffic/liveness reports stall and the node flaps offline mid-upgrade. The
+    # lock lets at most one command batch run at a time (no overlapping upgrades).
+    if _cmd_lock.locked():
+        return
+    threading.Thread(target=_poll_commands_blocking, daemon=True).start()
+
+
+def _poll_commands_blocking() -> None:
+    if not _cmd_lock.acquire(blocking=False):
+        return
+    try:
+        _do_poll_commands()
+    finally:
+        _cmd_lock.release()
+
+
+def _do_poll_commands() -> None:
+    # Lease operator commands from the panel, run each, report the result. Auth is
+    # the agent token (X-Agent-Token) — the panel is the only authenticated source.
+    try:
+        sc, resp = _call("POST", "/commands/lease", {})
+    except Exception as exc:  # noqa: BLE001
+        _log(f"command lease error: {exc}")
+        return
+    if sc != 200 or not isinstance(resp, dict):
+        return
+    lease_token = resp.get("lease_token")
+    commands = resp.get("commands") or []
+    if not lease_token or not commands:
+        return
+    for cmd in commands:
+        cid = cmd.get("command_id")
+        kind = cmd.get("kind")
+        payload = cmd.get("payload") or {}
+        if not cid or not kind:
+            continue
+        _log(f"executing command {kind} ({cid})")
+        try:
+            success, result = _run_command(kind, payload)
+        except Exception as exc:  # noqa: BLE001
+            success, result = False, {"error": str(exc)}
+        # Deliver the result with retries: a lost POST leaves the command LEASED,
+        # so it re-leases and re-executes after expiry (at-least-once). Retrying
+        # here makes that rare, and we log a failure so silent double-runs are
+        # visible rather than suppressed.
+        delivered = False
+        for _ in range(3):
+            try:
+                rsc, _ = _call(
+                    "POST",
+                    "/commands/result",
+                    {
+                        "command_id": cid,
+                        "lease_token": lease_token,
+                        "success": bool(success),
+                        "result": result,
+                    },
+                )
+                if rsc == 200:
+                    delivered = True
+                    break
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(2)
+        if not delivered:
+            _log(f"command {kind} ({cid}) result NOT delivered — may re-run")
+        _log(f"command {kind} ({cid}) -> {'ok' if success else 'failed'}")
+
+
 def cycle() -> None:
     sc, cfg = _call("GET", "/config")
     if sc != 200:
         _log(f"config pull failed ({sc}): {cfg}")
+        # Still report liveness so a transient config-pull failure doesn't flip
+        # the node OFFLINE — the agent + cores are alive, only the pull failed.
+        with contextlib.suppress(Exception):
+            _call("POST", "/state", {"agent_version": AGENT_VERSION})
         return
     version = cfg.get("config_version")
     conf = cfg.get("config") or {}
     clients = conf.get("clients", [])
     global _xray_core, _singbox_core, _hysteria_core
     cores = conf.get("core_templates") or {}
-    _xray_core = cores.get("xray") or {}
-    _singbox_core = cores.get("sing-box") or {}
-    _hysteria_core = cores.get("hysteria") or {}
     _log(f"pulled config v={version} clients={len(clients)}")
 
     kinds_present = {_effective_core(c) for c in clients} & set(CORES)
     pre_samples: list[dict] = []
     active_kinds: set[str] = set()
+    locally_limited = 0
     try:
-        pre_samples = collect_traffic(kinds_present, clients) if not DRY_RUN else []
-        effective = _local_enforce(clients, pre_samples)
-        if len(effective) != len(clients):
-            version = f"{version}-local{len(effective)}"
-        active_kinds = apply_config(effective, version)
+        with _enforce_lock:
+            # Swap the core templates under the same lock the fast-enforce loop
+            # holds when it reads them (via the config builders), so it never
+            # pairs a new client set with a stale/half-updated template.
+            _xray_core = cores.get("xray") or {}
+            _singbox_core = cores.get("sing-box") or {}
+            _hysteria_core = cores.get("hysteria") or {}
+            # Fresh config: the panel's used_bytes now already accounts for every
+            # delta reported so far, so rebase the local accumulator to avoid
+            # double-counting (which would falsely keep users over-limit forever).
+            global _usage_acc, _over_users
+            _usage_acc = {}
+            _over_users = set()
+            pre_samples = collect_traffic(kinds_present, clients) if not DRY_RUN else []
+            # Persist immediately: collect_traffic reset the core counters, so a
+            # crash before the WAL write (which used to happen ~50 lines later,
+            # after several network calls) would silently lose this usage.
+            _wal_append(pre_samples)
+            effective = _local_enforce(clients, pre_samples)
+            locally_limited = len(clients) - len(effective)
+            # Internal apply key: vary when the locally-enforced set changes so
+            # apply_config re-runs, WITHOUT mutating the version we report to the
+            # panel (reporting a mangled version = permanent phantom drift).
+            effective_version = (
+                f"{version}-local{len(effective)}" if locally_limited else version
+            )
+            active_kinds = apply_config(effective, effective_version)
+            global _last_clients, _last_kinds, _last_effective_version
+            _last_clients = clients
+            _last_kinds = kinds_present
+            _last_effective_version = effective_version
     except Exception as exc:
         _log(f"apply cycle error (continuing to report state): {exc}")
         active_kinds = {_effective_core(c) for c in clients} & set(CORES)
 
     cpu, mem = read_metrics()
-    provider_status = check_provider_health(active_kinds) if not DRY_RUN else {}
+    # Report health for every installed core, not just the ones with clients, so
+    # the panel shows the full core picture even when one is down or idle.
+    def _installed_safe(k: str) -> bool:
+        try:
+            return _core_installed(k, CORES[k])
+        except Exception:  # noqa: BLE001
+            return False
+
+    health_kinds = active_kinds | {k for k in CORES if _installed_safe(k)}
+    provider_status = (
+        check_provider_health(health_kinds, serving_kinds=active_kinds)
+        if not DRY_RUN
+        else {}
+    )
     unhealthy = [k for k, v in provider_status.items() if v != "healthy"]
     if unhealthy:
         _log(f"provider health: UNHEALTHY {unhealthy} (status={provider_status})")
@@ -960,7 +1603,7 @@ def cycle() -> None:
         {
             "config_version": version,
             "agent_version": AGENT_VERSION,
-            "applied": {"config_version": version},
+            "applied": {"config_version": version, "locally_limited": locally_limited},
             "provider_status": provider_status,
         },
     )
@@ -976,17 +1619,22 @@ def cycle() -> None:
             },
         )
 
-    global _pending_traffic
-    samples = _pending_traffic + pre_samples
+    # pre_samples were already WAL'd under the enforce lock right after
+    # collection; here we just claim the full WAL for delivery.
+    samples = _wal_rotate()
     if samples:
-        batch = f"{NODE_ID}-{int(time.time())}"
+        # Deterministic batch id over the WAL contents so a resend of the same
+        # unacked batch dedups server-side instead of double-counting.
+        digest = hashlib.sha256(
+            json.dumps(samples, sort_keys=True).encode()
+        ).hexdigest()[:32]
+        batch = f"{NODE_ID}-{digest}"
         sc, _ = _call("POST", "/traffic", {"batch_id": batch, "samples": samples})
         if sc == 200:
-            _pending_traffic = []
+            _wal_commit(len(samples))
             _log(f"reported traffic for {len(samples)} client(s) ({sc})")
         else:
-            _pending_traffic = samples[-5000:]
-            _log(f"traffic report failed ({sc}); buffered {len(_pending_traffic)} sample(s)")
+            _log(f"traffic report failed ({sc}); {len(samples)} sample(s) held in WAL")
 
     ts = _now()
     _call(
@@ -1000,18 +1648,22 @@ def cycle() -> None:
             ]
         },
     )
-    core_lines = read_core_logs()
-    if core_lines:
-        _call(
-            "POST",
-            "/logs",
-            {
-                "lines": [
-                    {"level": _xray_level(ln), "message": ln, "observed_at": ts}
-                    for ln in core_lines
-                ]
-            },
-        )
+    out_lines = [
+        {"level": _xray_level(ln), "message": ln, "observed_at": ts, "source": "xray"}
+        for ln in read_core_logs()
+    ]
+    for kind in CORES:
+        if kind == "xray" or not _installed_safe(kind):
+            continue
+        service = CORES[kind].get("service", "")
+        if not service:
+            continue
+        out_lines += [
+            {"level": _journal_level(ln), "message": ln, "observed_at": ts, "source": kind}
+            for ln in read_service_logs(service)
+        ]
+    if out_lines:
+        _call("POST", "/logs", {"lines": out_lines[:1000]})
 
 
 def sse_listener() -> None:
@@ -1021,12 +1673,50 @@ def sse_listener() -> None:
             req = urllib.request.Request(
                 url, headers={"X-Agent-Token": TOKEN, "Accept": "text/event-stream"}
             )
-            with urllib.request.urlopen(req, timeout=None) as resp:
+            # Finite read timeout, longer than the panel's ~20s SSE keepalive: a
+            # half-open/stalled stream (LB idle-drop, no RST) then raises instead
+            # of wedging this thread forever with timeout=None.
+            with _OPENER.open(req, timeout=90) as resp:
                 for raw in resp:
                     if raw.decode("utf-8", "ignore").startswith("data:"):
                         _wake.set()
         except Exception:
             time.sleep(5)
+
+
+def fast_enforce_loop() -> None:
+    # Lightweight loop: re-read usage for the last-applied client set and drop any
+    # user that has just crossed their data limit, without waiting for the next
+    # full cycle. Recovery (re-adding a reset user) is owned by the full cycle.
+    if DRY_RUN:
+        return
+    while True:
+        time.sleep(FAST_INTERVAL)
+        if not _last_clients:
+            continue
+        try:
+            with _enforce_lock:
+                # Snapshot the shared trio atomically under the lock so we never
+                # pair a new client set with a stale kinds/version from a cycle
+                # update that is mid-flight.
+                clients = _last_clients
+                kinds = _last_kinds
+                base_version = _last_effective_version
+                if not clients or not kinds:
+                    continue
+                prev_over = set(_over_users)
+                # collect_traffic resets the core counters (-reset), so these
+                # deltas MUST be persisted or the usage is lost. WAL them always;
+                # the next full cycle delivers the WAL to the panel.
+                samples = collect_traffic(kinds, clients)
+                _wal_append(samples)
+                effective = _local_enforce(clients, samples)
+                newly_over = _over_users - prev_over
+                if newly_over:
+                    apply_config(effective, f"{base_version}-fast{len(effective)}")
+                    _log(f"fast-enforce dropped {len(newly_over)} over-limit user(s)")
+        except Exception as exc:
+            _log(f"fast-enforce error: {exc}")
 
 
 def main() -> int:
@@ -1038,11 +1728,16 @@ def main() -> int:
         with contextlib.suppress(OSError):
             os.makedirs(os.path.dirname(XRAY_ERROR_LOG) or ".", exist_ok=True)
     threading.Thread(target=sse_listener, daemon=True).start()
+    threading.Thread(target=fast_enforce_loop, daemon=True).start()
     while True:
         try:
             cycle()
         except Exception as exc:
             _log(f"cycle error: {exc}")
+        try:
+            poll_commands()
+        except Exception as exc:
+            _log(f"command poll error: {exc}")
         _wake.wait(timeout=INTERVAL)
         _wake.clear()
 

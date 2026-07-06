@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
-import { Plus, Trash } from "lucide-react";
+import { Activity, Gauge, Plus } from "lucide-react";
 import {
   ApiError,
   deleteInboundHost,
@@ -20,7 +20,6 @@ import {
   type ProfileRead,
 } from "@/lib/api";
 import { bytes } from "@/lib/format";
-import { Drawer } from "../parts";
 import { UsageAreaChart } from "../usage-chart";
 import {
   WarpBadge,
@@ -29,12 +28,13 @@ import {
   WarpHead,
   WarpRow,
   WarpSkeleton,
-  WarpStat,
-  WarpStatRow,
   WarpTableCard,
 } from "../warp-table";
 import { ProfileDialog } from "./dialog";
 import { HostDialog } from "./host-dialog";
+import { DgSearch } from "../../dg-icons";
+import { SettingsSection } from "../settings-kit";
+import { cn } from "@/lib/cn";
 
 function protoBadge(p: string): string {
   switch (p.toLowerCase()) {
@@ -100,61 +100,10 @@ export function ProfilesScreen() {
         ),
       )
     : profiles;
-  const totalHosts = allHosts.length;
 
-  return (
-    <div className="mx-auto w-full max-w-6xl">
-      <WarpStatRow>
-        <WarpStat label="Inbounds" value={profiles.length} />
-        <WarpStat label="Addresses" value={totalHosts} />
-        <WarpStat label="Nodes" value={nodes.length} />
-      </WarpStatRow>
-
-      <WarpTableCard
-        toolbar={
-          <>
-            <WarpButton primary onClick={() => setEditingInbound("new")}>
-              <Plus size={14} /> Add Inbound
-            </WarpButton>
-            <input
-              className="warp-tb-search warp-tb-spacer"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search inbounds…"
-            />
-          </>
-        }
-      >
-        <WarpHead cols={["#", "Name", "Node", "Protocol", "Addresses"]} actions />
-        {query.isLoading ? (
-          <WarpSkeleton />
-        ) : filtered.length === 0 ? (
-          <WarpEmpty icon="fa-globe">
-            {search ? "No matches." : "No inbounds yet."}
-          </WarpEmpty>
-        ) : (
-          filtered.map((p, i) => (
-            <WarpRow
-              key={p.id}
-              onClick={() => setDetail(p)}
-              menu={[
-                { label: "Edit", icon: "edit", onClick: () => setEditingInbound(p) },
-                { label: "Disable", icon: "disable", disabled: !p.is_active, onClick: () => disableInbound(p) },
-                { label: "Delete", icon: "trash", danger: true, onClick: () => removeInbound(p) },
-              ]}
-              cells={[
-                i + 1,
-                <span className="font-medium capitalize">{p.name}</span>,
-                <span className="warp-tb-mono">{nodeName(p.node_id)}</span>,
-                <span className={`warp-proto-badge ${protoBadge(p.protocol)}`}>{p.protocol}</span>,
-                <WarpBadge tone={hostCount(p.id) > 0 ? "blue" : "gray"}>{hostCount(p.id)}</WarpBadge>,
-              ]}
-            />
-          ))
-        )}
-      </WarpTableCard>
-
-      {detail ? (
+  if (detail) {
+    return (
+      <>
         <HostsDrawer
           profile={detail}
           nodeName={nodeName(detail.node_id)}
@@ -164,7 +113,69 @@ export function ProfilesScreen() {
             setDetail(null);
           }}
         />
-      ) : null}
+        {editingInbound ? (
+          <ProfileDialog
+            profile={editingInbound === "new" ? null : editingInbound}
+            nodes={nodes}
+            onClose={() => setEditingInbound(null)}
+            onSaved={() => {
+              setEditingInbound(null);
+              refreshInbounds();
+            }}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-6xl">
+      <div className="warp-table-top">
+        <span className="title">All hosts</span>
+        <div className="right">
+          <span className="warp-tb-search-wrap" style={{ maxWidth: 321, flex: 1 }}>
+            <DgSearch size={16} />
+            <input
+              className="warp-tb-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Find host"
+            />
+          </span>
+          <WarpButton primary onClick={() => setEditingInbound("new")}>
+            <Plus size={16} strokeWidth={1.8} /> Add Inbound
+          </WarpButton>
+        </div>
+      </div>
+
+      <WarpTableCard className="warp-users-table">
+        <WarpHead cols={["Name", "Node", "Protocol", "Addresses"]} actions />
+        {query.isLoading ? (
+          <WarpSkeleton />
+        ) : filtered.length === 0 ? (
+          <WarpEmpty icon="fa-globe">
+            {search ? "No matches." : "No inbounds yet."}
+          </WarpEmpty>
+        ) : (
+          filtered.map((p) => (
+            <WarpRow
+              key={p.id}
+              onClick={() => setDetail(p)}
+              menu={[
+                { label: "Edit", icon: "edit", onClick: () => setEditingInbound(p) },
+                { label: "Disable", icon: "disable", disabled: !p.is_active, onClick: () => disableInbound(p) },
+                { label: "Delete", icon: "trash", danger: true, onClick: () => removeInbound(p) },
+              ]}
+              cells={[
+                <span className="font-medium capitalize">{p.name}</span>,
+                <span className="warp-tb-mono">{nodeName(p.node_id)}</span>,
+                <span className={`warp-proto-badge ${protoBadge(p.protocol)}`}>{p.protocol}</span>,
+                <WarpBadge tone={hostCount(p.id) > 0 ? "blue" : "gray"}>{hostCount(p.id)}</WarpBadge>,
+              ]}
+            />
+          ))
+        )}
+      </WarpTableCard>
 
       {editingInbound ? (
         <ProfileDialog
@@ -199,6 +210,7 @@ function HostsDrawer({
   });
   const [hostDialog, setHostDialog] = useState<InboundHostRead | "new" | null>(null);
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<"general" | "traffic" | "addresses">("general");
 
   const allHosts = (hostsQuery.data ?? []) as InboundHostRead[];
   const needle = search.trim().toLowerCase();
@@ -224,88 +236,86 @@ function HostsDrawer({
   };
 
   return (
-    <Drawer
-      title={
-        <span className="flex items-center gap-2">
-          <span className="text-lg font-medium capitalize">{profile.name}</span>
-          <WarpBadge tone="blue">{profile.protocol}</WarpBadge>
-          <span className="text-sm text-fg-muted">· {nodeName}</span>
-        </span>
-      }
-      width="w-[720px]"
-      panelClassName="bg-canvas"
-      onClose={onClose}
-      onEdit={onEdit}
-    >
-      <div className="flex flex-col gap-4">
-        <ProfileUsageCard profileId={profile.id} />
-        <div className="flex items-center gap-2">
-          <WarpButton onClick={() => setHostDialog("new")}>
-            <Plus size={14} /> Add address
-          </WarpButton>
-          {allHosts.length > 3 ? (
-            <input
-              className="warp-tb-search ml-auto"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search addresses…"
-            />
-          ) : null}
-        </div>
+    <div className="w-full px-4 pb-6 pt-0">
+      <div className="warp-pd-tabs warp-profile-tabs">
+        {([["general", "General"], ["traffic", "Inbound Traffic"], ["addresses", "Addresses"]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={cn("warp-pd-tab", tab === key && "is-active")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-        <div>
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="text-left">
-                <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Remark</th>
-                <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Address</th>
-                <th className="px-3 py-2 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Port</th>
-                <th className="w-16 px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {hosts.map((h) => (
-                <tr
+      {tab === "general" ? (
+      <div className="warp-settings-card">
+        <SettingsSection icon={Gauge} title="General" description="Inbound protocol, node and address summary.">
+          <PdRow label="Protocol" value={<span className={`warp-proto-badge ${protoBadge(profile.protocol)}`}>{profile.protocol}</span>} />
+          <PdRow label="Node" value={nodeName} />
+          <PdRow label="Addresses" value={String(allHosts.length)} />
+        </SettingsSection>
+      </div>
+      ) : null}
+
+      {tab === "traffic" ? (
+      <div className="warp-settings-card">
+        <SettingsSection icon={Activity} title="Inbound Traffic" description="Traffic served through this inbound.">
+          <ProfileUsageCard profileId={profile.id} />
+        </SettingsSection>
+      </div>
+      ) : null}
+
+      {tab === "addresses" ? (
+        <>
+          <div className="warp-table-top">
+            <span className="title">Addresses</span>
+            <div className="right">
+              {allHosts.length > 3 ? (
+                <span className="warp-tb-search-wrap" style={{ maxWidth: 321, flex: 1 }}>
+                  <DgSearch size={16} />
+                  <input
+                    className="warp-tb-search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Find address"
+                  />
+                </span>
+              ) : null}
+              <WarpButton primary onClick={() => setHostDialog("new")}>
+                <Plus size={16} strokeWidth={1.8} /> Add address
+              </WarpButton>
+            </div>
+          </div>
+          <WarpTableCard className="warp-users-table">
+            <WarpHead cols={["Remark", "Address", "Port"]} actions />
+            {hosts.length === 0 ? (
+              <WarpEmpty icon="fa-globe">No extra addresses — the inbound already works on the node address.</WarpEmpty>
+            ) : (
+              hosts.map((h) => (
+                <WarpRow
                   key={h.id}
                   onClick={() => setHostDialog(h)}
-                  className="cursor-pointer rounded-lg transition-colors hover:bg-muted"
-                >
-                  <td className="px-3 py-2.5 font-medium text-fg">
-                    {h.remark || <span className="text-fg-muted">—</span>}
-                    {h.is_universal ? (
-                      <span className="ml-1.5">
-                        <WarpBadge tone="blue">universal</WarpBadge>
-                      </span>
-                    ) : null}
-                  </td>
-                  <td className="px-3 py-2.5 text-fg-muted">{h.address ?? "—"}</td>
-                  <td className="px-3 py-2.5">
-                    <WarpBadge tone="gray">{h.port ?? "—"}</WarpBadge>
-                  </td>
-                  <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      title="Delete"
-                      className="warp-tb-rowicon warp-tb-del"
-                      style={{ marginLeft: 0 }}
-                      onClick={() => removeHost(h)}
-                    >
-                      <Trash size={12} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {hosts.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center text-xs text-fg-muted">
-                    No extra addresses — the inbound already works on the node address.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  menu={[
+                    { label: "Edit", icon: "edit", onClick: () => setHostDialog(h) },
+                    { label: "Delete", icon: "delete", danger: true, onClick: () => removeHost(h) },
+                  ]}
+                  cells={[
+                    <span className="font-medium">
+                      {h.remark || "—"}
+                      {h.is_universal ? <span className="ml-1.5 warp-badge info">universal</span> : null}
+                    </span>,
+                    <span className="text-fg-muted">{h.address ?? "—"}</span>,
+                    <span className="text-fg-muted">{h.port ?? "—"}</span>,
+                  ]}
+                />
+              ))
+            )}
+          </WarpTableCard>
+        </>
+      ) : null}
 
       {hostDialog ? (
         <HostDialog
@@ -318,7 +328,16 @@ function HostsDrawer({
           }}
         />
       ) : null}
-    </Drawer>
+    </div>
+  );
+}
+
+function PdRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="warp-pd-row">
+      <span className="warp-pd-row-label">{label}</span>
+      <span className="warp-pd-row-value">{value}</span>
+    </div>
   );
 }
 

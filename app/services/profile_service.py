@@ -8,7 +8,7 @@ from app.core.pagination import decode_cursor, encode_cursor
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.profile import Profile
 from app.providers.base.exceptions import ProviderNotFoundError
-from app.providers.base.models import ProviderKind
+from app.providers.base.models import ProviderKind, protocols_for
 from app.providers.base.registry import ProviderRegistry
 from app.repositories.node import NodeRepository
 from app.repositories.profile import ProfileRepository
@@ -37,7 +37,11 @@ class ProfileService:
         await invalidate_subscription_cache(self._subscription_service, node_id)
 
     async def create(self, data: ProfileCreate) -> Profile:
+        from app.providers.settings_validation import validate_profile_settings
+
         self._validate_provider_kind(data.provider_kind)
+        self._validate_protocol(data.provider_kind, data.protocol)
+        validate_profile_settings(data.provider_kind, data.protocol, data.settings)
         await self._validate_node(data.node_id)
 
         if data.provider_kind == ProviderKind.WIREGUARD:
@@ -85,8 +89,14 @@ class ProfileService:
         if data.name is not None:
             profile.name = data.name
         if data.protocol is not None:
+            self._validate_protocol(profile.provider_kind, data.protocol)
             profile.protocol = data.protocol
         if data.settings is not None:
+            from app.providers.settings_validation import validate_profile_settings
+
+            validate_profile_settings(
+                profile.provider_kind, data.protocol or profile.protocol, data.settings
+            )
             profile.settings = data.settings
         if data.is_active is not None:
             profile.is_active = data.is_active
@@ -103,28 +113,29 @@ class ProfileService:
     async def disable(self, profile_id: uuid.UUID) -> Profile:
         profile = await self.set_active(profile_id, False)
 
-        from sqlalchemy import select
+        from sqlalchemy import func, select, update
+
+        from app.domain.node import Node
 
         stmt = select(ClientAssignment).where(
             ClientAssignment.profile_id == profile_id,
             ClientAssignment.status == AssignmentStatus.ACTIVE,
         )
         active_assignments = (await self._repo.session.execute(stmt)).scalars().all()
-        # Batch-load nodes once instead of one query per assignment (N+1).
-        node_ids = {a.node_id for a in active_assignments}
-        nodes_by_id = {}
-        if node_ids:
-            from app.domain.node import Node
-
-            node_rows = (
-                await self._repo.session.execute(select(Node).where(Node.id.in_(node_ids)))
-            ).scalars().all()
-            nodes_by_id = {n.id: n for n in node_rows}
+        decrements: dict[uuid.UUID, int] = {}
         for assignment in active_assignments:
             assignment.status = AssignmentStatus.DISABLED
-            node = nodes_by_id.get(assignment.node_id)
-            if node is not None:
-                node.current_users = max(0, node.current_users - 1)
+            if assignment.node_id is not None:
+                decrements[assignment.node_id] = decrements.get(assignment.node_id, 0) + 1
+        for node_id, count in decrements.items():
+            # Atomic raw UPDATE so the ORM version column is not corrupted and
+            # concurrent counter writes are not lost (see _adjust_node_users_by_id).
+            await self._repo.session.execute(
+                update(Node)
+                .where(Node.id == node_id, Node.current_users > 0)
+                .values(current_users=func.greatest(0, Node.current_users - count))
+                .execution_options(synchronize_session=False)
+            )
         await self._repo.session.flush()
         return profile
 
@@ -144,9 +155,24 @@ class ProfileService:
                 details={"assignments": int(count)},
             )
         node_id = profile.node_id
+        await self._scrub_profile_from_groups(profile_id)
         await self._repo.session.delete(profile)
         await self._repo.session.flush()
         await self._invalidate_subscription_cache(node_id)
+
+    async def _scrub_profile_from_groups(self, profile_id: uuid.UUID) -> None:
+        from sqlalchemy import select
+
+        from app.domain.group import Group
+
+        pid = str(profile_id)
+        rows = (await self._repo.session.execute(select(Group))).scalars().all()
+        for group in rows:
+            ids = group.profile_ids or []
+            filtered = [p for p in ids if str(p) != pid]
+            if len(filtered) != len(ids):
+                group.profile_ids = filtered
+                self._repo.session.add(group)
 
     async def list_profiles_keyset(
         self,
@@ -189,6 +215,16 @@ class ProfileService:
                 code="invalid_provider",
                 details={"provider_kind": kind.value},
             ) from exc
+
+    def _validate_protocol(self, kind: ProviderKind, protocol: str) -> None:
+        allowed = protocols_for(kind)
+        if protocol.lower() not in allowed:
+            raise ValidationError(
+                f"Provider '{kind.value}' does not support protocol '{protocol}'. "
+                f"Supported: {', '.join(sorted(allowed))}.",
+                code="protocol_provider_mismatch",
+                details={"provider_kind": kind.value, "protocol": protocol},
+            )
 
     async def _validate_node(self, node_id: uuid.UUID) -> None:
         node = await self._nodes.get(node_id)

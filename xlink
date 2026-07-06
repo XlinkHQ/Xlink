@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Thin wrapper around the XLink CLI running inside the api container.
+#
+#   ./xlink help
+#   ./xlink user list
+#   ./xlink admin reset-password -u admin -p NEWPASS
+#   ./xlink node token local-node
+#
+# Falls back to a local interpreter when XLINK_LOCAL=1 (no container).
+set -euo pipefail
+cd "$(dirname "$0")"
+
+if [[ "${XLINK_LOCAL:-0}" == "1" ]]; then
+  exec python -m app.cli.main "$@"
+fi
+
+exec docker compose exec -T api python -m app.cli.main "$@"

@@ -12,6 +12,12 @@ from app.subscription.models import ProviderConfig
 PROTOCOL = "wireguard"
 
 
+def _ini_value(raw: object) -> str:
+    """INI keys are single-line; strip CR/LF so a value containing a newline
+    can't forge extra directives (e.g. a rogue AllowedIPs)."""
+    return str(raw).replace("\r", " ").replace("\n", " ").strip()
+
+
 def _int_setting(config: ProviderConfig, key: str, default: int, lo: int, hi: int) -> int:
     """Coerce a setting to int with range validation; raise on bad input."""
     raw = setting(config, key)
@@ -19,12 +25,12 @@ def _int_setting(config: ProviderConfig, key: str, default: int, lo: int, hi: in
         return default
     try:
         val = int(raw)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
         raise FormatRenderError(
             f"WireGuard {key} must be an integer.",
             code="subscription_invalid_field",
             details={"field": key, "value": str(raw)},
-        )
+        ) from exc
     if not (lo <= val <= hi):
         raise FormatRenderError(
             f"WireGuard {key} must be between {lo} and {hi}.",
@@ -35,21 +41,21 @@ def _int_setting(config: ProviderConfig, key: str, default: int, lo: int, hi: in
 
 
 def _peer_block(config: ProviderConfig) -> str:
-    public_key = str(setting(config, "peerPublicKey", setting(config, "publicKey", "")))
+    public_key = _ini_value(setting(config, "peerPublicKey", setting(config, "publicKey", "")))
     if not public_key:
         raise FormatRenderError(
             "WireGuard requires a peer public key.",
             code="subscription_missing_fields",
             details={"missing": ["peerPublicKey"]},
         )
-    allowed_ips = str(setting(config, "allowedIPs", "0.0.0.0/0, ::/0"))
+    allowed_ips = _ini_value(setting(config, "allowedIPs", "0.0.0.0/0, ::/0"))
     lines = [
         "[Peer]",
         f"PublicKey = {public_key}",
-        f"Endpoint = {config.host}:{config.port}",
+        f"Endpoint = {_ini_value(config.host)}:{config.port}",
         f"AllowedIPs = {allowed_ips}",
     ]
-    preshared = str(setting(config, "presharedKey", ""))
+    preshared = _ini_value(setting(config, "presharedKey", ""))
     if preshared:
         lines.insert(2, f"PresharedKey = {preshared}")
     keepalive = _int_setting(config, "persistentKeepalive", 25, 1, 65535)
@@ -58,20 +64,20 @@ def _peer_block(config: ProviderConfig) -> str:
 
 
 def _interface_block(config: ProviderConfig) -> str:
-    private_key = str(setting(config, "privateKey", "") or "").strip()
+    private_key = _ini_value(setting(config, "privateKey", "") or "")
     if not private_key:
         raise FormatRenderError(
             "WireGuard requires a client private key.",
             code="subscription_missing_fields",
             details={"missing": ["privateKey"]},
         )
-    address = str(setting(config, "address", "10.0.0.2/32"))
+    address = _ini_value(setting(config, "address", "10.0.0.2/32"))
     lines = [
         "[Interface]",
         f"PrivateKey = {private_key}",
         f"Address = {address}",
     ]
-    dns = str(setting(config, "dns", ""))
+    dns = _ini_value(setting(config, "dns", ""))
     if dns:
         lines.append(f"DNS = {dns}")
     mtu = _int_setting(config, "mtu", 1280, 1280, 65535)

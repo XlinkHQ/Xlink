@@ -5,6 +5,52 @@ import dynamic from "next/dynamic";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
+export function MetricsAreaChart({
+  cpu,
+  mem,
+  loading,
+  height = 240,
+}: {
+  cpu: { x: number; y: number }[];
+  mem: { x: number; y: number }[];
+  loading?: boolean;
+  height?: number;
+}) {
+  if (loading) return <div className="animate-pulse rounded-md bg-muted" style={{ height }} />;
+  if (cpu.length === 0 && mem.length === 0) {
+    return (
+      <div className="grid place-items-center text-sm text-fg-muted" style={{ height }}>
+        No metrics reported yet.
+      </div>
+    );
+  }
+  const options: ApexOptions = {
+    chart: { type: "area", height, toolbar: { show: false }, fontFamily: "var(--warp-font)" },
+    dataLabels: { enabled: false },
+    stroke: { curve: "smooth", width: 2.5 },
+    colors: ["#3961DB", "#33b074"],
+    fill: { type: "gradient", gradient: { opacityFrom: 0.3, opacityTo: 0.05, stops: [0, 100] } },
+    yaxis: { min: 0, max: 100, tickAmount: 4, labels: { formatter: (v) => `${Math.round(v)}%` } },
+    xaxis: { type: "datetime" },
+    legend: { position: "top", horizontalAlign: "right" },
+    grid: { borderColor: "rgba(0,0,0,0.06)" },
+    tooltip: { theme: "light", x: { format: "HH:mm" }, y: { formatter: (v) => `${v.toFixed(1)}%` } },
+  };
+  return (
+    <div style={{ height }}>
+      <ReactApexChart
+        options={options}
+        series={[
+          { name: "CPU", data: cpu },
+          { name: "Memory", data: mem },
+        ]}
+        type="area"
+        height={height}
+      />
+    </div>
+  );
+}
+
 export function UsageAreaChart({
   series,
   loading,

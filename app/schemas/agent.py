@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.agent.domain import CommandKind, DriftSeverity, ProviderHealthStatus
+
 
 class TrafficSampleIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -21,6 +23,19 @@ class TrafficReportRequest(BaseModel):
 
     batch_id: str = Field(min_length=1, max_length=128)
     samples: list[TrafficSampleIn] = Field(default_factory=list, max_length=10000)
+
+
+class ConnectionSampleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assignment_id: uuid.UUID
+    source_ip: str = Field(min_length=1, max_length=64)
+
+
+class ConnectionReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    samples: list[ConnectionSampleIn] = Field(default_factory=list, max_length=10000)
 
 
 class TrafficReportResponse(BaseModel):
@@ -50,7 +65,7 @@ class ReportedStateRequest(BaseModel):
 
 class DriftReportOut(BaseModel):
     node_id: uuid.UUID
-    severity: str
+    severity: DriftSeverity
     desired_version: str
     reported_version: str | None
     drift: dict[str, Any]
@@ -60,7 +75,7 @@ class DriftReportOut(BaseModel):
 class CommandOut(BaseModel):
     command_id: uuid.UUID
     node_id: uuid.UUID
-    kind: str
+    kind: CommandKind
     payload: dict[str, Any]
     signature: str
     origin: str
@@ -85,7 +100,7 @@ class CommandResultRequest(BaseModel):
 class EnqueueCommandRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: str
+    kind: CommandKind
     payload: dict[str, Any] = Field(default_factory=dict)
     origin: str = "operator"
     max_attempts: int = Field(default=3, ge=1, le=10)
@@ -95,9 +110,9 @@ class ProviderHealthIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider_name: str = Field(min_length=1, max_length=64)
-    status: str
+    status: ProviderHealthStatus
     latency_ms: float | None = Field(default=None, ge=0)
-    detail: str | None = None
+    detail: str | None = Field(default=None, max_length=1024)
 
 
 class ProviderHealthReportRequest(BaseModel):
@@ -126,12 +141,18 @@ class LogLineIn(BaseModel):
     level: str = Field(min_length=1, max_length=16)
     message: str = Field(min_length=1, max_length=8192)
     observed_at: datetime
+    source: str | None = Field(default=None, max_length=16)
 
 
 class LogStreamRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     lines: list[LogLineIn] = Field(default_factory=list, max_length=1000)
+
+
+class CommandResultResponse(BaseModel):
+    command_id: uuid.UUID
+    status: str
 
 
 class StreamAck(BaseModel):

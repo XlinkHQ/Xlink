@@ -39,9 +39,11 @@ class TrafficCollector:
         )
 
     def _valid(self, sample: TrafficSample) -> bool:
+
         return sample.upload_bytes >= 0 and sample.download_bytes >= 0
 
     def _row(self, node_id: uuid.UUID, sample: TrafficSample) -> dict:
+
         return {
             "assignment_id": sample.assignment_id,
             "node_id": node_id,

@@ -19,12 +19,12 @@ def _vmess_object(config: ProviderConfig) -> dict[str, str]:
     network = str(setting(config, "network", "tcp"))
     security = str(setting(config, "security", "none"))
     service_name = str(setting(config, "serviceName", "")) if network == "grpc" else ""
-    return {
+    obj = {
         "v": "2",
         "ps": label(config, encoded=False),
         "add": config.host,
         "port": str(config.port),
-        "id": config.client_id,
+        "id": config.resolved_uuid,
         "aid": str(setting(config, "alterId", 0)),
         "scy": str(setting(config, "cipher", "auto")),
         "net": network,
@@ -35,6 +35,12 @@ def _vmess_object(config: ProviderConfig) -> dict[str, str]:
         "sni": str(setting(config, "sni", "")),
         "fp": str(setting(config, "fingerprint", "")),
     }
+    if security == "reality":
+        obj["pbk"] = str(setting(config, "publicKey", setting(config, "pbk", "")))
+        obj["sid"] = str(setting(config, "shortId", setting(config, "sid", "")))
+        if not obj["fp"]:
+            obj["fp"] = str(setting(config, "fingerprint", "chrome"))
+    return obj
 
 
 def render(config: ProviderConfig) -> str:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from app.dependencies.auth import AdminUser
+from app.dependencies.auth import AdminUser, SudoAdminUser
 from app.dependencies.services import GitOpsServiceDep
 from app.gitops.schemas import (
     CommitRequest,
@@ -34,7 +34,7 @@ def _to_snapshot(gitops: GitOpsServiceDep, payload: SnapshotPayload):
 @router.post("/commit", response_model=GitOpsRecordRead)
 async def gitops_commit(
     payload: CommitRequest,
-    _admin: AdminUser,
+    _admin: SudoAdminUser,
     gitops: GitOpsServiceDep,
 ) -> GitOpsRecordRead:
     if payload.before is not None:
@@ -61,3 +61,13 @@ async def gitops_diff(
     after = _to_snapshot(gitops, payload.after)
     diff = gitops.diff(before, after)
     return DiffResponse(added=diff.added, changed=diff.changed, removed=diff.removed)
+
+
+@router.get("/records", response_model=list[GitOpsRecordRead])
+async def gitops_records(
+    _admin: AdminUser,
+    gitops: GitOpsServiceDep,
+    limit: int = 100,
+) -> list[GitOpsRecordRead]:
+    records = await gitops.list_recent(limit=min(max(limit, 1), 500))
+    return [GitOpsRecordRead.model_validate(r) for r in records]

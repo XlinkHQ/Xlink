@@ -1,29 +1,18 @@
 from __future__ import annotations
 
-import uuid
-
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict
 
-from app.dependencies.auth import AdminUser
+from app.dependencies.auth import SudoAdminUser
 from app.dependencies.services import FailoverServiceDep
 from app.failover.models import FailoverPlan, FailoverPlanItem
 from app.failover.schemas import (
     FailoverPlanItemRead,
     FailoverPlanRead,
+    FailoverPlanRequest,
     FailoverResultRead,
 )
-from app.scheduler.models import SchedulerPolicyName
 
 router = APIRouter(prefix="/failover", tags=["failover"])
-
-
-class FailoverPlanRequest(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    source_node_id: uuid.UUID
-    dry_run: bool = False
-    policy: SchedulerPolicyName = SchedulerPolicyName.BALANCED
 
 
 def _plan_read(plan: FailoverPlan) -> FailoverPlanRead:
@@ -65,7 +54,7 @@ def _plan_from_read(payload: FailoverPlanRead) -> FailoverPlan:
 @router.post("/plan", response_model=FailoverPlanRead)
 async def failover_plan(
     payload: FailoverPlanRequest,
-    _admin: AdminUser,
+    _admin: SudoAdminUser,
     failover: FailoverServiceDep,
 ) -> FailoverPlanRead:
     plan = await failover.plan(
@@ -79,7 +68,7 @@ async def failover_plan(
 @router.post("/execute", response_model=FailoverResultRead)
 async def failover_execute(
     payload: FailoverPlanRead,
-    _admin: AdminUser,
+    _admin: SudoAdminUser,
     failover: FailoverServiceDep,
 ) -> FailoverResultRead:
     result = await failover.execute(_plan_from_read(payload))

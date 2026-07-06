@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.logging import get_logger
 from app.db.session import Database
@@ -15,7 +15,6 @@ from app.domain.node import Node
 from app.domain.profile import Profile
 from app.domain.user import User
 from app.events.bus import EventBus
-from app.events.models import SubscriptionGenerated
 from app.failover.models import FailoverPlan, FailoverResult
 from app.providers.base.models import ClientSpec, ProviderKind
 from app.providers.base.registry import ProviderRegistry
@@ -48,10 +47,12 @@ class FailoverExecutor:
         events: EventBus | None = None,
         *,
         concurrency: int = _DEFAULT_CONCURRENCY,
+        cache=None,
     ) -> None:
         self._db = db
         self._providers = providers
         self._events = events
+        self._cache = cache
         self._semaphore = asyncio.Semaphore(max(1, concurrency))
 
     async def execute(self, plan: FailoverPlan) -> FailoverResult:
@@ -66,6 +67,8 @@ class FailoverExecutor:
         outcomes = await asyncio.gather(*(self._migrate_item(item) for item in plan.items))
         migrated = sum(1 for ok in outcomes if ok)
         skipped = len(outcomes) - migrated
+        if migrated:
+            await self._wake_after_migration(plan)
         return FailoverResult(
             plan_id=plan.plan_id,
             migrated=migrated,
@@ -73,9 +76,31 @@ class FailoverExecutor:
             dry_run=False,
         )
 
+    async def _wake_after_migration(self, plan: FailoverPlan) -> None:
+        # A migration moves clients between nodes, so any cached subscription
+        # feed is stale. Invalidate once per batch and push a live config change
+        # to the affected nodes.
+        if self._cache is None:
+            return
+        node_ids = {plan.source_node_id}
+        node_ids.update(i.target_node_id for i in plan.items if i.target_node_id is not None)
+        try:
+            await self._cache.delete_by_pattern("subscription:*")
+            for nid in node_ids:
+                await self._cache.publish_node_event(nid, "config_changed")
+        except Exception as exc:
+            logger.warning("failover_cache_invalidate_failed", error=str(exc))
+
     async def _migrate_item(self, item) -> bool:
         async with self._semaphore:
-            ctx = await self._load_context(item)
+            try:
+                ctx = await self._load_context(item)
+            except Exception:
+                logger.exception(
+                    "failover_load_context_failed",
+                    assignment_id=str(getattr(item, "assignment_id", None)),
+                )
+                return False
             if ctx is None:
                 return False
             new_id = uuid.uuid4()
@@ -107,13 +132,15 @@ class FailoverExecutor:
                         client_id=result.client_id,
                     )
                 return False
-            if self._events is not None:
+            if committed and self._events is not None:
+                from app.events.models import SubscriptionGenerated
+
                 await self._events.publish(
                     SubscriptionGenerated(
                         scope="user",
                         subject_id=ctx.user_id,
-                        content_hash="pending",
-                        etag='"pending"',
+                        content_hash="",
+                        etag="",
                         item_count=0,
                     )
                 )
@@ -153,6 +180,27 @@ class FailoverExecutor:
                 return False
             if await self._already_migrated(session, assignment, ctx.target_node_id):
                 return False
+
+            target_node = await session.get(Node, ctx.target_node_id)
+            if target_node is not None:
+                # Atomic check-and-increment: the capacity guard lives in the
+                # WHERE clause so a concurrent failover cannot overfill the node.
+                stmt = update(Node).where(Node.id == ctx.target_node_id)
+                if target_node.max_users is not None:
+                    stmt = stmt.where(Node.current_users < target_node.max_users)
+                result = await session.execute(
+                    stmt.values(current_users=Node.current_users + 1).execution_options(
+                        synchronize_session=False
+                    )
+                )
+                if (result.rowcount or 0) == 0:
+                    logger.warning(
+                        "failover_target_at_capacity",
+                        assignment_id=str(ctx.assignment_id),
+                        target_node_id=str(ctx.target_node_id),
+                    )
+                    return False
+
             new_assignment = ClientAssignment(
                 id=new_id,
                 user_id=ctx.user_id,
@@ -167,23 +215,13 @@ class FailoverExecutor:
             assignment.status = AssignmentStatus.DISABLED
             session.add(new_assignment)
 
-            source_node = await session.get(Node, assignment.node_id)
-            if source_node is not None:
-                source_node.current_users = max(0, source_node.current_users - 1)
-
-            target_node = await session.get(Node, ctx.target_node_id)
-            if target_node is not None:
-                if (
-                    target_node.max_users is not None
-                    and target_node.current_users >= target_node.max_users
-                ):
-                    logger.warning(
-                        "failover_target_at_capacity",
-                        assignment_id=str(ctx.assignment_id),
-                        target_node_id=str(ctx.target_node_id),
-                    )
-                    return False
-                target_node.current_users = target_node.current_users + 1
+            if assignment.node_id is not None:
+                await session.execute(
+                    update(Node)
+                    .where(Node.id == assignment.node_id, Node.current_users > 0)
+                    .values(current_users=Node.current_users - 1)
+                    .execution_options(synchronize_session=False)
+                )
 
             await session.flush()
         return True

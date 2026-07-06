@@ -1,10 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import {
   ApiError,
@@ -16,7 +16,6 @@ import {
   type ProfileRead,
   updateProfile,
 } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import { Field } from "../parts";
 import { PROTOCOLS, PROVIDERS, protocolsFor } from "./util";
 import { BOOL_KEYS, NUMERIC_KEYS, type TField, TRANSPORT_KEYS, transportFields } from "../transport";
@@ -215,173 +214,169 @@ export function ProfileDialog({
   const showGenerate = cfg.security === "reality" || protocol === "wireguard";
 
   return (
-    <div className="warp-dlg-overlay" onMouseDown={onClose}>
-      <form className="warp-dlg" onMouseDown={(e) => e.stopPropagation()} onSubmit={submit}>
-        <div className="warp-dlg-header">
-          <span className="warp-dlg-grab" />
-          <p>{profile ? "Edit Inbound" : "Add Inbound"}</p>
-        </div>
-
-        <div className="warp-dlg-body warp-dlg-body-flow">
-        <Field label="Name">
-          <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        </Field>
-        {!profile ? (
-          <>
-            <Field label="Slug">
-              <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="auto from name" />
+    <Modal
+      title={profile ? "Edit inbound" : "Add inbound"}
+      onClose={onClose}
+      onSubmit={submit}
+      width="sm:w-[40rem]"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy || !name.trim() || (!profile && !nodeId)}
+          >
+            {busy ? "Saving…" : profile ? "Save" : "Add inbound"}
+          </Button>
+        </>
+      }
+    >
+      <p className="warp-dlg-section-title">General</p>
+      {!profile ? (
+        <>
+          <div className="warp-dlg-2col">
+            <Field label="Name">
+              <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Provider (core)">
-                <Select
-                  value={provider}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setProvider(next);
-                    const allowed = protocolsFor(next);
-                    if (!allowed.includes(protocol)) setProtocol(allowed[0]);
-                  }}
-                >
-                  {providerKinds.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Node">
-                <Select value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
-                  {nodes.map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
-          </>
-        ) : (
-          <div className="rounded-md bg-subtle px-2.5 py-1.5 text-[11px] text-fg-muted">
+            <Field label="Slug" hint="auto from name if left empty">
+              <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="auto from name" autoComplete="off" />
+            </Field>
+          </div>
+          <div className="warp-dlg-2col">
+            <Field label="Provider (core)">
+              <Select
+                value={provider}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setProvider(next);
+                  const allowed = protocolsFor(next);
+                  if (!allowed.includes(protocol)) setProtocol(allowed[0]);
+                }}
+              >
+                {providerKinds.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Node">
+              <Select value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
+                {nodes.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <Field label="Protocol">
+            <Select value={protocol} onChange={(e) => setProtocol(e.target.value)}>
+              {protocolsFor(provider).map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </>
+      ) : (
+        <>
+          <div className="warp-dlg-2col">
+            <Field label="Name">
+              <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
+            </Field>
+            <Field label="Protocol">
+              <Select value={protocol} onChange={(e) => setProtocol(e.target.value)}>
+                {protocolsFor(provider).map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <p className="text-[11px] text-fg-muted">
             Core <span className="font-medium text-fg">{provider}</span> · Node{" "}
             <span className="font-medium text-fg">
               {nodes.find((n) => n.id === nodeId)?.name ?? "—"}
             </span>
+          </p>
+        </>
+      )}
+
+      {top.length > 0 ? (
+        <>
+          <div className="warp-dlg-divider" />
+          <p className="warp-dlg-section-title">Connection</p>
+          <Grid fields={top} cfg={cfg} setField={setField} />
+        </>
+      ) : null}
+
+      {network.length > 0 ? (
+        <>
+          <div className="warp-dlg-divider" />
+          <p className="warp-dlg-section-title">Network settings</p>
+          <Grid fields={network} cfg={cfg} setField={setField} />
+        </>
+      ) : null}
+
+      {security.length > 0 ? (
+        <>
+          <div className="warp-dlg-divider" />
+          <div className="flex items-center justify-between gap-3">
+            <p className="warp-dlg-section-title">Security settings</p>
+            {showGenerate ? (
+              <button
+                type="button"
+                onClick={generate}
+                disabled={genBusy}
+                className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+              >
+                {genBusy ? "Generating…" : "Generate keys"}
+              </button>
+            ) : null}
           </div>
-        )}
-        <Field label="Protocol">
-          <Select value={protocol} onChange={(e) => setProtocol(e.target.value)}>
-            {protocolsFor(provider).map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </Select>
-        </Field>
+          <Grid fields={security} cfg={cfg} setField={setField} />
+        </>
+      ) : null}
 
-        {/* Common fields — always visible */}
-        {top.length > 0 ? <Grid fields={top} cfg={cfg} setField={setField} /> : null}
+      {camouflage.length > 0 ? (
+        <>
+          <div className="warp-dlg-divider" />
+          <p className="warp-dlg-section-title">Camouflage settings</p>
+          <Grid fields={camouflage} cfg={cfg} setField={setField} />
+        </>
+      ) : null}
 
-        <div>
-        {network.length > 0 ? (
-          <Section title="Network settings" defaultOpen>
-            <Grid fields={network} cfg={cfg} setField={setField} />
-          </Section>
-        ) : null}
-        {security.length > 0 ? (
-          <Section
-            title="Security settings"
-            action={
-              showGenerate ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    generate();
-                  }}
-                  disabled={genBusy}
-                  className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
-                >
-                  {genBusy ? "Generating…" : "Generate keys"}
-                </button>
-              ) : null
-            }
-          >
-            <Grid fields={security} cfg={cfg} setField={setField} />
-          </Section>
-        ) : null}
-        {camouflage.length > 0 ? (
-          <Section title="Camouflage settings">
-            <Grid fields={camouflage} cfg={cfg} setField={setField} />
-          </Section>
-        ) : null}
-        {mux.length > 0 ? (
-          <Section title="Multiplexing">
-            <Grid fields={mux} cfg={cfg} setField={setField} />
-          </Section>
-        ) : null}
-        <Section title="Advanced (JSON)">
-          <textarea
-            value={advanced}
-            onChange={(e) => setAdvanced(e.target.value)}
-            placeholder='{ "extraKey": "value" }'
-            className="h-24 w-full resize-y rounded border border-hairline bg-transparent p-2.5 font-mono text-[11px] text-fg outline-none focus:border-primary"
-          />
-        </Section>
-        <Section title="Settings preview">
-          <pre className="max-h-48 overflow-auto rounded border border-hairline bg-muted p-2.5 font-mono text-[11px] leading-relaxed text-fg-muted">
-            {previewJson}
-          </pre>
-        </Section>
-        </div>
-        </div>
+      {mux.length > 0 ? (
+        <>
+          <div className="warp-dlg-divider" />
+          <p className="warp-dlg-section-title">Multiplexing</p>
+          <Grid fields={mux} cfg={cfg} setField={setField} />
+        </>
+      ) : null}
 
-        <div className="warp-dlg-footer">
-          <button type="button" className="warp-tb-button" onClick={onClose}>Cancel</button>
-          <button type="submit" className="warp-tb-button warp-tb-button-primary" disabled={busy || !name.trim() || (!profile && !nodeId)}>
-            {busy ? "Saving…" : profile ? "Save" : "Create"}
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
+      <div className="warp-dlg-divider" />
+      <p className="warp-dlg-section-title">Advanced (JSON)</p>
+      <Field label="Extra settings" hint="merged into the generated settings">
+        <textarea
+          value={advanced}
+          onChange={(e) => setAdvanced(e.target.value)}
+          placeholder='{ "extraKey": "value" }'
+          className="h-24 w-full resize-y rounded-lg border border-hairline bg-transparent p-2.5 font-mono text-[11px] text-fg outline-none focus:border-primary"
+        />
+      </Field>
 
-function Section({
-  title,
-  action,
-  defaultOpen,
-  children,
-}: {
-  title: string;
-  action?: ReactNode;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen ?? false);
-  return (
-    <div>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setOpen((o) => !o)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setOpen((o) => !o);
-          }
-        }}
-        className="flex w-full cursor-pointer select-none items-center justify-between gap-2 py-3 text-sm font-medium text-fg"
-      >
-        <span>{title}</span>
-        <span className="flex items-center gap-3">
-          {action}
-          <ChevronDown
-            className={cn("h-4 w-4 text-fg-muted transition-transform", open && "rotate-180")}
-          />
-        </span>
-      </div>
-      {open ? <div className="pb-4">{children}</div> : null}
-    </div>
+      <div className="warp-dlg-divider" />
+      <p className="warp-dlg-section-title">Settings preview</p>
+      <pre className="max-h-48 overflow-auto rounded-lg border border-hairline bg-muted p-2.5 font-mono text-[11px] leading-relaxed text-fg-muted">
+        {previewJson}
+      </pre>
+    </Modal>
   );
 }
 
@@ -395,7 +390,7 @@ function Grid({
   setField: (k: string, v: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="warp-dlg-2col">
       {fields.map((f) =>
         f.type === "bool" ? (
           <label key={f.key} className="col-span-2 flex items-center gap-2 text-xs text-fg">

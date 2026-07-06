@@ -17,9 +17,10 @@ PROTOCOL = "tuic"
 
 def render(config: ProviderConfig) -> str:
     require_protocol(config, PROTOCOL)
-    require_fields(config, ("client_id", "host", "port", "password"))
+    require_fields(config, ("client_id", "host", "port"))
     validate_node(config)
-    password = quote(str(setting(config, "password")))
+
+    password = quote(str(setting(config, "password", "") or config.resolved_password))
     params = query(
         {
             "sni": setting(config, "sni", setting(config, "host", "")),
@@ -30,4 +31,4 @@ def render(config: ProviderConfig) -> str:
         }
     )
     suffix = f"?{params}" if params else ""
-    return f"tuic://{quote(config.client_id)}:{password}@{config.host}:{config.port}{suffix}#{label(config)}"
+    return f"tuic://{quote(config.resolved_uuid)}:{password}@{config.host}:{config.port}{suffix}#{label(config)}"

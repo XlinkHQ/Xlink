@@ -30,6 +30,7 @@ class BaseRepository[ModelT: Base]:
         self.session.add(instance)
 
         await self.session.flush()
+        await self.session.refresh(instance)
         return instance
 
     async def add_all(self, instances: Sequence[ModelT]) -> Sequence[ModelT]:

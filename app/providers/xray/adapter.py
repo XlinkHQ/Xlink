@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 from app.providers.base.models import ClientResult, ClientSpec
@@ -9,18 +10,35 @@ from app.providers.xray.payloads import (
     OPERATION_CREATE,
     OPERATION_DELETE,
     OPERATION_UPDATE,
+    PASSWORD_PROTOCOLS,
     PROVIDER_NAME,
+    default_method_for,
+    methods_for,
 )
 from app.providers.xray.stream import build_stream_settings
 from app.providers.xray.validator import validate_spec, validate_xray_client_payload
 
+_VMESS_CIPHERS = frozenset({"auto", "aes-128-gcm", "chacha20-poly1305", "none", "zero"})
 
-def _build_client(spec: ClientSpec) -> dict[str, Any]:
+
+def _build_client(spec: ClientSpec, protocol: str) -> dict[str, Any]:
     attrs = spec.attributes
     client: dict[str, Any] = {
         "id": str(spec.client_id),
         "email": spec.email.strip() if spec.email else "",
     }
+    if protocol == "vmess":
+        cipher = str(attrs.get("cipher", "auto")).strip().lower()
+        client["security"] = cipher if cipher in _VMESS_CIPHERS else "auto"
+    if protocol in PASSWORD_PROTOCOLS:
+        password = attrs.get("password")
+        client["password"] = (
+            str(password).strip() if isinstance(password, str) and password.strip()
+            else secrets.token_urlsafe(16)
+        )
+        valid = methods_for(protocol)
+        method = str(attrs.get("method", default_method_for(protocol))).strip().lower()
+        client["method"] = method if method in valid else default_method_for(protocol)
     for field, default in CLIENT_DEFAULTS.items():
         value = attrs.get(field, default)
         try:
@@ -43,7 +61,7 @@ def _build_client_payload(spec: ClientSpec, operation: str) -> dict[str, Any]:
     payload = {
         "operation": operation,
         "protocol": protocol,
-        "client": _build_client(spec),
+        "client": _build_client(spec, protocol),
         "streamSettings": build_stream_settings(spec.attributes),
     }
     validate_xray_client_payload(payload)

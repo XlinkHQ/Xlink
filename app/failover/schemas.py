@@ -4,6 +4,16 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from app.scheduler.models import SchedulerPolicyName
+
+
+class FailoverPlanRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    source_node_id: uuid.UUID
+    dry_run: bool = False
+    policy: SchedulerPolicyName = SchedulerPolicyName.BALANCED
+
 
 class FailoverPlanItemRead(BaseModel):
     model_config = ConfigDict(frozen=True)

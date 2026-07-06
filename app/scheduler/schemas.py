@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.scheduler.models import SchedulerPolicyName
 
@@ -15,6 +15,12 @@ class SchedulerRequestSchema(BaseModel):
     policy: SchedulerPolicyName = SchedulerPolicyName.BALANCED
     dry_run: bool = False
     weights: dict[str, float] | None = None
+
+    @model_validator(mode="after")
+    def _require_weights_for_custom(self) -> SchedulerRequestSchema:
+        if self.policy == SchedulerPolicyName.CUSTOM_WEIGHTED and self.weights is None:
+            raise ValueError("weights required for CUSTOM_WEIGHTED policy")
+        return self
 
 
 class NodeScoreRead(BaseModel):

@@ -6,10 +6,17 @@ import { toast } from "@/components/ui/toast";
 import { selectDialog } from "@/components/ui/dialog";
 import {
   ApiError,
+  type FailoverPlanRead,
+  failoverExecute,
+  failoverPlan,
   getCoreTemplates,
   issueAgentCommand,
+  listInboundHosts,
+  listProfiles,
   type NodeRead,
+  nodeCores,
   nodeLogs,
+  nodeMetricsRecent,
   nodeTrafficUsage,
   nodeUsageSeries,
   provisionAgentToken,
@@ -17,13 +24,31 @@ import {
   updateCoreTemplate,
   xrayVersions,
 } from "@/lib/api";
-import { ChevronDown, Globe, Loader2, RotateCw, Upload, Wifi, WifiOff, X } from "lucide-react";
+import { Activity, ArrowRightLeft, ChevronDown, Cpu, Info, KeyRound, Layers as LayersIcon, RotateCw, Server } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { bytes } from "@/lib/format";
 import { JsonEditor } from "../json-editor";
-import { UsageAreaChart } from "../usage-chart";
+import { MetricsAreaChart, UsageAreaChart } from "../usage-chart";
+import { Spinner } from "@/components/ui/spinner";
+import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "../warp-table";
+import { SettingsSection } from "../settings-kit";
 import { isNodeOnline } from "./util";
+
+function protoBadge(p: string): string {
+  switch (p.toLowerCase()) {
+    case "vless": return "is-blue";
+    case "vmess": return "is-indigo";
+    case "trojan": return "is-pink";
+    case "shadowsocks": return "is-purple";
+    case "wireguard": return "is-orange";
+    case "hysteria":
+    case "hysteria2": return "is-teal";
+    case "tuic": return "is-cyan";
+    default: return "is-slate";
+  }
+}
 
 const XRAY_DEFAULT_TEMPLATE = JSON.stringify(
   {
@@ -45,6 +70,45 @@ const XRAY_DEFAULT_TEMPLATE = JSON.stringify(
   2,
 );
 
+const CORE_DEFAULTS: Record<string, string> = {
+  xray: XRAY_DEFAULT_TEMPLATE,
+  "sing-box": JSON.stringify(
+    {
+      log: { level: "warn" },
+      dns: { servers: [{ tag: "cf", address: "1.1.1.1" }] },
+      outbounds: [
+        { type: "direct", tag: "direct" },
+        { type: "block", tag: "block" },
+      ],
+    },
+    null,
+    2,
+  ),
+  hysteria: JSON.stringify(
+    {
+      bandwidth: { up: "100 mbps", down: "100 mbps" },
+      ignoreClientBandwidth: false,
+      masquerade: { type: "proxy", proxy: { url: "https://news.ycombinator.com/", rewriteHost: true } },
+    },
+    null,
+    2,
+  ),
+  wireguard: JSON.stringify(
+    {
+      Interface: { MTU: 1420, DNS: ["1.1.1.1"] },
+    },
+    null,
+    2,
+  ),
+};
+
+const CORE_PLACEHOLDERS: Record<string, string> = {
+  xray: '{ "dns": { "servers": ["1.1.1.1"] }, "routing": { "rules": [] } }',
+  "sing-box": '{ "log": { "level": "warn" }, "outbounds": [] }',
+  hysteria: '{ "bandwidth": { "up": "100 mbps", "down": "100 mbps" } }',
+  wireguard: '{ "Interface": { "MTU": 1420 } }',
+};
+
 function apiOrigin(): string {
   if (typeof window === "undefined") return "";
   const env = process.env.NEXT_PUBLIC_API_URL;
@@ -52,9 +116,18 @@ function apiOrigin(): string {
   return `${window.location.origin}/api/v1`;
 }
 
-function installCommand(nodeId: string, token: string): string {
+const INSTALLABLE_CORES = ["xray", "singbox", "hysteria", "wireguard"] as const;
+
+function installCommand(nodeId: string, token: string, cores: string[]): string {
   const base = apiOrigin();
-  return `curl -fsSL ${base}/agent/install.sh | XLINK_AGENT_URL=${base}/agent/xlink-agent.py sudo -E bash -s ${window.location.origin} ${nodeId} ${token}`;
+  // No env-var prefix before sudo — it sets the var on the sudo process (often
+  // stripped by sudoers) not the child bash. The installer derives the agent URL
+  // from the panel URL positional arg, so it's redundant anyway.
+  // Pass --cores only when it's a strict subset, so the default (all) stays clean.
+  const all = INSTALLABLE_CORES.length;
+  const flag =
+    cores.length && cores.length < all ? ` --cores=${cores.join(",")}` : "";
+  return `curl -fsSL ${base}/agent/install.sh | sudo -E bash -s ${window.location.origin} ${nodeId} ${token}${flag}`;
 }
 
 export function NodeDetail({
@@ -66,61 +139,53 @@ export function NodeDetail({
   onClose: () => void;
   onEdit: () => void;
 }) {
-  const [tab, setTab] = useState<"config" | "info">("config");
+  const [tab, setTab] = useState<"config" | "info" | "inbounds">("config");
   const running = isNodeOnline(node.status);
 
   return (
-    <div className="fixed inset-0 z-[55] flex justify-end bg-black/30" onMouseDown={onClose}>
-      <aside
-        onMouseDown={(e) => e.stopPropagation()}
-        className="flex h-full w-[720px] max-w-full flex-col overflow-auto border-l border-hairline bg-canvas"
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-hairline p-5">
-          <h3 className="text-lg font-medium text-fg">Settings</h3>
+    <div className="w-full px-4 pb-6 pt-0">
+      <div className="warp-pd-tabs warp-profile-tabs">
+        {(
+          [
+            ["config", "Config"],
+            ["info", "Info"],
+            ["inbounds", "Inbounds"],
+          ] as Array<["config" | "info" | "inbounds", string]>
+        ).map(([key, label]) => (
           <button
+            key={key}
             type="button"
-            onClick={onClose}
-            className="grid h-7 w-7 flex-none place-items-center rounded text-fg-muted hover:bg-muted"
+            onClick={() => setTab(key)}
+            className={cn("warp-pd-tab", tab === key && "is-active")}
           >
-            <X size={16} aria-hidden />
+            {label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        <div className="flex flex-1 flex-col gap-4 p-5">
-          <div className="warp-usettings-tabs">
-            {(
-              [
-                ["config", "Config"],
-                ["info", "Info"],
-              ] as Array<["config" | "info", string]>
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={cn("warp-usettings-tab", tab === key && "is-active")}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {tab === "config" ? <XrayBackendCard node={node} running={running} /> : null}
-          {tab === "info" ? <NodeInfo node={node} /> : null}
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-hairline p-4">
-          <button type="button" className="warp-tb-button" onClick={onClose}>Close</button>
-          <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={onEdit}>Edit</button>
-        </div>
-      </aside>
+      {tab === "config" ? <XrayBackendCard node={node} running={running} /> : null}
+      {tab === "info" ? <NodeInfo node={node} /> : null}
+      {tab === "inbounds" ? <NodeInboundsCard node={node} /> : null}
     </div>
   );
 }
 
+const CORE_LABELS: Record<string, string> = {
+  xray: "Xray",
+  "sing-box": "sing-box",
+  hysteria: "Hysteria",
+  wireguard: "WireGuard",
+};
+
 function XrayBackendCard({ node, running }: { node: NodeRead; running: boolean }) {
   const [sub, setSub] = useState<"logs" | "config">("logs");
+  const [core, setCore] = useState<string>("xray");
   const [upgrading, setUpgrading] = useState(false);
+  const coresQ = useQuery({ queryKey: ["node-cores", node.id], queryFn: () => nodeCores(node.id) });
+  const installed = (coresQ.data ?? []).map((c) => c.provider_name);
+  const cores = installed.length ? installed : ["xray"];
+  const activeCore = cores.includes(core) ? core : cores[0];
+  const isXray = activeCore === "xray";
   const md = (node.metadata ?? {}) as Record<string, unknown>;
   const version =
     md.xray_version != null
@@ -166,7 +231,10 @@ function XrayBackendCard({ node, running }: { node: NodeRead; running: boolean }
     if (!target || target === current) return;
     setUpgrading(true);
     try {
-      await issueAgentCommand(node.id, { kind: "upgrade", payload: { target_version: target } });
+      await issueAgentCommand(node.id, {
+        kind: "upgrade",
+        payload: { core: activeCore, target_version: target },
+      });
       toast("success", `Upgrade to ${target} queued — the agent applies it shortly.`);
     } catch (e) {
       toast("error", e instanceof ApiError ? e.message : "Upgrade failed.");
@@ -175,95 +243,111 @@ function XrayBackendCard({ node, running }: { node: NodeRead; running: boolean }
     }
   };
 
-  const updateGeo = async () => {
-    setUpgrading(true);
+  const [restarting, setRestarting] = useState(false);
+  const restartCore = async () => {
+    setRestarting(true);
     try {
-      await issueAgentCommand(node.id, { kind: "update_geo", payload: {} });
-      toast("success", "Geo-IP / geo-site update queued.");
+      await issueAgentCommand(node.id, { kind: "restart", payload: { core: activeCore } });
+      toast("success", `Restart of ${CORE_LABELS[activeCore] ?? activeCore} queued.`);
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Geo update failed.");
+      toast("error", e instanceof ApiError ? e.message : "Restart failed.");
     } finally {
-      setUpgrading(false);
+      setRestarting(false);
     }
   };
 
+  const coreHealth = (coresQ.data ?? []).find((c) => c.provider_name === activeCore);
+
   return (
-    <div>
-      <div className="flex flex-row items-center gap-2 pb-4">
-        <h4 className="text-base font-medium capitalize text-fg">Xray</h4>
-        <button
-          type="button"
-          className="warp-ver-pill"
-          onClick={upgrade}
-          disabled={upgrading}
-          title="Change Xray-core version"
-        >
-          {version ? `v${version}` : "Set version"}
-          <ChevronDown size={12} />
-        </button>
-        <span className={cn("warp-tb-badge", running ? "green" : "red")}>
-          {running ? <Wifi size={12} /> : <WifiOff size={12} />} {running ? "Running" : "Offline"}
-        </span>
-        <button
-          type="button"
-          className="warp-tb-iconbtn"
-          style={{ marginLeft: "auto" }}
-          onClick={updateGeo}
-          disabled={upgrading}
-          title="Update geo-IP / geo-site"
-        >
-          <Globe size={14} />
-        </button>
-        <button
-          type="button"
-          className="warp-tb-iconbtn"
-          onClick={upgrade}
-          disabled={upgrading}
-          title="Upgrade Xray core"
-        >
-          {upgrading ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
-        </button>
-      </div>
-      <div>
-        <div className="warp-usettings-tabs mb-3">
+    <div className="warp-settings-card">
+      <SettingsSection icon={Server} title="Cores" description="Version, runtime status, logs and configuration per installed core.">
+        <div className="warp-xray-head">
+          <select
+            className="warp-ver-pill warp-core-select"
+            value={activeCore}
+            onChange={(e) => setCore(e.target.value)}
+            title="Select core"
+          >
+            {cores.map((k) => (
+              <option key={k} value={k}>
+                {CORE_LABELS[k] ?? k}
+              </option>
+            ))}
+          </select>
+          {(() => {
+            const st = coreHealth?.status?.toLowerCase();
+            const ok = st
+              ? ["healthy", "online", "connected", "running", "ok", "idle"].includes(st)
+              : running;
+            const label = coreHealth ? (ok ? "Healthy" : coreHealth.status) : running ? "Running" : "Offline";
+            return (
+              <span className={cn("warp-badge", ok ? "success" : "neutral")}>{label}</span>
+            );
+          })()}
+          {isXray ? (
+            <button
+              type="button"
+              className="warp-ver-pill"
+              onClick={upgrade}
+              disabled={upgrading}
+              title="Change Xray-core version"
+            >
+              {upgrading ? <Spinner size={12} /> : null}
+              {version ? `v${version}` : "Set version"}
+              <ChevronDown size={12} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="warp-ver-pill"
+            onClick={restartCore}
+            disabled={restarting}
+            title={`Restart ${CORE_LABELS[activeCore] ?? activeCore}`}
+          >
+            {restarting ? <Spinner size={12} /> : null}
+            Restart
+          </button>
+        </div>
+        <div className="warp-pd-tabs warp-xray-tabs">
           {(
             [
               ["logs", "Logs"],
-              ["config", "Config"],
+              ["config", "Core config"],
             ] as Array<["logs" | "config", string]>
           ).map(([key, label]) => (
             <button
               key={key}
               type="button"
               onClick={() => setSub(key)}
-              className={cn("warp-usettings-tab", sub === key && "is-active")}
+              className={cn("warp-pd-tab", sub === key && "is-active")}
             >
               {label}
             </button>
           ))}
         </div>
         {sub === "logs" ? (
-          <NodeLogs nodeId={node.id} />
+          <NodeLogs nodeId={node.id} source={activeCore} />
         ) : (
-          <CoreConfig node={node} />
+          <CoreConfig node={node} core={activeCore} />
         )}
-      </div>
+      </SettingsSection>
     </div>
   );
 }
 
-function CoreConfig({ node }: { node: NodeRead }) {
+function CoreConfig({ node, core }: { node: NodeRead; core: string }) {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["core-templates"], queryFn: () => getCoreTemplates() });
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [restarting, setRestarting] = useState(false);
 
-  const remoteRaw = q.data?.templates?.xray ?? "";
-  const remote = remoteRaw.trim() && remoteRaw.trim() !== "{}" ? remoteRaw : XRAY_DEFAULT_TEMPLATE;
+  const remoteRaw = q.data?.templates?.[core] ?? "";
+  const remote =
+    remoteRaw.trim() && remoteRaw.trim() !== "{}" ? remoteRaw : CORE_DEFAULTS[core] ?? "{}";
   useEffect(() => {
     if (q.data) setText(remote);
-  }, [q.data, remote]);
+  }, [q.data, remote, core]);
 
   const dirty = q.data ? text !== remote : false;
   const valid = (() => {
@@ -278,9 +362,9 @@ function CoreConfig({ node }: { node: NodeRead }) {
   const save = async () => {
     setBusy(true);
     try {
-      const res = await updateCoreTemplate("xray", text || "{}");
+      const res = await updateCoreTemplate(core, text || "{}");
       qc.setQueryData(["core-templates"], res);
-      toast("success", "Core template saved — nodes apply it instantly.");
+      toast("success", `${core} template saved — nodes apply it instantly.`);
     } catch (e) {
       toast("error", e instanceof ApiError ? e.message : "Save failed.");
     } finally {
@@ -305,9 +389,9 @@ function CoreConfig({ node }: { node: NodeRead }) {
       <JsonEditor
         value={q.isLoading ? "Loading…" : text}
         onChange={setText}
-        rows={26}
+        rows={24}
         disabled={q.isLoading}
-        placeholder='{ "dns": { "servers": ["1.1.1.1"] }, "routing": { "rules": [] } }'
+        placeholder={CORE_PLACEHOLDERS[core]}
       />
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -335,12 +419,45 @@ function CoreConfig({ node }: { node: NodeRead }) {
 function NodeInfo({ node }: { node: NodeRead }) {
   const [token, setToken] = useState<string | null>(null);
   const [tokenBusy, setTokenBusy] = useState(false);
+  const [coresSel, setCoresSel] = useState<string[]>([...INSTALLABLE_CORES]);
+  const [drainPlan, setDrainPlan] = useState<FailoverPlanRead | null>(null);
+  const [drainBusy, setDrainBusy] = useState(false);
   const usageQuery = useQuery({
     queryKey: ["node-usage", node.id],
     queryFn: () => nodeTrafficUsage(),
   });
+  const coresQuery = useQuery({
+    queryKey: ["node-cores", node.id],
+    queryFn: () => nodeCores(node.id),
+  });
   const measured = usageQuery.data?.find((u) => u.node_id === node.id)?.total_bytes ?? 0;
   const healthy = isNodeOnline(node.status);
+
+  const coreOk = (s: string) => ["healthy", "online", "connected", "running", "ok"].includes(s.toLowerCase());
+
+  const openDrain = async () => {
+    setDrainBusy(true);
+    try {
+      setDrainPlan(await failoverPlan(node.id, true));
+    } catch (e) {
+      toast("error", e instanceof ApiError ? e.message : "Could not build failover plan.");
+    } finally {
+      setDrainBusy(false);
+    }
+  };
+  const runDrain = async () => {
+    if (!drainPlan) return;
+    setDrainBusy(true);
+    try {
+      const res = await failoverExecute(drainPlan);
+      toast("success", `${res.migrated} migrated, ${res.skipped} skipped.`);
+      setDrainPlan(null);
+    } catch (e) {
+      toast("error", e instanceof ApiError ? e.message : "Failover failed.");
+    } finally {
+      setDrainBusy(false);
+    }
+  };
 
   const genToken = async () => {
     setTokenBusy(true);
@@ -370,48 +487,36 @@ function NodeInfo({ node }: { node: NodeRead }) {
   ];
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <div className="pb-2">
-          <h4 className="text-base font-medium text-fg">Details</h4>
+    <div className="warp-settings-card">
+      <SettingsSection icon={Info} title="Details" description="Core connection details for this node.">
+        <div className="warp-pd-form">
+          {rows.map(([k, v]) => (
+            <div key={String(k)} className="warp-pd-row">
+              <span className="warp-pd-row-label">{k}</span>
+              <span className="warp-pd-row-value">{v}</span>
+            </div>
+          ))}
         </div>
-        <table className="w-full text-sm">
-          <tbody>
-            {rows.map(([k, v]) => (
-              <tr key={k}>
-                <td className="py-2.5 align-middle text-fg-muted">{k}</td>
-                <td className="py-2.5 text-right align-middle font-medium text-fg">{v}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      </SettingsSection>
 
-      <div>
+      <SettingsSection divider icon={Activity} title="Node Traffic Usage" description="Total traffic served through this node.">
         <div className="flex items-end justify-between gap-3 pb-3">
-          <div>
-            <h4 className="text-base font-medium text-fg">Node Traffic Usage</h4>
-            <p className="mt-1 text-sm text-fg-muted">Total traffic usage on this node</p>
-          </div>
+          <span className="text-sm text-fg-muted">Last 24 hours</span>
           <div className="flex flex-col items-end">
             <span className="text-2xl font-medium leading-none text-fg">{bytes(measured)}</span>
             <span className="text-sm text-fg-muted">Total</span>
           </div>
         </div>
-        <div className="py-2">
-          <NodeUsageChart nodeId={node.id} />
-        </div>
-      </div>
+        <NodeUsageChart nodeId={node.id} />
+      </SettingsSection>
 
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="warp-copyfield-title">Agent connection</span>
-          <button
-            type="button"
-            className="warp-tb-button"
-            onClick={genToken}
-            disabled={tokenBusy}
-          >
+      <SettingsSection divider icon={Cpu} title="Node health" description="CPU and memory reported by the node agent.">
+        <NodeMetricsChart nodeId={node.id} />
+      </SettingsSection>
+
+      <SettingsSection divider icon={KeyRound} title="Agent connection" description="Generate a token to get the node ID, token and one-line install command.">
+        <div className="flex items-center justify-end">
+          <button type="button" className="warp-dg-btn secondary" onClick={genToken} disabled={tokenBusy}>
             {tokenBusy ? "Generating…" : token ? "Regenerate token" : "Generate token"}
           </button>
         </div>
@@ -419,16 +524,148 @@ function NodeInfo({ node }: { node: NodeRead }) {
           <div className="mt-4 flex flex-col gap-3">
             <CopyField label="Node ID" value={node.id} />
             <CopyField label="Agent token" value={token} />
-            <CopyField label="One-line install (run on the node as root)" value={installCommand(node.id, token)} />
+            <div className="flex flex-col gap-2">
+              <span className="warp-field-label">Cores to install</span>
+              <div className="flex flex-wrap gap-3">
+                {INSTALLABLE_CORES.map((c) => {
+                  const on = coresSel.includes(c);
+                  return (
+                    <label key={c} className="flex items-center gap-1.5 text-[13px] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={c === "xray"}
+                        onChange={(e) =>
+                          setCoresSel((s) =>
+                            e.target.checked ? [...new Set([...s, c])] : s.filter((x) => x !== c),
+                          )
+                        }
+                      />
+                      {CORE_LABELS[c === "singbox" ? "sing-box" : c] ?? c}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <CopyField label="One-line install (run on the node as root)" value={installCommand(node.id, token, coresSel)} />
             <p className="warp-copyfield-hint">Shown once — store it now.</p>
           </div>
-        ) : (
-          <p className="warp-copyfield-hint mt-3">
-            Generate a token to get the node ID, token, and a one-line install command.
+        ) : null}
+      </SettingsSection>
+
+      <SettingsSection divider icon={Cpu} title="Cores" description="Per-core health and latency reported by this node.">
+        <WarpTableCard className="warp-users-table">
+          <WarpHead cols={["Provider", "Status", "Latency", "Checked"]} />
+          {coresQuery.isLoading ? (
+            <WarpSkeleton />
+          ) : (coresQuery.data ?? []).length === 0 ? (
+            <WarpEmpty icon="fa-server">No core health reported yet.</WarpEmpty>
+          ) : (
+            (coresQuery.data ?? []).map((c) => (
+              <WarpRow
+                key={c.provider_name}
+                cells={[
+                  <span className="font-medium">{c.provider_name}</span>,
+                  <span className={`warp-badge ${coreOk(c.status) ? "success" : "critical"}`}>{c.status}</span>,
+                  <span className="text-fg-muted">{c.latency_ms != null ? `${Math.round(c.latency_ms)} ms` : "—"}</span>,
+                  <span className="text-fg-muted">{c.checked_at ? new Date(c.checked_at).toLocaleString() : "—"}</span>,
+                ]}
+              />
+            ))
+          )}
+        </WarpTableCard>
+      </SettingsSection>
+
+      <SettingsSection divider icon={ArrowRightLeft} title="Failover" description="Migrate all clients off this node to healthy nodes.">
+        <div className="flex items-center justify-end">
+          <button type="button" className="warp-dg-btn secondary" onClick={openDrain} disabled={drainBusy}>
+            {drainBusy ? "Planning…" : "Drain node"}
+          </button>
+        </div>
+      </SettingsSection>
+
+      {drainPlan ? (
+        <Modal
+          title="Drain node"
+          onClose={() => setDrainPlan(null)}
+          footer={
+            <>
+              <button type="button" className="warp-tb-button" onClick={() => setDrainPlan(null)} disabled={drainBusy}>
+                Cancel
+              </button>
+              <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={runDrain} disabled={drainBusy || drainPlan.items.length === 0}>
+                {drainBusy ? "Migrating…" : "Migrate"}
+              </button>
+            </>
+          }
+        >
+          <p className="text-sm text-fg-muted" style={{ marginBottom: 12 }}>
+            {drainPlan.items.length === 0
+              ? "Nothing to migrate — no active assignments on this node."
+              : `${drainPlan.items.length} assignment(s) will be migrated to healthy nodes.`}
           </p>
-        )}
-      </div>
+          {drainPlan.items.length > 0 ? (
+            <WarpTableCard className="warp-users-table">
+              <WarpHead cols={["Profile", "User", "Target node"]} />
+              {drainPlan.items.map((it) => (
+                <WarpRow
+                  key={it.assignment_id}
+                  cells={[
+                    <span className="warp-tb-mono">{it.profile_id.slice(0, 8)}</span>,
+                    <span className="warp-tb-mono">{it.user_id.slice(0, 8)}</span>,
+                    <span className="warp-tb-mono">{it.target_node_id.slice(0, 8)}</span>,
+                  ]}
+                />
+              ))}
+            </WarpTableCard>
+          ) : null}
+        </Modal>
+      ) : null}
     </div>
+  );
+}
+
+function NodeInboundsCard({ node }: { node: NodeRead }) {
+  const profilesQuery = useQuery({ queryKey: ["profiles"], queryFn: () => listProfiles() });
+  const hostsQuery = useQuery({
+    queryKey: ["inbound-hosts", "all"],
+    queryFn: () => listInboundHosts(),
+  });
+
+  const profiles = (profilesQuery.data?.items ?? []).filter((p) => p.node_id === node.id);
+  const hosts = hostsQuery.data ?? [];
+  const loading = profilesQuery.isLoading;
+
+  const addressesFor = (profileId: string): string => {
+    const addrs = hosts
+      .filter((h) => h.profile_id === profileId)
+      .map((h) => (h.port != null ? `${h.address ?? "?"}:${h.port}` : h.address ?? ""))
+      .filter(Boolean);
+    return addrs.length ? addrs.join(", ") : "—";
+  };
+
+  return (
+      <WarpTableCard className="warp-users-table">
+        <WarpHead cols={["Name", "Protocol", "Addresses"]} />
+        {loading ? (
+          <WarpSkeleton />
+        ) : profiles.length === 0 ? (
+          <WarpEmpty icon="fa-plug">No inbounds on this node yet.</WarpEmpty>
+        ) : (
+          profiles.map((p) => (
+            <WarpRow
+              key={p.id}
+              cells={[
+                <span key="n" className="font-medium">{p.name}</span>,
+                <span key="p" className={`warp-proto-badge ${protoBadge(p.protocol)}`}>
+                  {p.protocol}
+                </span>,
+                <span key="a" className="text-fg-muted">{addressesFor(p.id)}</span>,
+              ]}
+            />
+          ))
+        )}
+      </WarpTableCard>
   );
 }
 
@@ -438,6 +675,27 @@ function NodeUsageChart({ nodeId }: { nodeId: string }) {
     queryFn: () => nodeUsageSeries(nodeId, 24),
   });
   return <UsageAreaChart series={q.data ?? []} loading={q.isLoading} />;
+}
+
+function NodeMetricsChart({ nodeId }: { nodeId: string }) {
+  const q = useQuery({
+    queryKey: ["node-metrics", nodeId],
+    queryFn: () => nodeMetricsRecent(nodeId, 120),
+    refetchInterval: 15000,
+  });
+  const samples = q.data ?? [];
+  const pick = (name: string) =>
+    samples
+      .filter((s) => s.name === name)
+      .map((s) => ({ x: new Date(s.observed_at).getTime(), y: s.value }))
+      .sort((a, b) => a.x - b.x);
+  return (
+    <MetricsAreaChart
+      cpu={pick("cpu_percent")}
+      mem={pick("memory_percent")}
+      loading={q.isLoading}
+    />
+  );
 }
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -466,10 +724,10 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function NodeLogs({ nodeId }: { nodeId: string }) {
+function NodeLogs({ nodeId, source }: { nodeId: string; source?: string }) {
   const q = useQuery({
-    queryKey: ["node-logs", nodeId],
-    queryFn: () => nodeLogs(nodeId),
+    queryKey: ["node-logs", nodeId, source ?? "all"],
+    queryFn: () => nodeLogs(nodeId, 100, source),
     refetchInterval: 10000,
   });
   const logs = q.data ?? [];

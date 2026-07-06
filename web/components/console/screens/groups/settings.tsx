@@ -7,29 +7,40 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import {
   ApiError,
   type AssignmentRead,
   type GroupRead,
   listUsers,
+  onlineUsers,
   type ProfileRead,
   updateGroup,
   type UserRead,
 } from "@/lib/api";
 import { bytes } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { Drawer } from "../parts";
+import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "../warp-table";
 
-const TABS = [
-  ["inbounds", "Inbounds"],
-  ["users", "Users"],
-] as const;
 const PAGE_SIZE = 10;
+
+function protoBadge(p: string): string {
+  switch (p.toLowerCase()) {
+    case "vless": return "is-blue";
+    case "vmess": return "is-indigo";
+    case "trojan": return "is-pink";
+    case "shadowsocks": return "is-purple";
+    case "wireguard": return "is-orange";
+    case "hysteria":
+    case "hysteria2": return "is-teal";
+    case "tuic": return "is-cyan";
+    default: return "is-slate";
+  }
+}
 
 export function ServiceSettings({
   group,
@@ -48,30 +59,29 @@ export function ServiceSettings({
   onEdit: () => void;
   onSaved: () => void;
 }) {
-  const [tab, setTab] = useState<string>("inbounds");
+  const [tab, setTab] = useState<"inbounds" | "users">("inbounds");
 
   return (
-    <Drawer title="Settings" width="w-[720px]" onClose={onClose} onEdit={onEdit}>
-      <div className="warp-usettings-tabs">
-        {TABS.map(([key, label]) => (
+    <div className="w-full px-4 pb-6 pt-0">
+      <div className="warp-pd-tabs warp-profile-tabs">
+        {([["inbounds", "Inbounds"], ["users", "Users"]] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
             onClick={() => setTab(key)}
-            className={cn("warp-usettings-tab", tab === key && "is-active")}
+            className={cn("warp-pd-tab", tab === key && "is-active")}
           >
             {label}
           </button>
         ))}
       </div>
 
-      <div className="mt-4">
-        {tab === "inbounds" ? (
-          <InboundsTab group={group} profiles={profiles} nodeName={nodeName} onSaved={onSaved} />
-        ) : null}
-        {tab === "users" ? <UsersTab group={group} assignments={assignments} /> : null}
-      </div>
-    </Drawer>
+      {tab === "inbounds" ? (
+        <InboundsTab group={group} profiles={profiles} nodeName={nodeName} onSaved={onSaved} />
+      ) : (
+        <UsersTab group={group} assignments={assignments} />
+      )}
+    </div>
   );
 }
 
@@ -95,25 +105,11 @@ function InboundsTab({
   const rows = profiles.slice(start, start + PAGE_SIZE);
   const allOnPage = rows.length > 0 && rows.every((p) => selected.has(p.id));
 
-  const toggle = (id: string) =>
-    setSelected((s) => {
-      const n = new Set(s);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
-  const toggleAll = () =>
-    setSelected((s) => {
-      const n = new Set(s);
-      if (allOnPage) rows.forEach((p) => n.delete(p.id));
-      else rows.forEach((p) => n.add(p.id));
-      return n;
-    });
-
-  const apply = async () => {
+  const persist = async (next: Set<string>) => {
+    setSelected(next);
     setBusy(true);
     try {
-      await updateGroup(group.id, { name: group.name, profile_ids: [...selected] });
-      toast("success", "Service inbounds updated.");
+      await updateGroup(group.id, { name: group.name, profile_ids: [...next] });
       onSaved();
     } catch (e) {
       toast("error", e instanceof ApiError ? e.message : "Update failed.");
@@ -121,54 +117,52 @@ function InboundsTab({
       setBusy(false);
     }
   };
+  const toggle = (id: string) => {
+    const n = new Set(selected);
+    n.has(id) ? n.delete(id) : n.add(id);
+    persist(n);
+  };
+  const toggleAll = () => {
+    const n = new Set(selected);
+    if (allOnPage) rows.forEach((p) => n.delete(p.id));
+    else rows.forEach((p) => n.add(p.id));
+    persist(n);
+  };
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="overflow-hidden rounded-lg border border-hairline">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-hairline text-left">
-              <th className="w-10 px-3 py-2.5">
-                <CheckBox checked={allOnPage} onChange={toggleAll} />
-              </th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Tag</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Protocol</th>
-              <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Nodes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr
-                key={p.id}
-                onClick={() => toggle(p.id)}
-                className="cursor-pointer border-b border-hairline transition-colors last:border-0 hover:bg-muted"
-              >
-                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <CheckBox checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
-                </td>
-                <td className="px-3 py-2.5 font-medium text-fg">{p.name}</td>
-                <td className="px-3 py-2.5">
-                  <Badge tone="neutral">{p.protocol}</Badge>
-                </td>
-                <td className="px-3 py-2.5">
-                  <Badge tone="muted">{nodeName(p.node_id)}</Badge>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-3 py-8 text-center text-xs text-fg-muted">
-                  No inbounds available.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      <WarpTableCard className="warp-users-table">
+        <WarpHead
+          cols={[
+            <input key="all" type="checkbox" className="warp-tb-check" checked={allOnPage} onChange={toggleAll} onClick={(e) => e.stopPropagation()} />,
+            "Tag",
+            "Protocol",
+            "Nodes",
+          ]}
+        />
+        {rows.length === 0 ? (
+          <WarpEmpty icon="fa-globe">No inbounds available.</WarpEmpty>
+        ) : (
+          rows.map((p) => (
+            <WarpRow
+              key={p.id}
+              onClick={() => toggle(p.id)}
+              cells={[
+                <span key="c" className="warp-tb-idcell" onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" className="warp-tb-check" checked={selected.has(p.id)} onChange={() => toggle(p.id)} />
+                </span>,
+                <span key="n" className="font-medium">{p.name}</span>,
+                <span key="p" className={`warp-proto-badge ${protoBadge(p.protocol)}`}>{p.protocol}</span>,
+                <span key="nd" className="text-fg-muted">{nodeName(p.node_id)}</span>,
+              ]}
+            />
+          ))
+        )}
+      </WarpTableCard>
 
       <div className="flex items-center justify-between gap-3 text-xs text-fg-muted">
         <span>
-          {selected.size} / {profiles.length} selected
+          {busy ? "Saving…" : `${selected.size} / ${profiles.length} selected`}
         </span>
         <div className="flex items-center gap-1">
           <span className="mr-2">
@@ -191,15 +185,6 @@ function InboundsTab({
           </PageBtn>
         </div>
       </div>
-
-      <button
-        type="button"
-        className="warp-tb-button warp-tb-button-primary flex w-full justify-center"
-        onClick={apply}
-        disabled={busy}
-      >
-        {busy ? "Applying…" : "Apply"}
-      </button>
     </div>
   );
 }
@@ -212,6 +197,8 @@ function UsersTab({
   assignments: AssignmentRead[];
 }) {
   const usersQuery = useQuery({ queryKey: ["users", "all"], queryFn: () => listUsers({ size: 500 }) });
+  const onlineQuery = useQuery({ queryKey: ["users-online"], queryFn: () => onlineUsers(), refetchInterval: 30000 });
+  const onlineSet = new Set(onlineQuery.data?.user_ids ?? []);
   const users = (usersQuery.data?.items ?? []) as UserRead[];
   const members = useMemo(() => {
     const inbounds = new Set(group.profile_ids);
@@ -220,42 +207,37 @@ function UsersTab({
     return users.filter((u) => ids.has(u.id));
   }, [group.profile_ids, assignments, users]);
 
+  const now = Date.now();
+
   return (
-    <div className="overflow-hidden rounded-lg border border-hairline">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-hairline text-left">
-            <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Username</th>
-            <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Activated</th>
-            <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Used Traffic</th>
-            <th className="px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Expire Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {members.map((u) => (
-            <tr key={u.id} className="border-b border-hairline last:border-0">
-              <td className="px-3 py-2.5 font-medium text-fg">{u.username}</td>
-              <td className="px-3 py-2.5">
-                <Badge tone={u.is_active ? "success" : "muted"}>
-                  {u.is_active ? "Active" : "Disabled"}
-                </Badge>
-              </td>
-              <td className="px-3 py-2.5 text-fg-muted">{bytes(u.users_data_usage ?? 0)}</td>
-              <td className="px-3 py-2.5 text-fg-muted">
-                {u.expire_at ? u.expire_at.slice(0, 10) : "—"}
-              </td>
-            </tr>
-          ))}
-          {members.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="px-3 py-8 text-center text-xs text-fg-muted">
-                No users in this service yet.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
+    <WarpTableCard className="warp-users-table">
+      <WarpHead cols={["Username", "Online", "Status", "Used Traffic", "Expiration"]} />
+      {usersQuery.isLoading ? (
+        <WarpSkeleton />
+      ) : members.length === 0 ? (
+        <WarpEmpty icon="fa-user">No users in this service yet.</WarpEmpty>
+      ) : (
+        members.map((u) => {
+          const expired = u.expire_at != null && Date.parse(u.expire_at) < now;
+          return (
+            <WarpRow
+              key={u.id}
+              cells={[
+                <span className="font-medium">{u.username}</span>,
+                <span className={`warp-badge ${onlineSet.has(u.id) ? "success" : "neutral"}`}>
+                  {onlineSet.has(u.id) ? "Online" : "Offline"}
+                </span>,
+                <span className={`warp-badge ${!u.is_active ? "critical" : expired ? "critical" : "success"}`}>
+                  {!u.is_active ? "Disabled" : expired ? "Expired" : "Active"}
+                </span>,
+                <span className="text-fg-muted">{bytes(u.users_data_usage ?? 0)}</span>,
+                <span className="text-fg-muted">{u.expire_at ? u.expire_at.slice(0, 10) : "Never"}</span>,
+              ]}
+            />
+          );
+        })
+      )}
+    </WarpTableCard>
   );
 }
 

@@ -36,11 +36,32 @@ def _hasher() -> PasswordHasher:
     )
 
 
+def validate_password_strength(password: str) -> str:
+    digits = sum(c.isdigit() for c in password)
+    uppers = sum(c.isupper() for c in password)
+    lowers = sum(c.islower() for c in password)
+    specials = sum(not c.isalnum() for c in password)
+    failures = []
+    if digits < 2:
+        failures.append("at least 2 digits")
+    if uppers < 2:
+        failures.append("at least 2 uppercase letters")
+    if lowers < 2:
+        failures.append("at least 2 lowercase letters")
+    if specials < 1:
+        failures.append("at least 1 special character")
+    if failures:
+        raise ValueError("Password must contain " + ", ".join(failures) + ".")
+    return password
+
+
 def hash_password(password: str) -> str:
     return _hasher().hash(password)
 
 
-def verify_password(password: str, password_hash: str) -> bool:
+def verify_password(password: str, password_hash: str | None) -> bool:
+    if not password_hash:
+        return False
     try:
         return _hasher().verify(password_hash, password)
     except (VerifyMismatchError, InvalidHashError):

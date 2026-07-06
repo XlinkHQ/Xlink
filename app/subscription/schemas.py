@@ -20,6 +20,7 @@ class RenderVersion(StrEnum):
 class SubscriptionFormat(StrEnum):
     TEXT = "text"
     BASE64 = "base64"
+    XRAY_JSON = "xray_json"
     SINGBOX_JSON = "singbox_json"
     MIHOMO_YAML = "mihomo_yaml"
     CLASH_YAML = "clash_yaml"
@@ -43,6 +44,8 @@ class FeedRequest(BaseModel):
     version: RenderVersion = RenderVersion.V1
     format: SubscriptionFormat = SubscriptionFormat.TEXT
     use_cache: bool = True
+
+    shuffle: bool = False
 
 
 class ConfigRead(BaseModel):

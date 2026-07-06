@@ -177,7 +177,7 @@ def test_events_are_typed_and_immutable() -> None:
 
     assert event.event_name == "AssignmentDisabled"
     with pytest.raises(FrozenInstanceError):
-        event.provider_kind = ProviderKind.SING_BOX  # type: ignore[misc]
+        event.provider_kind = ProviderKind.SING_BOX
 
 
 def test_default_handlers_register_all_domain_events() -> None:

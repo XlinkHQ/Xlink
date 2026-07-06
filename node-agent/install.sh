@@ -48,23 +48,72 @@ install_xray() {
     skip "xray present ($(xray version 2>/dev/null | head -1 | awk '{print $2}'))"; return
   fi
   bash <(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh) install >/dev/null 2>&1 &&
-    ok "xray installed" || die "xray install failed."
+    ok "xray installed" || warn "xray install failed (transient GitHub/network? retry: xlink core-update xray)"
+}
+
+_ensure_cert() {
+    # sing-box/hysteria TLS inbounds point at /etc/ssl/xlink/{cert,key}.pem. If
+    # the panel doesn't push inline cert material, those files must still exist
+    # or `sing-box check` fails and NOTHING applies. Generate a self-signed cert
+    # once (clients using REALITY/uTLS or trusting the SNI don't need a CA-signed
+    # one; a real cert can replace it later).
+    local d=/etc/ssl/xlink
+    [ -s "$d/cert.pem" ] && [ -s "$d/key.pem" ] && return 0
+    command -v openssl >/dev/null 2>&1 || {
+        (apt-get install -y openssl >/dev/null 2>&1 || yum install -y openssl >/dev/null 2>&1 || true)
+    }
+    command -v openssl >/dev/null 2>&1 || { warn "openssl missing — TLS cores may not start"; return 0; }
+    mkdir -p "$d"
+    openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+        -keyout "$d/key.pem" -out "$d/cert.pem" -subj "/CN=xlink.local" >/dev/null 2>&1 \
+        && chmod 600 "$d/key.pem" && ok "self-signed TLS cert ready" \
+        || warn "could not generate TLS cert"
+}
+
+_ensure_swap() {
+    # A from-source sing-box build needs ~1.5G+; add a temp swapfile if the box
+    # is short on memory so the build isn't OOM-killed (silent "build failed").
+    local mem_kb swap_kb total_mb
+    mem_kb="$(grep -i '^MemTotal:' /proc/meminfo 2>/dev/null | awk '{print $2}')"
+    swap_kb="$(grep -i '^SwapTotal:' /proc/meminfo 2>/dev/null | awk '{print $2}')"
+    total_mb=$(( ( ${mem_kb:-0} + ${swap_kb:-0} ) / 1024 ))
+    [ "$total_mb" -ge 1500 ] && return 0
+    [ -f /swapfile ] && return 0
+    log "adding 2G swap for the sing-box build"
+    if fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 2>/dev/null; then
+        chmod 600 /swapfile && mkswap /swapfile >/dev/null 2>&1 && swapon /swapfile 2>/dev/null && ok "swap enabled" || true
+    fi
 }
 
 _sb_has_v2ray() { command -v sing-box >/dev/null 2>&1 && sing-box version 2>/dev/null | grep -q with_v2ray_api; }
 install_singbox() {
   log "sing-box core (v2ray_api traffic stats)"
   if _sb_has_v2ray; then skip "sing-box (v2ray_api) present"; _singbox_unit; return; fi
-  local gv="1.24.7"
-  if [ ! -x /usr/local/go/bin/go ] || ! /usr/local/go/bin/go version 2>/dev/null | grep -q "go1.2[4-9]"; then
-    if curl -fsSL "https://go.dev/dl/go${gv}.linux-${GOARCH}.tar.gz" -o /tmp/go.tgz; then
-      rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tgz && ok "Go ${gv}"
-    else warn "Go download failed — sing-box stats unavailable"; fi
+  # Resolve the current stable Go from go.dev, then fall back through known-good
+  # pins. go.dev/VERSION sometimes reports a version whose tarball is not yet on
+  # the download mirror (404), so we try each candidate until one downloads.
+  local gv; gv="$(curl -fsSL "https://go.dev/VERSION?m=text" 2>/dev/null | head -1 | sed 's/^go//')"
+  # Accept any go1.2x or go1.3x+ (avoid re-downloading a perfectly new Go).
+  if [ ! -x /usr/local/go/bin/go ] || ! /usr/local/go/bin/go version 2>/dev/null | grep -qE "go1\.(2[3-9]|[3-9][0-9])"; then
+    local got=0 cand
+    for cand in "$gv" 1.25.4 1.24.4 1.23.4; do
+      [ -n "$cand" ] || continue
+      if curl -fsSL "https://go.dev/dl/go${cand}.linux-${GOARCH}.tar.gz" -o /tmp/go.tgz && [ -s /tmp/go.tgz ]; then
+        rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tgz && ok "Go ${cand}" && got=1 && break
+      fi
+    done
+    [ "$got" = 1 ] || warn "Go download failed — sing-box stats unavailable"
   fi
   if [ -x /usr/local/go/bin/go ]; then
+    # Ensure enough memory for the build (sing-box build is RAM-hungry; low-RAM
+    # VPS OOM-kill it silently). Add a temporary swapfile if RAM+swap < ~1.5G.
+    _ensure_swap
+    # Pin a known-good sing-box tag rather than @latest — a broken main/HEAD
+    # would fail the build or emit a binary the agent's config can't feed.
+    local sbver="${XLINK_SINGBOX_VERSION:-v1.11.15}"
     GOBIN=/usr/local/bin GOTOOLCHAIN=auto /usr/local/go/bin/go install \
       -tags "with_quic,with_grpc,with_v2ray_api,with_clash_api,with_gvisor,with_utls" \
-      github.com/sagernet/sing-box/cmd/sing-box@latest >/dev/null 2>&1 || warn "sing-box build failed"
+      "github.com/sagernet/sing-box/cmd/sing-box@${sbver}" >/dev/null 2>&1 || warn "sing-box build failed (low RAM? add swap)"
     command -v grpcurl >/dev/null 2>&1 || GOBIN=/usr/local/bin GOTOOLCHAIN=auto /usr/local/go/bin/go install \
       github.com/fullstorydev/grpcurl/cmd/grpcurl@latest >/dev/null 2>&1 || true
   fi
@@ -98,7 +147,7 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 UNIT
-  systemctl daemon-reload; systemctl enable sing-box >/dev/null 2>&1 || true
+  systemctl daemon-reload 2>/dev/null || true; systemctl enable sing-box >/dev/null 2>&1 || true
 }
 
 install_hysteria() {
@@ -121,7 +170,7 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 UNIT
-  systemctl daemon-reload; systemctl enable hysteria-server >/dev/null 2>&1 || true
+  systemctl daemon-reload 2>/dev/null || true; systemctl enable hysteria-server >/dev/null 2>&1 || true
 }
 
 install_wireguard() {
@@ -163,10 +212,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=XLINK_PANEL_URL=${XLINK_PANEL_URL}
-Environment=XLINK_NODE_ID=${XLINK_NODE_ID}
-Environment=XLINK_AGENT_TOKEN=${XLINK_AGENT_TOKEN}
-Environment=XLINK_INTERVAL=${INTERVAL}
+Environment="XLINK_PANEL_URL=${XLINK_PANEL_URL}"
+Environment="XLINK_NODE_ID=${XLINK_NODE_ID}"
+Environment="XLINK_AGENT_TOKEN=${XLINK_AGENT_TOKEN}"
+Environment="XLINK_INTERVAL=${INTERVAL}"
+Environment="no_proxy=*"
+Environment="NO_PROXY=*"
 ExecStart=/usr/bin/python3 ${AGENT_PY}
 Restart=always
 RestartSec=5
@@ -174,10 +225,26 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
-  systemctl daemon-reload
+  systemctl daemon-reload 2>/dev/null || true
 }
 
-install_self() { cp "$0" "$BIN" 2>/dev/null && chmod +x "$BIN" 2>/dev/null || true; }
+install_self() {
+  # When run via `curl | bash`, $0 is "bash"/stdin, not this script — copying it
+  # would install the wrong file (or nothing), so the `xlink` command never
+  # appears. Prefer the real script path; otherwise re-fetch it from the panel.
+  local src; src="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)/$(basename "$0")"
+  # Already the installed binary (e.g. `xlink update`) → nothing to copy.
+  [ "$src" = "$BIN" ] && return 0
+  if [ -f "$src" ] && head -5 "$src" 2>/dev/null | grep -q 'XLink node manager'; then
+    cp "$src" "$BIN" && chmod +x "$BIN" && return 0
+  fi
+  if [ -n "${XLINK_PANEL_URL:-}" ] &&
+     curl -fsSL "${XLINK_PANEL_URL%/}/api/v1/agent/install.sh" -o "$BIN" 2>/dev/null &&
+     [ -s "$BIN" ]; then
+    chmod +x "$BIN"; return 0
+  fi
+  warn "could not install the 'xlink' command (agent still runs); re-run the installer from a saved copy to get it"
+}
 
 # ---------------------------------------------------------------- commands
 
@@ -199,9 +266,12 @@ cmd_install() {
     -*) die "unknown flag '$a'" ;; *) pos+=("$a") ;;
   esac; done
 
-  XLINK_PANEL_URL="${XLINK_PANEL_URL:-${pos[0]:-}}"
-  XLINK_NODE_ID="${XLINK_NODE_ID:-${pos[1]:-}}"
-  XLINK_AGENT_TOKEN="${XLINK_AGENT_TOKEN:-${pos[2]:-}}"
+  # Pad to ≥3 elements: on bash ≤4.3 (CentOS/RHEL 7) indexing an empty array
+  # under `set -u` aborts with "pos[0]: unbound variable" before install starts.
+  pos+=("" "" "")
+  XLINK_PANEL_URL="${XLINK_PANEL_URL:-${pos[0]}}"
+  XLINK_NODE_ID="${XLINK_NODE_ID:-${pos[1]}}"
+  XLINK_AGENT_TOKEN="${XLINK_AGENT_TOKEN:-${pos[2]}}"
 
   if [ "$interactive" = 1 ]; then
     log "select cores (xray always installed)"
@@ -223,6 +293,9 @@ cmd_install() {
     (apt-get update -y >/dev/null 2>&1 && apt-get install -y python3 >/dev/null 2>&1) || yum install -y python3 >/dev/null 2>&1 || die "install python3 manually."; ok "python3 installed"; }
   command -v curl >/dev/null 2>&1 || { apt-get install -y curl >/dev/null 2>&1 || yum install -y curl >/dev/null 2>&1 || true; }
 
+  # TLS cores (sing-box/hysteria) need a cert on disk to start.
+  if [ "$want_sb" = 1 ] || [ "$want_hy" = 1 ]; then _ensure_cert; fi
+
   [ "$want_xray" = 1 ] && install_xray
   [ "$want_sb" = 1 ] && install_singbox
   [ "$want_hy" = 1 ] && install_hysteria
@@ -230,14 +303,26 @@ cmd_install() {
 
   log "xlink agent"
   fetch_agent; write_unit; install_self
-  systemctl enable --now xlink-agent >/dev/null 2>&1
+  systemctl enable xlink-agent >/dev/null 2>&1
+  # restart (not just enable --now): on a reinstall the unit is already running
+  # with the OLD Environment=, so --now would NOT reload a rotated token → 401
+  # config pulls until the next manual restart.
+  systemctl restart xlink-agent >/dev/null 2>&1
   ok "agent running"
 
   _row() { printf "  %-12s ${2}%s${C_RST}\n" "$1" "$3"; }
   _t() { case "$1" in installed|present|running) echo "$C_GREEN";; failed|missing) echo "$C_RED";; *) echo "$C_DIM";; esac; }
   echo; printf "${C_B}${C_CYAN}── XLink node ready ──${C_RST}\n"
-  _row xray "$(_t "$(command -v xray >/dev/null 2>&1 && echo present || echo missing)")" "$(command -v xray >/dev/null 2>&1 && echo present || echo 'not installed')"
-  _row sing-box "$(_t "$(command -v sing-box >/dev/null 2>&1 && echo present || echo skipped)")" "$([ "$want_sb" = 1 ] && (command -v sing-box >/dev/null 2>&1 && echo present || echo failed) || echo skipped)"
+  _xray_state() { [ "$want_xray" = 1 ] || { echo skipped; return; }; command -v xray >/dev/null 2>&1 && echo present || echo failed; }
+  _row xray "$(_t "$(_xray_state)")" "$(_xray_state)"
+  _sb_state() {
+    [ "$want_sb" = 1 ] || { echo skipped; return; }
+    command -v sing-box >/dev/null 2>&1 || { echo failed; return; }
+    _sb_has_v2ray && echo present || echo "present-nostats"
+  }
+  _sb_s="$(_sb_state)"
+  _sb_label="$_sb_s"; [ "$_sb_s" = "present-nostats" ] && _sb_label="present (NO STATS — sing-box quotas unenforced)"
+  _row sing-box "$(_t "$([ "$_sb_s" = present ] && echo present || { [ "$_sb_s" = failed ] && echo failed || echo other; })")" "$_sb_label"
   _row hysteria "$(_t "$([ "$want_hy" = 1 ] && (command -v hysteria >/dev/null 2>&1 && echo present || echo failed) || echo skipped)")" "$([ "$want_hy" = 1 ] && (command -v hysteria >/dev/null 2>&1 && echo present || echo failed) || echo skipped)"
   _row wireguard "$(_t "$([ "$want_wg" = 1 ] && (command -v wg >/dev/null 2>&1 && echo present || echo failed) || echo skipped)")" "$([ "$want_wg" = 1 ] && (command -v wg >/dev/null 2>&1 && echo present || echo failed) || echo skipped)"
   echo
@@ -248,21 +333,46 @@ cmd_install() {
 cmd_update() {
   need_root; [ -f "$UNIT" ] || die "not installed. run: xlink install"
   log "updating agent"
-  # reuse env from existing unit
-  eval "$(grep -E '^Environment=XLINK_' "$UNIT" | sed 's/^Environment=//')"
+  # Reuse env from the existing unit WITHOUT eval — a token/URL containing a
+  # space, $, backtick or ; would otherwise be executed or truncated, corrupting
+  # auth so the node can never report (→ stuck OFFLINE). Parse line by line.
+  while IFS= read -r line; do
+    line="${line#Environment=}"
+    line="${line%\"}"; line="${line#\"}"   # strip optional surrounding quotes
+    case "$line" in
+      XLINK_PANEL_URL=*) XLINK_PANEL_URL="${line#*=}" ;;
+      XLINK_NODE_ID=*) XLINK_NODE_ID="${line#*=}" ;;
+      XLINK_AGENT_TOKEN=*) XLINK_AGENT_TOKEN="${line#*=}" ;;
+    esac
+  done < <(grep -E '^Environment=XLINK_(PANEL_URL|NODE_ID|AGENT_TOKEN)=' "$UNIT")
   export XLINK_PANEL_URL XLINK_NODE_ID XLINK_AGENT_TOKEN
-  fetch_agent; install_self
+  fetch_agent
+  # Refresh the manager script itself from the panel (bug fixes to install.sh
+  # land on nodes via `xlink update`, not just the agent).
+  if [ -n "${XLINK_PANEL_URL:-}" ] &&
+     curl -fsSL "${XLINK_PANEL_URL%/}/api/v1/agent/install.sh" -o "$BIN.new" 2>/dev/null &&
+     [ -s "$BIN.new" ]; then
+    mv "$BIN.new" "$BIN" && chmod +x "$BIN" && ok "manager updated"
+  else
+    rm -f "$BIN.new" 2>/dev/null || true
+  fi
   systemctl restart xlink-agent && ok "agent updated + restarted"
 }
 
 cmd_core_update() {
-  need_root; local core="${1:-}"
+  need_root; local core="${1:-}" ver="${2:-}"
   case "$core" in
-    xray) command -v xray >/dev/null 2>&1 && bash <(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh) install >/dev/null 2>&1 && ok "xray updated" || install_xray ;;
-    singbox|sing-box) install_singbox ;;
+    xray)
+      # INSTALL_VERSION lets the official installer pin a release (e.g. v1.8.4);
+      # -u forces reinstall even if xray is already present, so upgrade actually
+      # changes the version instead of skipping.
+      local xargs="install"; [ -n "$ver" ] && xargs="install -u $ver"
+      bash <(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh) $xargs >/dev/null 2>&1 \
+        && ok "xray updated${ver:+ ($ver)}" || warn "xray update failed" ;;
+    singbox|sing-box) [ -n "$ver" ] && export XLINK_SINGBOX_VERSION="$ver"; rm -f /usr/local/bin/sing-box 2>/dev/null; install_singbox ;;
     hysteria) install_hysteria ;;
     wireguard|wg) install_wireguard ;;
-    *) die "usage: xlink core-update <xray|singbox|hysteria|wireguard>" ;;
+    *) die "usage: xlink core-update <xray|singbox|hysteria|wireguard> [version]" ;;
   esac
   systemctl restart xlink-agent >/dev/null 2>&1 || true
 }

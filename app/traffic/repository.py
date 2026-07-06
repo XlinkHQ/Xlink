@@ -23,14 +23,22 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
 
         ordered = sorted(deltas)
-        for aid in ordered:
-            updated = ClientAssignment.used_bytes + deltas[aid]
-            await self.session.execute(
-                update(ClientAssignment)
-                .where(ClientAssignment.id == aid)
-                .values(used_bytes=case((updated < 0, 0), else_=updated))
-                .execution_options(synchronize_session=False)
-            )
+        # Single UPDATE with a per-id CASE delta instead of one round-trip per
+        # assignment: this is the traffic-ingest hot path (runs on every agent
+        # report), so N sequential UPDATEs held the connection and scaled badly
+        # with assignments-per-node. One statement, one round-trip.
+        delta_case = case(
+            {aid: deltas[aid] for aid in ordered},
+            value=ClientAssignment.id,
+            else_=0,
+        )
+        updated = ClientAssignment.used_bytes + delta_case
+        await self.session.execute(
+            update(ClientAssignment)
+            .where(ClientAssignment.id.in_(ordered))
+            .values(used_bytes=case((updated < 0, 0), else_=updated))
+            .execution_options(synchronize_session=False)
+        )
         await self.session.flush()
 
     async def bulk_insert(self, rows: Sequence[dict]) -> int:
@@ -46,6 +54,26 @@ class TrafficRepository:
         result = await self.session.execute(stmt)
         await self.session.flush()
         return result.rowcount if result.rowcount is not None and result.rowcount >= 0 else 0
+
+    async def claim_batch(self, node_id: uuid.UUID, batch_id: str) -> bool:
+        """Record (node_id, batch_id) idempotently. Returns True if this call
+        claimed it (first time), False if it was already processed — the caller
+        should then skip re-applying deltas to avoid double-counting."""
+        from app.traffic.models import ProcessedBatch
+
+        dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
+        values = {"node_id": node_id, "batch_id": batch_id}
+        if dialect == "sqlite":
+            stmt = sqlite_insert(ProcessedBatch).values(values).on_conflict_do_nothing(
+                index_elements=["node_id", "batch_id"]
+            )
+        else:
+            stmt = pg_insert(ProcessedBatch).values(values).on_conflict_do_nothing(
+                constraint="uq_processed_batches_node_batch"
+            )
+        result = await self.session.execute(stmt)
+        await self.session.flush()
+        return bool(result.rowcount)
 
     async def usage_for_assignment(self, assignment_id: uuid.UUID) -> TrafficUsage:
         stmt = select(
@@ -63,14 +91,24 @@ class TrafficRepository:
             sample_count=int(count),
         )
 
-    async def totals(self) -> TrafficTotals:
-        stmt = select(
-            func.coalesce(func.sum(TrafficRecord.total_bytes), 0),
-            func.coalesce(func.sum(TrafficRecord.upload_bytes), 0),
-            func.coalesce(func.sum(TrafficRecord.download_bytes), 0),
-            func.count(),
+    def _weighted_totals_stmt(self):
+        from app.domain.client_assignment import ClientAssignment
+        from app.domain.node import Node
+
+        coeff = func.coalesce(Node.usage_coefficient, 1.0)
+        return (
+            select(
+                func.coalesce(func.sum(TrafficRecord.total_bytes * coeff), 0),
+                func.coalesce(func.sum(TrafficRecord.upload_bytes * coeff), 0),
+                func.coalesce(func.sum(TrafficRecord.download_bytes * coeff), 0),
+                func.count(),
+            )
+            .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
+            .join(Node, Node.id == ClientAssignment.node_id)
         )
-        total, up, down, count = (await self.session.execute(stmt)).one()
+
+    async def totals(self) -> TrafficTotals:
+        total, up, down, count = (await self.session.execute(self._weighted_totals_stmt())).one()
         return TrafficTotals(
             total_bytes=int(total),
             upload_bytes=int(up),
@@ -79,12 +117,7 @@ class TrafficRepository:
         )
 
     async def totals_since(self, since: datetime) -> TrafficTotals:
-        stmt = select(
-            func.coalesce(func.sum(TrafficRecord.total_bytes), 0),
-            func.coalesce(func.sum(TrafficRecord.upload_bytes), 0),
-            func.coalesce(func.sum(TrafficRecord.download_bytes), 0),
-            func.count(),
-        ).where(TrafficRecord.collected_at >= since)
+        stmt = self._weighted_totals_stmt().where(TrafficRecord.collected_at >= since)
         total, up, down, count = (await self.session.execute(stmt)).one()
         return TrafficTotals(
             total_bytes=int(total),
@@ -140,11 +173,34 @@ class TrafficRepository:
             totals[aid] = totals.get(aid, 0) + adjusted
         return totals
 
-    async def delete_before(self, cutoff: datetime) -> int:
-        result = await self.session.execute(
-            delete(TrafficRecord).where(TrafficRecord.collected_at < cutoff)
+    async def delete_before(self, cutoff: datetime, *, batch: int = 10000) -> int:
+        from app.traffic.models import ProcessedBatch
+
+        # Delete in bounded chunks rather than one unbounded DELETE: a full-table
+        # purge otherwise takes a long transaction + wide lock on traffic_records,
+        # which is also the ingest hot-path table. Each chunk is a small statement;
+        # committing per chunk keeps locks short and WAL bounded.
+        deleted = 0
+        while True:
+            sub = (
+                select(TrafficRecord.id)
+                .where(TrafficRecord.collected_at < cutoff)
+                .limit(batch)
+            )
+            stmt = delete(TrafficRecord).where(
+                TrafficRecord.id.in_(sub.scalar_subquery())
+            )
+            result = await self.session.execute(stmt)
+            n = result.rowcount or 0
+            deleted += n
+            await self.session.commit()
+            if n < batch:
+                break
+        await self.session.execute(
+            delete(ProcessedBatch).where(ProcessedBatch.created_at < cutoff)
         )
-        return result.rowcount or 0
+        await self.session.commit()
+        return deleted
 
     async def count(self) -> int:
         return int(await self.session.scalar(select(func.count()).select_from(TrafficRecord)) or 0)
@@ -202,52 +258,63 @@ class TrafficRepository:
     async def usage_for_users(
         self, user_ids: Sequence[uuid.UUID]
     ) -> dict[uuid.UUID, tuple[int, int, bool]]:
-        from app.domain.client_assignment import ClientAssignment
+        from app.domain.user import User
 
+        # Report the ACCOUNT-level figures the panel actually enforces on:
+        # used = User.users_data_usage (the maintained coefficient-adjusted total),
+        # limit = User.data_limit_bytes, unlimited = data_limit_bytes IS NULL.
+        # (Summing per-assignment traffic_limit_bytes produced an incoherent
+        # "limit=X but unlimited=true" contract.)
         if not user_ids:
             return {}
         rows = (
             await self.session.execute(
                 select(
-                    ClientAssignment.user_id,
-                    func.coalesce(func.sum(ClientAssignment.used_bytes), 0),
-                    func.coalesce(func.sum(ClientAssignment.traffic_limit_bytes), 0),
-                    func.count().filter(ClientAssignment.traffic_limit_bytes.is_(None)),
-                )
-                .where(ClientAssignment.user_id.in_(list(user_ids)))
-                .group_by(ClientAssignment.user_id)
+                    User.id,
+                    func.coalesce(User.users_data_usage, 0),
+                    User.data_limit_bytes,
+                ).where(User.id.in_(list(user_ids)))
             )
         ).all()
-        return {r[0]: (int(r[1] or 0), int(r[2] or 0), int(r[3] or 0) > 0) for r in rows}
+        return {
+            r[0]: (int(r[1] or 0), int(r[2] or 0), r[2] is None) for r in rows
+        }
 
     async def usage_by_node(self) -> dict[uuid.UUID, int]:
         from app.domain.client_assignment import ClientAssignment
+        from app.domain.node import Node
 
+        # Weight by the node's usage_coefficient so reported usage matches the
+        # enforced counters (ClientAssignment.used_bytes is coefficient-adjusted
+        # at ingest, while TrafficRecord.total_bytes is stored raw).
+        weighted = func.coalesce(
+            func.sum(TrafficRecord.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
+        )
         rows = (
             await self.session.execute(
-                select(
-                    ClientAssignment.node_id,
-                    func.coalesce(func.sum(TrafficRecord.total_bytes), 0),
-                )
+                select(Node.id, weighted)
                 .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
-                .group_by(ClientAssignment.node_id)
+                .join(Node, Node.id == ClientAssignment.node_id)
+                .group_by(Node.id)
             )
         ).all()
         return {nid: int(total or 0) for nid, total in rows}
 
     async def usage_by_node_user(self, node_id: uuid.UUID) -> list[tuple[uuid.UUID, int]]:
         from app.domain.client_assignment import ClientAssignment
+        from app.domain.node import Node
 
+        weighted = func.coalesce(
+            func.sum(TrafficRecord.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
+        )
         rows = (
             await self.session.execute(
-                select(
-                    ClientAssignment.user_id,
-                    func.coalesce(func.sum(TrafficRecord.total_bytes), 0),
-                )
+                select(ClientAssignment.user_id, weighted)
                 .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
+                .join(Node, Node.id == ClientAssignment.node_id)
                 .where(ClientAssignment.node_id == node_id)
                 .group_by(ClientAssignment.user_id)
-                .order_by(func.sum(TrafficRecord.total_bytes).desc())
+                .order_by(weighted.desc())
             )
         ).all()
         return [(uid, int(total or 0)) for uid, total in rows]
@@ -256,18 +323,17 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
+        weighted = func.coalesce(
+            func.sum(TrafficRecord.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
+        )
         rows = (
             await self.session.execute(
-                select(
-                    Node.id,
-                    Node.name,
-                    func.coalesce(func.sum(TrafficRecord.total_bytes), 0),
-                )
+                select(Node.id, Node.name, weighted)
                 .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
                 .join(Node, Node.id == ClientAssignment.node_id)
                 .where(ClientAssignment.user_id == user_id)
                 .group_by(Node.id, Node.name)
-                .order_by(func.sum(TrafficRecord.total_bytes).desc())
+                .order_by(weighted.desc())
             )
         ).all()
         return [(nid, name, int(total or 0)) for nid, name, total in rows]
@@ -312,11 +378,14 @@ class TrafficRepository:
 
     async def usage_total_for_profile(self, profile_id: uuid.UUID) -> int:
         from app.domain.client_assignment import ClientAssignment
+        from app.domain.node import Node
 
+        coeff = func.coalesce(Node.usage_coefficient, 1.0)
         total = (
             await self.session.execute(
-                select(func.coalesce(func.sum(TrafficRecord.total_bytes), 0))
+                select(func.coalesce(func.sum(TrafficRecord.total_bytes * coeff), 0))
                 .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
+                .join(Node, Node.id == ClientAssignment.node_id)
                 .where(ClientAssignment.profile_id == profile_id)
             )
         ).scalar_one()

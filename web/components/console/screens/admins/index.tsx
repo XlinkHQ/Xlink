@@ -1,33 +1,30 @@
 "use client";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, UserCheck, UserX } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
 import {
   ApiError,
   deleteUser,
+  demoteUser,
   disableAdminUsers,
   enableAdminUsers,
   listUsers,
   type UserRead,
 } from "@/lib/api";
-import { bytes } from "@/lib/format";
-import { Avatar, Drawer } from "../parts";
 import {
-  WarpBadge,
   WarpButton,
   WarpEmpty,
   WarpHead,
   WarpRow,
   WarpSkeleton,
-  WarpStat,
-  WarpStatRow,
   WarpTableCard,
 } from "../warp-table";
 import { AdminDialog } from "./dialog";
+import { DgAddUser } from "../../dg-icons";
+import { SearchBox } from "@/components/ui/search-box";
 
 export function AdminsScreen() {
   const qc = useQueryClient();
@@ -39,7 +36,6 @@ export function AdminsScreen() {
   });
   const admins = (query.data?.pages.flatMap((p) => p.items) ?? []) as UserRead[];
   const [search, setSearch] = useState("");
-  const [detail, setDetail] = useState<UserRead | null>(null);
   const [dialog, setDialog] = useState<UserRead | "new" | null>(null);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["admins"] });
@@ -58,33 +54,21 @@ export function AdminsScreen() {
     ? admins.filter((a) => a.username.toLowerCase().includes(needle))
     : admins;
 
-  const sudoCount = admins.filter((a) => a.is_sudo).length;
-  const activeCount = admins.filter((a) => a.is_active).length;
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <WarpStatRow>
-        <WarpStat label={query.hasNextPage ? "Loaded Admins" : "Total Admins"} value={query.hasNextPage ? `${admins.length}+` : admins.length} />
-        <WarpStat label="Active" value={`${activeCount} / ${admins.length}`} />
-        <WarpStat label="Sudo" value={sudoCount} />
-      </WarpStatRow>
+      <div className="warp-table-top">
+        <span className="title">All admins</span>
+        <div className="right">
+          <SearchBox value={search} onChange={setSearch} placeholder="Find admin" />
+          <WarpButton primary onClick={() => setDialog("new")}>
+            <DgAddUser size={16} /> Add Admin
+          </WarpButton>
+        </div>
+      </div>
 
-      <WarpTableCard
-        toolbar={
-          <>
-            <WarpButton primary onClick={() => setDialog("new")}>
-              <Plus size={14} /> Add Admin
-            </WarpButton>
-            <input
-              className="warp-tb-search warp-tb-spacer"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search admins…"
-            />
-          </>
-        }
-      >
-        <WarpHead cols={["#", "Username", "Status", "Permission", "Created"]} actions />
+      <WarpTableCard className="warp-users-table">
+        <WarpHead cols={["Username", "Status", "Permission", "Created"]} actions />
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
@@ -92,12 +76,21 @@ export function AdminsScreen() {
             {search ? "No matches." : "No admins yet."}
           </WarpEmpty>
         ) : (
-          filtered.map((a, i) => (
+          filtered.map((a) => (
             <WarpRow
               key={a.id}
-              onClick={() => setDetail(a)}
               menu={[
                 { label: "Edit", icon: "edit", onClick: () => setDialog(a) },
+                { label: "Enable users", icon: "enable", onClick: () => act(() => enableAdminUsers(a.id), "Enabled this admin's users.") },
+                { label: "Disable users", icon: "disable", onClick: () => act(() => disableAdminUsers(a.id), "Disabled this admin's users.") },
+                {
+                  label: "Demote to user",
+                  icon: "disable",
+                  onClick: async () => {
+                    if (await confirmDialog({ title: `Demote "${a.username}" to a regular user?`, message: "They lose all admin access.", confirmLabel: "Demote" }))
+                      act(() => demoteUser(a.id), "Admin demoted to user.");
+                  },
+                },
                 {
                   label: "Delete",
                   icon: "delete",
@@ -109,11 +102,10 @@ export function AdminsScreen() {
                 },
               ]}
               cells={[
-                i + 1,
                 <span className="font-medium">{a.username}</span>,
-                <WarpBadge tone={a.is_active ? "green" : "red"}>{a.is_active ? "Enabled" : "Disabled"}</WarpBadge>,
-                <WarpBadge tone={a.is_sudo ? "blue" : "orange"}>{a.is_sudo ? "Sudo" : "Standard"}</WarpBadge>,
-                a.created_at.slice(0, 10),
+                <span className={`warp-badge ${a.is_active ? "success" : "critical"}`}>{a.is_active ? "Enabled" : "Disabled"}</span>,
+                <span className={`warp-badge ${a.is_sudo ? "info" : "neutral"}`}>{a.is_sudo ? "Sudo" : "Standard"}</span>,
+                <span className="text-fg-muted">{a.created_at.slice(0, 10)}</span>,
               ]}
             />
           ))
@@ -137,70 +129,6 @@ export function AdminsScreen() {
         </div>
       ) : null}
 
-      {detail ? (
-        <Drawer
-          title={<span className="text-lg font-medium">Settings</span>}
-          width="w-[720px]"
-          panelClassName="bg-canvas"
-          onClose={() => setDetail(null)}
-        >
-          <div>
-            <div className="flex flex-row items-center justify-end gap-4 pb-4">
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await act(() => enableAdminUsers(detail.id), "Enabled this admin's users.");
-                    setDetail(null);
-                  }}
-                  className="warp-tb-button"
-                >
-                  <UserCheck size={14} aria-hidden />
-                  Enable users
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await act(() => disableAdminUsers(detail.id), "Disabled this admin's users.");
-                    setDetail(null);
-                  }}
-                  className="warp-tb-button warp-tb-button-danger"
-                >
-                  <UserX size={14} aria-hidden />
-                  Disable users
-                </button>
-              </div>
-            </div>
-
-            <div className="px-5 py-2">
-              <table className="w-full text-sm">
-                <tbody>
-                  <InfoRow label="Username" value={detail.username} />
-                  <InfoRow
-                    label="Status"
-                    value={
-                      <WarpBadge tone={detail.is_active ? "green" : "red"}>
-                        {detail.is_active ? "Enabled" : "Disabled"}
-                      </WarpBadge>
-                    }
-                  />
-                  <InfoRow
-                    label="Permission"
-                    value={
-                      <WarpBadge tone={detail.is_sudo ? "blue" : "orange"}>
-                        {detail.is_sudo ? "Sudo" : "Standard"}
-                      </WarpBadge>
-                    }
-                  />
-                  <InfoRow label="Created" value={detail.created_at.slice(0, 10)} />
-                  <InfoRow label="Users Data Usage" value={bytes(detail.users_data_usage)} last />
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </Drawer>
-      ) : null}
-
       {dialog ? (
         <AdminDialog
           admin={dialog === "new" ? null : dialog}
@@ -212,23 +140,6 @@ export function AdminsScreen() {
         />
       ) : null}
     </div>
-  );
-}
-
-function InfoRow({
-  label,
-  value,
-  last,
-}: {
-  label: string;
-  value: ReactNode;
-  last?: boolean;
-}) {
-  return (
-    <tr>
-      <td className="py-2.5 pr-4 align-middle font-normal text-fg-muted">{label}</td>
-      <td className="py-2.5 align-middle font-normal text-fg">{value}</td>
-    </tr>
   );
 }
 

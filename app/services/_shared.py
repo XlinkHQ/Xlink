@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING, Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm.exc import StaleDataError
 
@@ -9,9 +10,6 @@ from app.core.exceptions import ConflictError
 
 if TYPE_CHECKING:
     from app.subscription.service import SubscriptionService
-
-T = TypeVar("T")
-
 
 async def invalidate_subscription_cache(
     subscription_service: SubscriptionService | None,
@@ -23,7 +21,7 @@ async def invalidate_subscription_cache(
             await subscription_service.notify_node_changed(node_id)
 
 
-async def save_or_conflict(
+async def save_or_conflict[T](
     save: Callable[[T], Awaitable[T]], entity: T, label: str
 ) -> T:
     try:

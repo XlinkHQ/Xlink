@@ -8,7 +8,7 @@ export function Modal({
   onSubmit,
   footer,
   children,
-  width = "sm:w-[32rem]",
+  width = "sm:w-[34rem]",
 }: {
   title: string;
   onClose: () => void;
@@ -19,7 +19,7 @@ export function Modal({
 }) {
   return (
     <div
-      className="warp-modal-overlay fixed inset-0 z-[60] grid place-items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:place-items-center sm:p-4"
+      className="warp-modal-overlay fixed inset-0 z-[700] grid place-items-end justify-center bg-black/40 p-0 backdrop-blur-sm sm:place-items-center sm:p-4"
       onMouseDown={onClose}
     >
       <form
@@ -31,7 +31,7 @@ export function Modal({
         )}
       >
         <div className="flex flex-none items-center justify-between border-b border-hairline px-5 py-4 sm:px-6">
-          <h3 className="text-base font-medium text-fg">{title}</h3>
+          <h3 className="text-base font-semibold text-fg">{title}</h3>
           <button
             type="button"
             onClick={onClose}
@@ -42,7 +42,7 @@ export function Modal({
           </button>
         </div>
         <div
-          className="flex min-h-0 flex-col gap-3 overflow-auto p-4 sm:p-5"
+          className="flex min-h-0 flex-col gap-3.5 overflow-auto p-4 sm:p-5"
           style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
         >
           {children}

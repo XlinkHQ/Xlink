@@ -50,11 +50,7 @@ class EventBus:
     ) -> None:
         self._registry = registry or EventRegistry()
         self._config = config or EventBusConfig()
-        self._background: set[asyncio.Task] = set()
-
-    @property
-    def registry(self) -> EventRegistry:
-        return self._registry
+        self._background: set[asyncio.Task[None]] = set()
 
     def publish_background(self, event: DomainEvent) -> None:
         task = asyncio.create_task(self._publish_safe(event))

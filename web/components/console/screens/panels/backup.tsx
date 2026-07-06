@@ -1,10 +1,12 @@
 "use client";
 
+import { DatabaseBackup } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
 import { ApiError, downloadBackupDb, downloadUsersCsv, importBackupDb } from "@/lib/api";
 import { SettingsRow } from "../settings";
+import { SettingsSection } from "../settings-kit";
 
 export function BackupScreen() {
   const [dbBusy, setDbBusy] = useState(false);
@@ -37,7 +39,11 @@ export function BackupScreen() {
 
   return (
     <div className="w-full">
-      <div className="warp-set-list">
+      <SettingsSection
+        icon={DatabaseBackup}
+        title="Backup & restore"
+        description="Download database dumps, export users, or restore the panel from a previous backup."
+      >
         <SettingsRow
           label="Download database"
           hint="A nightly backup runs automatically. Download the raw database now — Postgres .sql or SQLite .db (sudo only)."
@@ -102,7 +108,7 @@ export function BackupScreen() {
             {importBusy ? "…" : "Upload"}
           </label>
         </SettingsRow>
-      </div>
+      </SettingsSection>
     </div>
   );
 }

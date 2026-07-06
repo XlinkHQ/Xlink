@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleCheck, CircleX, Info, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type ToastType = "success" | "error" | "info";
@@ -12,25 +13,10 @@ export function toast(type: ToastType, message: string) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: { type, message } }));
 }
 
-const TITLES: Record<ToastType, string> = {
-  success: "Successful",
-  error: "Unsuccessful",
-  info: "Notice",
-};
-
-function IconCheck() {
-  return (
-    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-function IconClose() {
-  return (
-    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
+function VariantIcon({ type }: { type: ToastType }) {
+  if (type === "error") return <CircleX strokeWidth={1.8} aria-hidden />;
+  if (type === "info") return <Info strokeWidth={1.8} aria-hidden />;
+  return <CircleCheck strokeWidth={1.8} aria-hidden />;
 }
 
 export function Toaster() {
@@ -54,18 +40,19 @@ export function Toaster() {
   return (
     <div className="warp-toast-wrap">
       {items.map((t) => (
-        <div key={t.id} className="warp-toast">
-          <div>
-            <span className={`warp-toast-ico ${t.type === "error" ? "warp-toast-x" : "warp-toast-check"}`}>
-              {t.type === "error" ? <IconClose /> : <IconCheck />}
+        <div key={t.id} className={`warp-toast warp-toast-${t.type}`} role="status">
+          <div className="warp-toast-body">
+            <span className="warp-toast-ico">
+              <VariantIcon type={t.type} />
             </span>
-            <div>
-              <h4>{TITLES[t.type]}</h4>
+            <div className="warp-toast-text">
               <p>{t.message}</p>
             </div>
           </div>
           <button type="button" aria-label="Close" onClick={() => close(t.id)}>
-            <span><IconClose /></span>
+            <span>
+              <X strokeWidth={1.8} aria-hidden />
+            </span>
           </button>
         </div>
       ))}

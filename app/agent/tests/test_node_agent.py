@@ -95,7 +95,10 @@ async def test_heartbeat_updates_node_status_and_stats(app_state: AppState) -> N
     )
 
     assert node.status is NodeStatus.ACTIVE
-    assert node.current_users == 7
+    # current_users is DB-authoritative (COUNT of ACTIVE assignments); the
+    # agent-reported count is telemetry only, kept in metadata.
+    assert node.current_users == 0
+    assert node.node_metadata["agent_reported_users"] == 7
     assert node.last_seen_at is not None
     assert node.node_metadata["agent_stats"]["cpu_percent"] == 12.5
 

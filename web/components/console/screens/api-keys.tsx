@@ -4,6 +4,9 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
+import { Modal } from "@/components/ui/modal";
+import { Input } from "@/components/ui/input";
+import { Field } from "./parts";
 import {
   ApiError,
   type ApiKey,
@@ -14,8 +17,21 @@ import {
   revokeApiKey,
 } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
-import { Copy, Plus, Trash } from "lucide-react";
-import { Switch } from "./subscription-settings";
+import { AlertTriangle, Copy } from "lucide-react";
+import {
+  WarpButton,
+  WarpEmpty,
+  WarpHead,
+  WarpRow,
+  WarpSkeleton,
+  WarpTableCard,
+} from "./warp-table";
+import { DgAddUser } from "../dg-icons";
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "Never";
+  return new Date(iso).toLocaleDateString();
+}
 
 function relTime(iso: string | null): string {
   if (!iso) return "Never";
@@ -35,15 +51,25 @@ export function ApiKeysScreen() {
     getNextPageParam: (last) => last.next_offset ?? undefined,
   });
   const keys = (q.data?.pages.flatMap((p) => p?.items ?? []).filter(Boolean) ?? []) as ApiKey[];
+
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null);
 
   const reload = () => qc.invalidateQueries({ queryKey: ["api-keys"] });
 
+  const openAdd = () => {
+    setName("");
+    setAdding(true);
+  };
+
   const create = async () => {
     setBusy(true);
     try {
-      const res = await createApiKey("");
+      const res = await createApiKey(name.trim());
+      setAdding(false);
+      setName("");
       setFresh(res.token);
       reload();
     } catch (e) {
@@ -86,85 +112,113 @@ export function ApiKeysScreen() {
   };
 
   return (
-    <div className="w-full">
-      <div className="mb-3 flex items-center justify-end">
-        <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={create} disabled={busy}>
-          <Plus size={14} /> {busy ? "Creating…" : "Create key"}
-        </button>
+    <div className="mx-auto w-full max-w-6xl">
+      <div className="warp-table-top">
+        <span className="title">API keys</span>
+        <div className="right">
+          <WarpButton primary onClick={openAdd}>
+            <DgAddUser size={16} /> Add key
+          </WarpButton>
+        </div>
       </div>
 
+      <WarpTableCard className="warp-users-table">
+        <WarpHead cols={["Name", "Last used", "Created"]} actions />
+        {q.isLoading ? (
+          <WarpSkeleton />
+        ) : keys.length === 0 ? (
+          <WarpEmpty icon="fa-key">
+            No API keys yet. Create one to automate the panel.
+          </WarpEmpty>
+        ) : (
+          keys.map((k) => (
+            <WarpRow
+              key={k.id}
+              menu={[
+                k.revoked_at
+                  ? { label: "Enable", icon: "enable", onClick: () => enable(k) }
+                  : { label: "Disable", icon: "disable", onClick: () => revoke(k) },
+                { label: "Delete", icon: "trash", danger: true, onClick: () => purge(k) },
+              ]}
+              cells={[
+                <span className="font-medium">{k.name || `xlk_${k.prefix}…`}</span>,
+                <span className="text-fg-muted">{relTime(k.last_used_at)}</span>,
+                <span className="text-fg-muted">{fmtDate(k.created_at)}</span>,
+              ]}
+            />
+          ))
+        )}
+      </WarpTableCard>
+
+      {q.hasNextPage ? (
+        <div className="mt-3 flex justify-center">
+          <button
+            type="button"
+            className="warp-tb-button"
+            onClick={() => q.fetchNextPage()}
+            disabled={q.isFetchingNextPage}
+          >
+            {q.isFetchingNextPage ? "Loading…" : "Load more"}
+          </button>
+        </div>
+      ) : null}
+
+      {adding ? (
+        <Modal
+          title="Add API key"
+          onClose={() => setAdding(false)}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy) create();
+          }}
+          footer={
+            <>
+              <button type="button" className="warp-tb-button" onClick={() => setAdding(false)} disabled={busy}>
+                Cancel
+              </button>
+              <button type="submit" className="warp-tb-button warp-tb-button-primary" disabled={busy}>
+                {busy ? "Creating…" : "Create"}
+              </button>
+            </>
+          }
+        >
+          <Field label="Name" hint="A label to recognise this key later.">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CI deploy" autoFocus autoComplete="off" />
+          </Field>
+        </Modal>
+      ) : null}
+
       {fresh ? (
-        <div className="warp-key-reveal">
-          <div className="warp-key-reveal-row">
-            <code>{fresh}</code>
+        <Modal
+          title="API key created"
+          onClose={() => setFresh(null)}
+          footer={
+            <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={() => setFresh(null)}>
+              Close
+            </button>
+          }
+        >
+          <div className="warp-totp-banner">
+            <AlertTriangle size={16} strokeWidth={1.9} aria-hidden />
+            <span>Copy this key now — for security it is shown only once and can’t be retrieved later.</span>
+          </div>
+          <label className="warp-totp-field">
+            <span className="warp-totp-label">API key</span>
             <button
               type="button"
-              className="warp-tb-button"
+              className="warp-totp-copy"
+              title="Copy API key"
               onClick={() => {
                 void copyText(fresh);
                 toast("success", "API key copied.");
               }}
             >
-              <Copy size={14} /> Copy
+              <code>{fresh}</code>
+              <Copy size={16} strokeWidth={1.8} aria-hidden />
             </button>
-            <button type="button" className="warp-tb-button" onClick={() => setFresh(null)}>
-              Done
-            </button>
-          </div>
-        </div>
+          </label>
+        </Modal>
       ) : null}
-
-      <div className="-mx-4 w-[calc(100%+2rem)] overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="warp-thead text-left">
-              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Key</th>
-              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Last used</th>
-              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Created</th>
-              <th className="px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-fg-muted">Status</th>
-              <th className="w-16 px-4 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {q.isLoading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-fg-muted">Loading…</td></tr>
-            ) : keys.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-fg-muted">No API keys yet. Create one to automate the panel.</td></tr>
-            ) : (
-              keys.map((k) => (
-                <tr key={k.id} className="hover:bg-muted">
-                  <td className="px-4 py-2.5 warp-tb-mono text-xs font-medium text-fg">xlk_{k.prefix}…</td>
-                  <td className="px-4 py-2.5 text-fg-muted">{relTime(k.last_used_at)}</td>
-                  <td className="px-4 py-2.5 text-fg-muted">{new Date(k.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-2.5">
-                    <Switch
-                      checked={!k.revoked_at}
-                      onChange={(on) => (on ? enable(k) : revoke(k))}
-                    />
-                  </td>
-                  <td className="px-4 py-2.5 text-right">
-                    <button type="button" className="warp-tb-rowicon warp-tb-del" title="Delete" onClick={() => purge(k)}>
-                      <Trash size={12} />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        {q.hasNextPage ? (
-          <div className="mt-3 flex justify-center">
-            <button
-              type="button"
-              className="warp-tb-button"
-              onClick={() => q.fetchNextPage()}
-              disabled={q.isFetchingNextPage}
-            >
-              {q.isFetchingNextPage ? "Loading…" : "Load more"}
-            </button>
-          </div>
-        ) : null}
-      </div>
     </div>
   );
 }

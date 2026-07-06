@@ -11,7 +11,7 @@ ME = "/api/v1/users/me"
 VALID_USER = {
     "email": "alice@example.com",
     "username": "alice",
-    "password": "super-secret-passphrase",
+    "password": "Super-Secret-Passphrase-12!",
     "full_name": "Alice",
 }
 
@@ -74,8 +74,15 @@ async def test_refresh_rotates_and_reuse_detected(client: AsyncClient) -> None:
     new_refresh = rotated.json()["refresh_token"]
     assert new_refresh != old_refresh
 
-    reused = await client.post(REFRESH, json={"refresh_token": old_refresh})
-    assert reused.status_code == 401
+    # Idempotent grace: replaying the just-rotated token within the grace window
+    # returns the SAME successor (not a new independent family), so a retrying
+    # client is safe and a thief only ever gets the token the client already has.
+    grace = await client.post(REFRESH, json={"refresh_token": old_refresh})
+    assert grace.status_code == 200
+    assert grace.json()["refresh_token"] == new_refresh
+    grace2 = await client.post(REFRESH, json={"refresh_token": old_refresh})
+    assert grace2.status_code == 200
+    assert grace2.json()["refresh_token"] == new_refresh
 
 
 async def test_logout_revokes_refresh(client: AsyncClient) -> None:
@@ -94,3 +101,32 @@ async def test_non_admin_cannot_list_users(client: AsyncClient) -> None:
     access = reg["tokens"]["access_token"]
     resp = await client.get("/api/v1/users", headers={"Authorization": f"Bearer {access}"})
     assert resp.status_code == 403
+
+
+async def test_totp_enroll_confirm_and_login(client: AsyncClient) -> None:
+    import time
+
+    from app.core import totp
+
+    reg = (await _register(client, username="totpie", email="totpie@example.com")).json()
+    access = reg["tokens"]["access_token"]
+    auth_h = {"Authorization": f"Bearer {access}"}
+
+    enroll = await client.post("/api/v1/auth/2fa/enroll", headers=auth_h)
+    assert enroll.status_code == 200
+    secret = enroll.json()["secret"]
+    assert enroll.json()["otpauth_uri"].startswith("otpauth://")
+
+    code = totp._hotp(secret, int(time.time() // 30))
+    confirm = await client.post("/api/v1/auth/2fa/confirm", json={"code": code}, headers=auth_h)
+    assert confirm.status_code == 204
+
+    creds = {"identifier": "totpie", "password": VALID_USER["password"]}
+    no_code = await client.post(LOGIN, json=creds)
+    assert no_code.status_code == 401
+    assert no_code.json()["error"]["code"] == "totp_required"
+
+    code2 = totp._hotp(secret, int(time.time() // 30))
+    with_code = await client.post(LOGIN, json={**creds, "totp_code": code2})
+    assert with_code.status_code == 200
+    assert with_code.json()["tokens"]["access_token"]

@@ -4,76 +4,119 @@ import asyncio
 import contextlib
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, select, update
 
 from app.agent.command_service import CommandService
 from app.agent.commands import CommandSigner
 from app.agent.config_sync import ConfigSyncService
 from app.agent.domain import DriftSeverity
 from app.agent.healing import AutoUpgradeService, HealingPolicy, SelfHealingService
-from app.agent.heartbeat import NodeHeartbeatService
+from app.core.leader import LeaderElector
 from app.core.logging import get_logger
 from app.db.redis import RedisCache
 from app.db.session import Database
 from app.domain.node import Node, NodeStatus
 from app.events.bus import EventBus
-from app.repositories.node import NodeRepository
+from app.webhooks.dispatcher import WebhookDispatcher
 
 logger = get_logger("xlink.agent.reconcile")
 
 _BATCH_SIZE = 100
 
-_STALE_AFTER_SECONDS = 120
-_RESET_PERIODS = {"day": timedelta(days=1), "week": timedelta(weeks=1), "month": timedelta(days=30)}
+def _shift_calendar(dt: datetime, *, months: int = 0, years: int = 0) -> datetime:
+    # Subtract calendar months/years with day-of-month clamping (Feb 30 → Feb
+    # 28/29). Avoids the ~5-day/year drift a fixed timedelta(days=30) produces,
+    # so "monthly" resets land on a stable day-of-month.
+    total = (dt.year + years) * 12 + (dt.month - 1) + months
+    year, month = divmod(total, 12)
+    month += 1
+    import calendar
+
+    day = min(dt.day, calendar.monthrange(year, month)[1])
+    return dt.replace(year=year, month=month, day=day)
+
+
+def _reset_cutoffs(now: datetime) -> dict[str, datetime]:
+    return {
+        "day": now - timedelta(days=1),
+        "week": now - timedelta(weeks=1),
+        "month": _shift_calendar(now, months=-1),
+        "year": _shift_calendar(now, years=-1),
+    }
 
 
 async def _apply_data_resets(session) -> list:
+    from sqlalchemy import or_
+
     from app.domain.client_assignment import AssignmentStatus, ClientAssignment
     from app.domain.user import DataResetStrategy, User
 
     now = datetime.now(UTC)
-    users = (
-        (
-            await session.execute(
-                select(User).where(User.data_reset_strategy != DataResetStrategy.NO_RESET)
-            )
-        )
-        .scalars()
-        .all()
-    )
     woke_nodes: set = set()
     changed = False
-    for user in users:
-        period = _RESET_PERIODS.get(user.data_reset_strategy.value)
-        if period is None:
+
+    for strategy, cutoff in _reset_cutoffs(now).items():
+        # Only users actually due for a reset (last_reset_at older than the
+        # window), filtered in SQL — no full scan of every reset-enabled user.
+        due_stmt = select(User.id).where(
+            User.data_reset_strategy == DataResetStrategy(strategy),
+            or_(
+                User.last_reset_at.is_(None),
+                User.last_reset_at < cutoff,
+            ),
+            func.coalesce(User.last_reset_at, User.created_at) < cutoff,
+        )
+        due_ids = [uid for (uid,) in (await session.execute(due_stmt)).all()]
+        if not due_ids:
             continue
-        last = user.last_reset_at or user.created_at
-        if now - last < period:
-            continue
+        changed = True
+
+        node_rows = await session.execute(
+            select(ClientAssignment.node_id).where(
+                ClientAssignment.user_id.in_(due_ids),
+                ClientAssignment.status == AssignmentStatus.LIMITED,
+            )
+        )
+        woke_nodes.update(nid for (nid,) in node_rows.all() if nid is not None)
+
         await session.execute(
             update(ClientAssignment)
-            .where(ClientAssignment.user_id == user.id)
+            .where(ClientAssignment.user_id.in_(due_ids))
             .values(used_bytes=0)
         )
-        user.users_data_usage = 0
-        user.last_reset_at = now
-        changed = True
-        if user.is_active and not user.removed:
-            node_rows = await session.execute(
-                select(ClientAssignment.node_id).where(
-                    ClientAssignment.user_id == user.id,
-                    ClientAssignment.status == AssignmentStatus.LIMITED,
-                )
+        await session.execute(
+            update(ClientAssignment)
+            .where(
+                ClientAssignment.user_id.in_(due_ids),
+                ClientAssignment.status == AssignmentStatus.LIMITED,
             )
-            woke_nodes.update(nid for (nid,) in node_rows.all() if nid is not None)
-            await session.execute(
-                update(ClientAssignment)
-                .where(
-                    ClientAssignment.user_id == user.id,
-                    ClientAssignment.status == AssignmentStatus.LIMITED,
-                )
-                .values(status=AssignmentStatus.ACTIVE)
+            .values(status=AssignmentStatus.ACTIVE)
+        )
+        await session.execute(
+            update(User)
+            .where(User.id.in_(due_ids))
+            .values(users_data_usage=0, last_reset_at=now)
+        )
+
+    if changed and woke_nodes:
+        # LIMITED→ACTIVE on reset restored slots; recompute current_users from a
+        # COUNT of ACTIVE assignments so the node counter doesn't drift.
+        active_count = (
+            select(func.count())
+            .select_from(ClientAssignment)
+            .where(
+                ClientAssignment.node_id == Node.id,
+                ClientAssignment.status == AssignmentStatus.ACTIVE,
             )
+            .scalar_subquery()
+        )
+        await session.execute(
+            update(Node)
+            .where(Node.id.in_(sorted(woke_nodes)))
+            .values(current_users=active_count)
+            .execution_options(synchronize_session=False)
+        )
+
     if changed:
         await session.commit()
     return sorted(woke_nodes)
@@ -88,33 +131,18 @@ async def reconcile_once(
     target_version: str | None,
     batch_size: int = _BATCH_SIZE,
     cache: RedisCache | None = None,
+    dispatcher: WebhookDispatcher | None = None,
 ) -> dict[str, int]:
     drifted = 0
     healed = 0
     upgrades = 0
     async with db.session() as session:
-        cutoff = datetime.now(UTC) - timedelta(seconds=_STALE_AFTER_SECONDS)
-        stale_nodes = (
-            (
-                await session.execute(
-                    select(Node).where(
-                        Node.status == NodeStatus.ACTIVE,
-                        or_(Node.last_seen_at.is_(None), Node.last_seen_at < cutoff),
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        heartbeat = NodeHeartbeatService(NodeRepository(session), events)
-        for node in stale_nodes:
-            await heartbeat.mark_stale_offline(node)
-        await session.commit()
+        # Offline detection is owned solely by NodeAgentScheduler.detect_offline_once
+        # (single source of truth, configurable threshold) to avoid duplicate
+        # NodeOffline events / webhook alerts from two racing scans.
         reset_nodes = await _apply_data_resets(session)
         if reset_nodes and cache is not None:
-            keys = [key async for key in cache.client.scan_iter(match="subscription:*")]
-            if keys:
-                await cache.client.delete(*keys)
+            await cache.delete_by_pattern("subscription:*")
             for nid in reset_nodes:
                 await cache.publish_node_event(nid, "config_changed")
         node_ids = (
@@ -192,6 +220,8 @@ class AgentReconcileJob:
         self_healing_enabled: bool,
         target_version: str | None,
         cache: RedisCache | None = None,
+        dispatcher: WebhookDispatcher | None = None,
+        leader: LeaderElector | None = None,
     ) -> None:
         self._db = db
         self._signer = signer
@@ -200,6 +230,8 @@ class AgentReconcileJob:
         self._self_healing_enabled = self_healing_enabled
         self._target_version = target_version
         self._cache = cache
+        self._dispatcher = dispatcher
+        self._leader = leader
         self._task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
 
@@ -229,6 +261,8 @@ class AgentReconcileJob:
                 await asyncio.wait_for(self._stopping.wait(), timeout=self._interval)
             if self._stopping.is_set():
                 break
+            if self._leader is not None and not self._leader.is_leader:
+                continue
             try:
                 await reconcile_once(
                     self._db,
@@ -237,6 +271,7 @@ class AgentReconcileJob:
                     self_healing_enabled=self._self_healing_enabled,
                     target_version=self._target_version,
                     cache=self._cache,
+                    dispatcher=self._dispatcher,
                 )
             except asyncio.CancelledError:
                 raise

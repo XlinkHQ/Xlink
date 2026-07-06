@@ -35,7 +35,11 @@ class MetricsSummaryCache:
             return None
         if not isinstance(data, dict):
             return None
-        return {str(k): float(v) for k, v in data.items()}
+        try:
+            return {str(k): float(v) for k, v in data.items()}
+        except (ValueError, TypeError):
+            logger.warning("metrics_summary_cache_data_invalid")
+            return None
 
     async def write(self, summary: dict[str, float]) -> None:
         try:
@@ -43,8 +47,8 @@ class MetricsSummaryCache:
         except Exception:
             logger.warning("metrics_summary_cache_write_failed")
 
-    def snapshot(self, summary: dict[str, float]) -> MetricsSnapshot:
-        return snapshot_from_summary(summary, self._providers)
+    async def snapshot(self, summary: dict[str, float]) -> MetricsSnapshot:
+        return await snapshot_from_summary(summary, self._providers)
 
 
 async def refresh_summary(

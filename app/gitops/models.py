@@ -20,10 +20,6 @@ class GitDiff:
     changed: dict[str, dict[str, Any]]
     removed: dict[str, Any]
 
-    @property
-    def is_empty(self) -> bool:
-        return not self.added and not self.changed and not self.removed
-
 
 @dataclass(frozen=True, slots=True)
 class RollbackPlan:

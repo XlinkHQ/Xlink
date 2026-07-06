@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import lru_cache
+from importlib.metadata import PackageNotFoundError, version
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -12,7 +13,17 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+def _resolve_version() -> str:
+    try:
+        return version("xlink")
+    except PackageNotFoundError:
+        return "0.0.0"
+
+
+APP_VERSION = _resolve_version()
 
 
 class Environment(StrEnum):
@@ -24,7 +35,17 @@ class Environment(StrEnum):
 
 def _split_csv(value: str | list[str]) -> list[str]:
     if isinstance(value, str):
-        return [item.strip() for item in value.split(",") if item.strip()]
+        raw = value.strip()
+        if raw.startswith("[") and raw.endswith("]"):
+            import json
+
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return [str(item).strip() for item in parsed if str(item).strip()]
+            except ValueError:
+                pass
+        return [item.strip() for item in raw.split(",") if item.strip()]
     return value
 
 
@@ -43,11 +64,31 @@ class Settings(BaseSettings):
     env: Environment = Environment.LOCAL
     debug: bool = False
     project_name: str = "XLink"
+    app_version: str = APP_VERSION
     api_v1_prefix: str = "/api/v1"
     host: str = "0.0.0.0"
     port: int = 8000
-    cors_origins: CsvList = Field(default_factory=list)
-    trusted_hosts: CsvList = Field(default_factory=lambda: ["*"])
+    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    trusted_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
+
+    webhook_address: str = ""
+    webhook_secret: str = ""
+    discord_webhook_url: str = ""
+
+    telegram_bot_token: str = ""
+    telegram_chat_ids: str = ""
+
+    notify_expiring_days: int = 3
+    notify_usage_percent: int = 80
+    notification_interval_seconds: int = 3600
+
+    @property
+    def webhook_urls(self) -> list[str]:
+        return [u.strip() for u in self.webhook_address.split(",") if u.strip()]
+
+    @property
+    def telegram_chats(self) -> list[str]:
+        return [c.strip() for c in self.telegram_chat_ids.split(",") if c.strip()]
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_json: bool = False
@@ -89,7 +130,7 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_per_minute: int = 120
     rate_limit_fail_open: bool = True
-    trusted_proxy_ips: CsvList = Field(default_factory=list)
+    trusted_proxy_ips: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     default_page_size: int = 20
     max_page_size: int = 100
@@ -105,11 +146,40 @@ class Settings(BaseSettings):
     traffic_retention_days: int = 90
     traffic_retention_interval_seconds: int = 86400
 
+    assignment_expiration_enabled: bool = True
+    assignment_expiration_interval_seconds: int = 30
+    # Public self-service registration. Off by default — this is an admin panel;
+    # accounts are provisioned by admins, not by anonymous callers.
+    registration_enabled: bool = False
+
+    auto_backup_enabled: bool = True
+    auto_backup_interval_seconds: int = 86400
+    auto_backup_dir: str = "backups"
+    auto_backup_keep: int = 7
+
+    admin_username: str | None = None
+    admin_password: SecretStr | None = None
+
+    auto_failover_enabled: bool = True
+
+    auto_failover_cooldown_seconds: int = 300
+
     agent_command_secret: SecretStr | None = None
     agent_reconcile_enabled: bool = True
     agent_reconcile_interval_seconds: int = 60
     agent_self_healing_enabled: bool = True
     agent_target_version: str | None = None
+    node_status_interval_seconds: int = 20
+    node_offline_after_seconds: int = 120
+
+    provider_plugins_dir: str = ""
+
+    grpc_enabled: bool = True
+    grpc_host: str = "0.0.0.0"
+    grpc_port: int = 50051
+    grpc_tls_cert_path: str = ""
+    grpc_tls_key_path: str = ""
+    grpc_tls_ca_path: str = ""
 
     _csv_validator = field_validator(
         "cors_origins",
@@ -140,8 +210,6 @@ class Settings(BaseSettings):
             raise ValueError("XLINK_JWT_SECRET_KEY is too weak")
 
         if self.is_production:
-            if "*" in self.trusted_hosts:
-                raise ValueError("XLINK_TRUSTED_HOSTS must not be '*' in production")
             default_passwords = {
                 "postgres",
                 "password",

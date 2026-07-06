@@ -1,15 +1,29 @@
 from __future__ import annotations
 
+import random
 import uuid
+from collections.abc import Sequence
+from datetime import UTC, datetime
+from types import MappingProxyType
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.db.redis import RedisCache
+from app.providers.base.models import ProviderKind
 from app.subscription.generator import SubscriptionGenerator
 from app.subscription.models import ProviderConfig, RenderedFeed
 from app.subscription.renderer import SubscriptionRenderer
-from app.subscription.repository import SubscriptionRepository
-from app.subscription.schemas import ConfigRead, FeedRead, FeedRequest, FeedScope
+from app.subscription.repository import SubscriptionRepository, UserTrafficStats
+from app.subscription.schemas import (
+    ConfigRead,
+    FeedRead,
+    FeedRequest,
+    FeedScope,
+    RenderVersion,
+    SubscriptionFormat,
+)
+
+_PLACEHOLDER_UUID = "00000000-0000-0000-0000-000000000000"
 
 logger = get_logger("xlink.subscription")
 
@@ -53,22 +67,68 @@ class SubscriptionService:
         )
 
     async def feed(self, request: FeedRequest) -> FeedRead:
+        if request.scope is FeedScope.USER:
+            await self._repository.activate_on_hold(request.subject_id)
+            await self._enforce_user_quota(request.subject_id)
+
+        use_cache = request.use_cache and not request.shuffle
         cache_key = self._cache_key(request)
-        if request.use_cache:
+        if use_cache:
             cached = await self._read_cache(cache_key)
             if cached is not None:
                 return cached
 
         configs = await self._generate_feed_configs(request)
+        if request.shuffle:
+            configs = tuple(random.sample(configs, len(configs)))
         rendered = self._renderer.render_feed(
             configs,
             version=request.version,
             feed_format=request.format,
         )
         response = self._feed_read(rendered)
-        if request.use_cache:
+        if use_cache:
             await self._cache.set_json(cache_key, response.model_dump(mode="json"))
         return response
+
+    async def placeholder_feed(
+        self,
+        remark: str,
+        feed_format: SubscriptionFormat,
+        version: RenderVersion = RenderVersion.V1,
+    ) -> FeedRead:
+        config = ProviderConfig(
+            assignment_id=uuid.UUID(_PLACEHOLDER_UUID),
+            user_id=uuid.UUID(_PLACEHOLDER_UUID),
+            provider_kind=ProviderKind.XRAY,
+            provider_name="placeholder",
+            protocol="vless",
+            client_id=_PLACEHOLDER_UUID,
+            email=None,
+            inbound_tag="placeholder",
+            host="127.0.0.1",
+            port=1,
+            expires_at=None,
+            traffic_limit_bytes=None,
+            settings=MappingProxyType(
+                {
+                    "uuid": _PLACEHOLDER_UUID,
+                    "remark": remark,
+                    "network": "tcp",
+                    "security": "none",
+                }
+            ),
+        )
+        rendered = self._renderer.render_feed((config,), version=version, feed_format=feed_format)
+        return self._feed_read(rendered)
+
+    async def _enforce_user_quota(self, user_id: uuid.UUID) -> None:
+        stats = await self._repository.get_user_quota(user_id)
+        now_ts = int(datetime.now(UTC).timestamp())
+        if stats.expire_timestamp is not None and stats.expire_timestamp < now_ts:
+            raise ValidationError("Subscription has expired.", code="subscription_expired")
+        if stats.traffic_limit_bytes is not None and stats.used_bytes >= stats.traffic_limit_bytes:
+            raise ValidationError("Data limit reached.", code="subscription_limit_reached")
 
     async def _generate_feed_configs(self, request: FeedRequest) -> tuple[ProviderConfig, ...]:
         if request.scope is FeedScope.ASSIGNMENT:
@@ -77,7 +137,14 @@ class SubscriptionService:
             sources = await self._repository.list_profile_sources(request.subject_id)
         else:
             sources = await self._repository.list_user_sources(request.subject_id)
-        return await self._generator.generate_feed(sources)
+            pinned = await self._repository.pinned_node_ids(request.subject_id)
+            if pinned:
+                pinned_set = {str(n) for n in pinned}
+                sources = [s for s in sources if str(s.node.id) in pinned_set]
+        texts = await self._repository.get_status_texts()
+        profile_ids = list({s.profile.id for s in sources})
+        overrides = await self._repository.host_overrides(profile_ids)
+        return await self._generator.generate_feed(sources, texts, overrides)
 
     def _feed_read(self, rendered: RenderedFeed) -> FeedRead:
         return FeedRead(
@@ -113,11 +180,38 @@ class SubscriptionService:
             await self._cache.delete(cache_key)
             return None
 
+    async def get_user_traffic_stats(self, user_id: uuid.UUID) -> UserTrafficStats:
+        return await self._repository.get_user_traffic_stats(user_id)
+
+    async def get_user_quota(self, user_id: uuid.UUID) -> UserTrafficStats:
+        return await self._repository.get_user_quota(user_id)
+
+    async def invalidate_cache(self, pattern: str = "subscription:*") -> None:
+        keys: list[bytes] = [key async for key in self._cache.client.scan_iter(match=pattern)]
+        if keys:
+            await self._cache.client.delete(*keys)
+        logger.info("subscription_cache_invalidated", pattern=pattern, deleted=len(keys))
+
+    async def invalidate_subjects(self, subject_ids: Sequence[uuid.UUID]) -> None:
+        deleted = 0
+        for sid in subject_ids:
+            keys: list[bytes] = [
+                key async for key in self._cache.client.scan_iter(match=f"subscription:{sid}:*")
+            ]
+            if keys:
+                await self._cache.client.delete(*keys)
+                deleted += len(keys)
+        if deleted:
+            logger.info("subscription_cache_invalidated_subjects", subjects=len(subject_ids), deleted=deleted)
+
+    async def notify_node_changed(self, node_id: uuid.UUID) -> None:
+        await self._cache.publish_node_event(node_id, "config_changed")
+
     def _cache_key(self, request: FeedRequest) -> str:
         return (
             "subscription:"
-            f"{request.version.value}:"
-            f"{request.format.value}:"
+            f"{request.subject_id}:"
             f"{request.scope.value}:"
-            f"{request.subject_id}"
+            f"{request.version.value}:"
+            f"{request.format.value}"
         )

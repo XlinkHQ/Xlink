@@ -10,6 +10,23 @@ web/.next/
 *.log
 .env
 .DS_Store
+._*
+.AppleDouble
+backups/
+backup_*.sql
 dist/
 build/
 *.egg-info/
+.VSCodeCounter/
+*_audit.py
+/package-lock.json
+data/
+
+*.pem
+*.key
+.env.*
+!.env.example
+
+# Local Claude Code permissions (dev/test placeholders, machine-specific)
+.claude/settings.json
+.claude/settings.local.json

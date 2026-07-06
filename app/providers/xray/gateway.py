@@ -38,10 +38,6 @@ class XrayGateway:
         self._config = config or XrayGatewayConfig()
         self._circuit = _CircuitState()
 
-    @property
-    def config(self) -> XrayGatewayConfig:
-        return self._config
-
     async def create_client(self, spec: ClientSpec) -> ClientResult:
         payload = build_create_client_payload(spec)
         raw = await self._dispatch("create", payload)

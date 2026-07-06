@@ -11,7 +11,7 @@ from app.gitops.service import GitOpsService
 
 
 def test_snapshot_redacts_secrets() -> None:
-    service = GitOpsService(session=None)  # type: ignore[arg-type]
+    service = GitOpsService(session=None)
 
     snapshot = service.snapshot(
         entity_type="node",
@@ -24,7 +24,7 @@ def test_snapshot_redacts_secrets() -> None:
 
 
 def test_diff_generation() -> None:
-    service = GitOpsService(session=None)  # type: ignore[arg-type]
+    service = GitOpsService(session=None)
     entity_id = uuid.uuid4()
     before = service.snapshot(entity_type="node", entity_id=entity_id, payload={"a": 1, "b": 2})
     after = service.snapshot(entity_type="node", entity_id=entity_id, payload={"a": 1, "c": 3})

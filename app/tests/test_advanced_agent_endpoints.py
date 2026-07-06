@@ -16,7 +16,7 @@ from app.providers.base.models import ProviderKind
 
 TOKEN = "agent-endpoint-token-adv"
 LOGIN = "/api/v1/auth/login"
-ADMIN_PW = "admin-strong-password-1234"
+ADMIN_PW = "admin-strong-password-1234-AB!"
 
 
 async def _seed(app_state: AppState) -> uuid.UUID:
@@ -26,6 +26,7 @@ async def _seed(app_state: AppState) -> uuid.UUID:
             username="admin",
             hashed_password=hash_password(ADMIN_PW),
             role=UserRole.ADMIN,
+            is_sudo=True,
         )
         session.add(admin)
         node = Node(
@@ -42,7 +43,7 @@ async def _seed(app_state: AppState) -> uuid.UUID:
         user = User(
             email=f"u-{uuid.uuid4().hex[:8]}@x.io",
             username=f"u-{uuid.uuid4().hex[:8]}",
-            hashed_password=hash_password("strong-password-1234"),
+            hashed_password=hash_password("strong-password-1234-AB!"),
             role=UserRole.USER,
         )
         session.add(user)

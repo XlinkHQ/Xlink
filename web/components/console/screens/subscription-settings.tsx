@@ -1,7 +1,18 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, RotateCcw, Sparkles, X } from "lucide-react";
+import {
+  FileCode,
+  ListFilter,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+  Tags,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Input, Select } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
@@ -15,6 +26,7 @@ import {
 import { CodeEditor } from "./code-editor";
 import { Modal } from "@/components/ui/modal";
 import { SettingsRow, useRegisterSave } from "./settings";
+import { SettingsSection } from "./settings-kit";
 import { WarpBadge } from "./warp-table";
 
 const PREVIEW_VALUES: Record<string, string> = {
@@ -138,6 +150,7 @@ export function SubscriptionSettingsScreen() {
         rules: rules.filter((r) => r.pattern.trim() !== ""),
       });
       toast("success", "Subscription settings saved.");
+      setLoaded(false);
       qc.invalidateQueries({ queryKey: ["sub-settings"] });
     } catch (e) {
       toast("error", e instanceof ApiError ? e.message : "Save failed.");
@@ -149,7 +162,11 @@ export function SubscriptionSettingsScreen() {
 
   return (
     <div className="w-full">
-      <div className="warp-set-list">
+      <SettingsSection
+        icon={Settings2}
+        title="General"
+        description="Core subscription details shown to clients when they load the profile."
+      >
         <SettingsRow label="Profile title" hint="Shown as the subscription profile name in client apps.">
           <input className="warp-set-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="XLink" />
         </SettingsRow>
@@ -162,7 +179,14 @@ export function SubscriptionSettingsScreen() {
         <SettingsRow label="Config name" hint="Template for each config's display name.">
           <input className="warp-set-input font-mono" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="{PROTOCOL} | {USERNAME}" />
         </SettingsRow>
+      </SettingsSection>
 
+      <SettingsSection
+        divider
+        icon={Tags}
+        title="Status labels"
+        description="Rename the label appended to each config for the user's current account state."
+      >
         {(
           [
             ["active", "Active config label"],
@@ -176,7 +200,14 @@ export function SubscriptionSettingsScreen() {
             <input className="warp-set-input" value={texts[key]} onChange={(e) => setTexts((t) => ({ ...t, [key]: e.target.value }))} placeholder={label} />
           </SettingsRow>
         ))}
+      </SettingsSection>
 
+      <SettingsSection
+        divider
+        icon={SlidersHorizontal}
+        title="Delivery behavior"
+        description="Control how configs are ordered and what inactive users receive."
+      >
         <SettingsRow label="Shuffle configs" hint="Randomise config order on every fetch to spread client load.">
           <Switch checked={shuffle} onChange={setShuffle} />
         </SettingsRow>
@@ -188,26 +219,25 @@ export function SubscriptionSettingsScreen() {
             <input className="warp-set-input" value={placeholderRemark} onChange={(e) => setPlaceholderRemark(e.target.value)} placeholder="Subscription expired — contact support" />
           </SettingsRow>
         ) : null}
-      </div>
+      </SettingsSection>
 
-      <div className="warp-set-block">
-        <div className="flex items-center justify-between">
-          <div>
-            <h4 className="text-lg font-medium text-fg">Custom subscription page</h4>
-            <p className="mt-0.5 text-sm text-fg-muted">
-              {customHtml.trim()
-                ? "A custom HTML page is set — shown when the link opens in a browser."
-                : "Leave empty to use the built-in page."}
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5">
-            {customHtml.trim() ? <WarpBadge tone="green">Custom</WarpBadge> : <WarpBadge tone="gray">Default</WarpBadge>}
-            <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={() => setEditorOpen(true)}>
-              <Pencil size={14} /> Edit
-            </button>
-          </div>
+      <SettingsSection
+        divider
+        icon={FileCode}
+        title="Custom subscription page"
+        description={
+          customHtml.trim()
+            ? "A custom HTML page is set — shown when the link opens in a browser."
+            : "Leave empty to use the built-in page."
+        }
+      >
+        <div className="flex items-center justify-end gap-1.5">
+          {customHtml.trim() ? <WarpBadge tone="green">Custom</WarpBadge> : <WarpBadge tone="gray">Default</WarpBadge>}
+          <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={() => setEditorOpen(true)}>
+            <Pencil size={14} /> Edit
+          </button>
         </div>
-      </div>
+      </SettingsSection>
 
       {editorOpen ? (
         <CustomPageEditor
@@ -217,15 +247,13 @@ export function SubscriptionSettingsScreen() {
         />
       ) : null}
 
-      <div className="warp-set-block">
-
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-lg font-medium text-fg">User-Agent rules</h4>
-              <p className="mt-0.5 text-sm text-fg-muted">
-                first match wins; regex on the client User-Agent → format (or block)
-              </p>
-            </div>
+      <SettingsSection
+        divider
+        icon={ListFilter}
+        title="User-Agent rules"
+        description="First match wins; regex on the client User-Agent maps to a format (or block)."
+      >
+          <div className="mb-2 flex items-center justify-end">
             <button
               type="button"
               className="warp-tb-button"
@@ -273,7 +301,7 @@ export function SubscriptionSettingsScreen() {
               </div>
             ))}
           </div>
-      </div>
+      </SettingsSection>
     </div>
   );
 }
@@ -326,11 +354,6 @@ function CheckRow({
     </label>
   );
 }
-
-const PLACEHOLDERS = [
-  "{{title}}", "{{username}}", "{{status}}", "{{used}}", "{{total}}", "{{percent}}",
-  "{{expire}}", "{{sub_url}}", "{{support}}", "{{count}}", "{{configs}}", "{{configs_raw}}",
-];
 
 function CustomPageEditor({
   value,
@@ -388,19 +411,6 @@ function CustomPageEditor({
             <Sparkles size={14} /> Starter
           </button>
         )}
-      </div>
-
-      <div className="warp-ph-panel">
-        <p className="warp-ph-panel-hint">
-          Click a placeholder to insert. Leave empty to use the built-in page.
-        </p>
-        <div className="warp-ph-grid">
-          {PLACEHOLDERS.map((p) => (
-            <button key={p} type="button" className="warp-ph-chip warp-ph-chip-btn" onClick={() => setDraft((d) => d + p)}>
-              {p}
-            </button>
-          ))}
-        </div>
       </div>
 
       {mode === "code" ? (

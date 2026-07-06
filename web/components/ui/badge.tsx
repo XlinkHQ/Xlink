@@ -3,14 +3,15 @@ import { cn } from "@/lib/cn";
 
 export type Variant = "online" | "offline" | "warning" | "error" | "success" | "info";
 export type Tone = "neutral" | "success" | "warning" | "danger" | "muted";
+export type ShadVariant = "default" | "secondary" | "destructive" | "outline";
 
 const VARIANT_VAR: Record<Variant, string | null> = {
   online: "var(--green)",
   success: "var(--green)",
   warning: "var(--orange)",
   error: "var(--red)",
-  info: "var(--primary)", // primary (blue)
-  offline: null, // neutral grey
+  info: "var(--primary)",
+  offline: null,
 };
 
 const TONE_TO_VARIANT: Record<Tone, Variant> = {
@@ -35,6 +36,13 @@ export function variantForStatus(status: string): Variant {
   return TONE_TO_VARIANT[toneForStatus(status)];
 }
 
+const SHAD_CLASS: Record<ShadVariant, string> = {
+  default: "warp-badge2 is-default",
+  secondary: "warp-badge2 is-secondary",
+  destructive: "warp-badge2 is-destructive",
+  outline: "warp-badge2 is-outline",
+};
+
 export function Badge({
   variant,
   tone,
@@ -42,14 +50,23 @@ export function Badge({
   children,
   className,
 }: {
-  variant?: Variant;
-  
+  variant?: Variant | ShadVariant;
   tone?: Tone;
   dot?: boolean;
   children: ReactNode;
   className?: string;
 }) {
-  const v: Variant = variant ?? (tone ? TONE_TO_VARIANT[tone] : "info");
+  // shadcn-style API path (default/secondary/destructive/outline) — our colors.
+  if (variant && variant in SHAD_CLASS) {
+    return (
+      <span className={cn(SHAD_CLASS[variant as ShadVariant], className)}>
+        {dot ? <span className="warp-badge2-dot" /> : null}
+        {children}
+      </span>
+    );
+  }
+
+  const v: Variant = (variant as Variant) ?? (tone ? TONE_TO_VARIANT[tone] : "info");
   const hue = VARIANT_VAR[v];
   const style: CSSProperties | undefined = hue
     ? { backgroundColor: `color-mix(in srgb, ${hue} 12%, transparent)`, color: hue }
@@ -57,7 +74,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        "inline-flex h-[25px] items-center gap-1.5 rounded-full border border-hairline px-2 text-xs font-medium",
+        "inline-flex h-[18px] items-center gap-1.5 rounded-full px-2 text-[11px] font-medium",
         hue ? "" : "bg-muted text-fg-muted",
         className,
       )}
@@ -65,7 +82,7 @@ export function Badge({
     >
       {dot ? (
         <span
-          className="h-[9px] w-[9px] rounded-full"
+          className="h-1.5 w-1.5 rounded-full"
           style={{ backgroundColor: hue ?? "var(--body-muted)" }}
         />
       ) : null}

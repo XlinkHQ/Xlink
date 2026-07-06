@@ -112,6 +112,8 @@ async function readError(response: Response): Promise<{ message: string; code?: 
 
 const NO_REFRESH_PATHS = ["/auth/login", "/auth/refresh", "/auth/register"];
 
+const REQUEST_TIMEOUT_MS = 45000;
+
 async function rawFetch(path: string, init: RequestInit, token: string | null): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -121,7 +123,21 @@ async function rawFetch(path: string, init: RequestInit, token: string | null): 
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(`/api/v1${path}`, { ...init, headers });
+  // Abort on timeout so a hung backend call rejects instead of leaving mutation
+  // dialogs stuck on their "Adding…"/"Saving…" spinner forever (busy only resets
+  // in finally, which never runs if the promise never settles).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(`/api/v1${path}`, { ...init, headers, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new ApiError("Request timed out. Please try again.", 408, "timeout");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function ensureAuthed(path: string, init: RequestInit): Promise<Response> {
@@ -279,6 +295,8 @@ export type UserRead = {
   users_data_usage: number;
   owner_id: string | null;
   subscription_url_prefix: string | null;
+  admin_user_limit?: number | null;
+  admin_traffic_limit_bytes?: number | null;
   sub_updated_at: string | null;
   sub_last_user_agent: string | null;
   created_at: string;
@@ -297,8 +315,10 @@ function query(params: Record<string, string | number | undefined>): string {
 }
 
 export function listNodes(opts: { size?: number; cursor?: string } = {}) {
+  // Default matches the backend max_page_size clamp (100) so the requested size
+  // isn't a silent lie. Callers that need >100 must page via cursor.
   return apiFetch<CursorPage<NodeRead>>(
-    `/nodes${query({ size: opts.size ?? 200, cursor: opts.cursor })}`,
+    `/nodes${query({ size: opts.size ?? 100, cursor: opts.cursor })}`,
   );
 }
 
@@ -307,7 +327,7 @@ export function listAssignments(
 ) {
   return apiFetch<CursorPage<AssignmentRead>>(
     `/assignments${query({
-      size: opts.size ?? 200,
+      size: opts.size ?? 100,
       cursor: opts.cursor,
       user_id: opts.userId,
       status_filter: opts.status,
@@ -317,21 +337,165 @@ export function listAssignments(
 
 export function listProfiles(opts: { size?: number; cursor?: string } = {}) {
   return apiFetch<CursorPage<ProfileRead>>(
-    `/profiles${query({ size: opts.size ?? 200, cursor: opts.cursor })}`,
+    `/profiles${query({ size: opts.size ?? 100, cursor: opts.cursor })}`,
   );
 }
 
 export function listUsers(
-  opts: { size?: number; cursor?: string; role?: string; includeRemoved?: boolean } = {},
+  opts: { size?: number; cursor?: string; role?: string; includeRemoved?: boolean; sort?: string } = {},
 ) {
   return apiFetch<CursorPage<UserRead>>(
     `/users${query({
-      size: opts.size ?? 200,
+      size: opts.size ?? 100,
       cursor: opts.cursor,
       role: opts.role,
       include_removed: opts.includeRemoved ? "true" : undefined,
+      sort: opts.sort,
     })}`,
   );
+}
+
+export function usersTotal(role = "user") {
+  return apiFetch<{ items: UserRead[]; meta: { total: number } }>(
+    `/users${query({ page: 1, size: 1, role })}`,
+  );
+}
+
+export type UserTemplateRead = {
+  id: string;
+  name: string;
+  data_limit_bytes: number | null;
+  expire_days: number | null;
+  data_reset_strategy: string;
+  device_limit: number | null;
+  username_prefix: string;
+  created_at: string;
+};
+
+export function listUserTemplates() {
+  return apiFetch<UserTemplateRead[]>("/user-templates");
+}
+
+export type WarpSettingsRead = {
+  warp_enabled: boolean;
+  warp_private_key: string;
+  warp_public_key: string;
+  warp_address: string;
+  warp_endpoint: string;
+  warp_reserved: string;
+};
+
+export function getWarpSettings() {
+  return apiFetch<WarpSettingsRead>("/settings/warp");
+}
+
+export function updateWarpSettings(body: Partial<WarpSettingsRead>) {
+  return apiFetch<WarpSettingsRead>("/settings/warp", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export type RoutingRuleRead = {
+  id: string;
+  name: string;
+  match_type: string;
+  match_values: string;
+  outbound: string;
+  enabled: boolean;
+  priority: number;
+};
+
+export function listRoutingRules() {
+  return apiFetch<RoutingRuleRead[]>("/routing/rules");
+}
+
+export function createRoutingRule(body: Partial<RoutingRuleRead>) {
+  return apiFetch<RoutingRuleRead>("/routing/rules", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateRoutingRule(id: string, body: Partial<RoutingRuleRead>) {
+  return apiFetch<RoutingRuleRead>(`/routing/rules/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteRoutingRule(id: string) {
+  return apiFetch<void>(`/routing/rules/${id}`, { method: "DELETE" });
+}
+
+export type OutboundRead = {
+  id: string;
+  tag: string;
+  type: string;
+  settings: Record<string, unknown>;
+  enabled: boolean;
+};
+
+export function listOutbounds() {
+  return apiFetch<OutboundRead[]>("/routing/outbounds");
+}
+
+export function createOutbound(body: {
+  tag: string;
+  type: string;
+  settings?: Record<string, unknown>;
+  enabled?: boolean;
+}) {
+  return apiFetch<OutboundRead>("/routing/outbounds", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateOutbound(id: string, body: Partial<Omit<OutboundRead, "id">>) {
+  return apiFetch<OutboundRead>(`/routing/outbounds/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteOutbound(id: string) {
+  return apiFetch<void>(`/routing/outbounds/${id}`, { method: "DELETE" });
+}
+
+export function importOutbound(text: string) {
+  return apiFetch<{ type: string; settings: Record<string, unknown> }>(
+    "/routing/outbounds/import",
+    { method: "POST", body: JSON.stringify({ text }) },
+  );
+}
+
+export type PingResult = { ok: boolean; latency_ms: number | null; detail: string };
+
+export function pingOutbound(address: string) {
+  return apiFetch<PingResult>(
+    "/routing/outbounds/ping",
+    { method: "POST", body: JSON.stringify({ address }) },
+  );
+}
+
+export function pingOutboundById(id: string) {
+  return apiFetch<PingResult>(`/routing/outbounds/${id}/ping`, { method: "POST" });
+}
+
+export function createUserTemplate(body: Partial<UserTemplateRead>) {
+  return apiFetch<UserTemplateRead>("/user-templates", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateUserTemplate(id: string, body: Partial<UserTemplateRead>) {
+  return apiFetch<UserTemplateRead>(`/user-templates/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteUserTemplate(id: string) {
+  return apiFetch<void>(`/user-templates/${id}`, { method: "DELETE" });
 }
 
 export function currentUser() {
@@ -344,6 +508,10 @@ export function createNode(body: Record<string, unknown>) {
 
 export function updateNode(id: string, body: Record<string, unknown>) {
   return apiFetch<NodeRead>(`/nodes/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function deleteNode(id: string) {
+  return apiFetch<void>(`/nodes/${id}`, { method: "DELETE" });
 }
 
 export function disableNode(id: string) {
@@ -454,24 +622,12 @@ export function createAssignment(body: Record<string, unknown>) {
   return apiFetch<AssignmentRead>("/assignments", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function updateAssignment(id: string, body: Record<string, unknown>) {
-  return apiFetch<AssignmentRead>(`/assignments/${id}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
-}
 
-export function disableAssignment(id: string) {
-  return apiFetch<AssignmentRead>(`/assignments/${id}/disable`, { method: "POST" });
-}
 
 export function deleteAssignment(id: string) {
   return apiFetch<void>(`/assignments/${id}`, { method: "DELETE" });
 }
 
-export function updateCurrentUser(body: Record<string, unknown>) {
-  return apiFetch<UserRead>("/users/me", { method: "PATCH", body: JSON.stringify(body) });
-}
 
 export type TrafficTotals = {
   total_bytes: number;
@@ -497,12 +653,6 @@ export function onlineUsers(windowSeconds = 180) {
   );
 }
 
-export function cliCommand(command: string) {
-  return apiFetch<{ output: string }>("/cli", {
-    method: "POST",
-    body: JSON.stringify({ command }),
-  });
-}
 
 export type SubscriptionRuleResult =
   | "links"
@@ -546,6 +696,33 @@ export function updateSubscriptionSettings(body: Partial<SubscriptionSettings>) 
   });
 }
 
+export type NodeScoreRead = { node_id: string; score: number; reasons: string[] };
+export type SchedulerDecisionRead = {
+  node_id: string;
+  profile_id: string;
+  policy: string;
+  dry_run: boolean;
+  score: number;
+  candidates: NodeScoreRead[];
+};
+
+export function schedulerPolicies() {
+  return apiFetch<string[]>("/scheduler/policies");
+}
+
+export function schedulerRun(body: { profile_id: string; policy: string; dry_run: boolean }) {
+  return apiFetch<SchedulerDecisionRead>("/scheduler/run", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export type NodeMetricSample = { name: string; value: number; observed_at: string };
+
+export function nodeMetricsRecent(nodeId: string, limit = 120) {
+  return apiFetch<NodeMetricSample[]>(`/agent/nodes/${nodeId}/metrics/recent${query({ limit })}`);
+}
+
 export function getCoreTemplates() {
   return apiFetch<{ templates: Record<string, string> }>("/settings/core");
 }
@@ -571,11 +748,6 @@ export function nodeTrafficUsage() {
   return apiFetch<{ node_id: string; total_bytes: number }[]>("/traffic/nodes");
 }
 
-export function nodeUserTrafficUsage(nodeId: string) {
-  return apiFetch<{ user_id: string; total_bytes: number }[]>(
-    `/traffic/nodes/${nodeId}/users`,
-  );
-}
 
 export function userNodeUsage(userId: string) {
   return apiFetch<{ node_id: string; node_name: string; total_bytes: number }[]>(
@@ -603,9 +775,6 @@ export function profileUsageTotal(profileId: string) {
   return apiFetch<{ total_bytes: number }>(`/traffic/profiles/${profileId}/usage`);
 }
 
-export function monitoringSummary() {
-  return apiFetch<MetricsSnapshotRead>("/monitoring/summary");
-}
 
 export type ApiKey = {
   id: string;
@@ -657,8 +826,34 @@ export type AuditEntry = {
   created_at: string;
 };
 
-export function listAudit(opts: { limit?: number; actor?: string } = {}) {
-  return apiFetch<AuditEntry[]>(`/audit${query({ limit: opts.limit, actor: opts.actor })}`);
+export function listAudit(
+  opts: { limit?: number; actor?: string; dateFrom?: string; dateTo?: string } = {},
+) {
+  return apiFetch<AuditEntry[]>(
+    `/audit${query({
+      limit: opts.limit,
+      actor: opts.actor,
+      date_from: opts.dateFrom,
+      date_to: opts.dateTo,
+    })}`,
+  );
+}
+
+export async function downloadAuditCsv(
+  opts: { actor?: string; dateFrom?: string; dateTo?: string } = {},
+): Promise<void> {
+  const qs = query({ actor: opts.actor, date_from: opts.dateFrom, date_to: opts.dateTo });
+  const res = await fetch(`/api/v1/audit/export.csv${qs}`, {
+    headers: { Authorization: `Bearer ${getToken() ?? ""}` },
+  });
+  if (!res.ok) throw new ApiError("Export failed.", res.status);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `xlink-audit-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export type SystemStatsRead = {
@@ -695,9 +890,11 @@ export function restartPanel() {
   return apiFetch<{ status: string }>("/monitoring/restart", { method: "POST" });
 }
 
-export function nodeLogs(nodeId: string, limit = 100) {
+export function nodeLogs(nodeId: string, limit = 100, source?: string) {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (source) q.set("source", source);
   return apiFetch<Array<Record<string, unknown>>>(
-    `/agent/nodes/${nodeId}/logs/recent?limit=${limit}`,
+    `/agent/nodes/${nodeId}/logs/recent?${q.toString()}`,
   );
 }
 
@@ -735,25 +932,22 @@ export async function downloadBackupDb(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-export function restoreBackup(body: Record<string, unknown>) {
-  return apiFetch<Record<string, unknown>>("/backup/restore", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
 
-export function gitopsDiff(body: Record<string, unknown>) {
-  return apiFetch<Record<string, unknown>>("/gitops/diff", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-}
 
-export function gitopsCommit(body: Record<string, unknown>) {
-  return apiFetch<Record<string, unknown>>("/gitops/commit", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+
+export type GitOpsRecordRead = {
+  id: string;
+  entity_type: string;
+  entity_id: string | null;
+  action: string;
+  actor: string | null;
+  message: string | null;
+  snapshot: Record<string, unknown>;
+  diff: { added?: Record<string, unknown>; changed?: Record<string, unknown>; removed?: Record<string, unknown> };
+  created_at: string;
+};
+export function gitopsRecords(limit = 100) {
+  return apiFetch<GitOpsRecordRead[]>(`/gitops/records${query({ limit })}`);
 }
 
 export function subscriptionFeed(
@@ -791,9 +985,6 @@ export function setNodeStatus(id: string, status: string) {
   });
 }
 
-export function getNode(id: string) {
-  return apiFetch<NodeRead>(`/nodes/${id}`);
-}
 
 export function xrayVersions() {
   return apiFetch<string[]>(`/nodes/xray-versions`);
@@ -805,17 +996,8 @@ export function provisionAgentToken(id: string) {
   });
 }
 
-export function getProfile(id: string) {
-  return apiFetch<ProfileRead>(`/profiles/${id}`);
-}
 
-export function getAssignment(id: string) {
-  return apiFetch<AssignmentRead>(`/assignments/${id}`);
-}
 
-export function getUser(id: string) {
-  return apiFetch<UserRead>(`/users/${id}`);
-}
 
 export function createUser(body: {
   username: string;
@@ -875,6 +1057,8 @@ export function createAdmin(body: {
   all_groups_access?: boolean;
   modify_users_access?: boolean;
   subscription_url_prefix?: string | null;
+  admin_user_limit?: number | null;
+  admin_traffic_limit_bytes?: number | null;
 }) {
   return apiFetch<UserRead>("/users/admins", { method: "POST", body: JSON.stringify(body) });
 }
@@ -889,6 +1073,8 @@ export function updateAdmin(
     all_groups_access?: boolean;
     modify_users_access?: boolean;
     subscription_url_prefix?: string | null;
+    admin_user_limit?: number | null;
+    admin_traffic_limit_bytes?: number | null;
   },
 ) {
   return apiFetch<UserRead>(`/users/admins/${id}`, {
@@ -905,17 +1091,22 @@ export function disableAdminUsers(id: string) {
   return apiFetch<{ affected: number }>(`/users/admins/${id}/disable-users`, { method: "POST" });
 }
 
+export type AdminUsageRead = {
+  users_count: number;
+  users_limit: number | null;
+  traffic_allocated_bytes: number;
+  traffic_used_bytes: number;
+  traffic_budget_bytes: number | null;
+};
+
+export function adminUsage(id: string) {
+  return apiFetch<AdminUsageRead>(`/users/admins/${id}/usage`);
+}
+
 export function revokeSubscription(id: string) {
   return apiFetch<UserRead>(`/users/${id}/revoke-subscription`, { method: "POST" });
 }
 
-export function promoteUser(id: string) {
-  return apiFetch<UserRead>(`/users/${id}/promote`, { method: "POST" });
-}
-
-export function demoteUser(id: string) {
-  return apiFetch<UserRead>(`/users/${id}/demote`, { method: "POST" });
-}
 
 export function userSubscriptionUrl(userId: string) {
   return apiFetch<{ token: string; subscription_url: string }>(
@@ -980,6 +1171,91 @@ export function resetUserDevices(userId: string) {
   return apiFetch<void>(`/users/${userId}/devices`, { method: "DELETE" });
 }
 
+export function promoteUser(id: string) {
+  return apiFetch<UserRead>(`/users/${id}/promote`, { method: "POST" });
+}
+
+export function demoteUser(id: string) {
+  return apiFetch<UserRead>(`/users/${id}/demote`, { method: "POST" });
+}
+
+export type BulkAction =
+  | "enable"
+  | "disable"
+  | "delete"
+  | "reset_usage"
+  | "set_data_limit"
+  | "set_expiry"
+  | "extend_expiry"
+  | "set_reset_strategy";
+
+export function bulkUserAction(
+  action: BulkAction,
+  userIds: string[],
+  params?: {
+    data_limit_bytes?: number | null;
+    expire_at?: string | null;
+    extend_days?: number;
+    data_reset_strategy?: string;
+  },
+) {
+  return apiFetch<{ ok: number; failed: number }>("/users/bulk", {
+    method: "POST",
+    body: JSON.stringify({ action, user_ids: userIds, ...params }),
+  });
+}
+
+export type CoreHealthRead = {
+  provider_name: string;
+  status: string;
+  latency_ms: number | null;
+  detail: string | null;
+  checked_at: string;
+};
+export function nodeCores(nodeId: string) {
+  return apiFetch<CoreHealthRead[]>(`/nodes/${nodeId}/cores`);
+}
+
+export type FailoverPlanItemRead = {
+  assignment_id: string;
+  source_node_id: string;
+  target_node_id: string;
+  profile_id: string;
+  user_id: string;
+};
+export type FailoverPlanRead = {
+  plan_id: string;
+  source_node_id: string;
+  dry_run: boolean;
+  items: FailoverPlanItemRead[];
+};
+export type FailoverResultRead = {
+  plan_id: string;
+  migrated: number;
+  skipped: number;
+  dry_run: boolean;
+};
+export function failoverPlan(sourceNodeId: string, dryRun = true) {
+  return apiFetch<FailoverPlanRead>("/failover/plan", {
+    method: "POST",
+    body: JSON.stringify({ source_node_id: sourceNodeId, dry_run: dryRun, policy: "balanced" }),
+  });
+}
+export function failoverExecute(plan: FailoverPlanRead) {
+  return apiFetch<FailoverResultRead>("/failover/execute", { method: "POST", body: JSON.stringify(plan) });
+}
+
+export type RetentionRead = { enabled: boolean; retention_days: number; interval_seconds: number };
+export function trafficRetention() {
+  return apiFetch<RetentionRead>("/traffic/retention");
+}
+export function trafficCleanup(retentionDays: number) {
+  return apiFetch<{ deleted: number; retention_days: number }>("/traffic/cleanup", {
+    method: "POST",
+    body: JSON.stringify({ retention_days: retentionDays }),
+  });
+}
+
 export function deleteUser(id: string) {
   return apiFetch<void>(`/users/${id}`, { method: "DELETE" });
 }
@@ -988,19 +1264,101 @@ export function monitoringMetrics() {
   return apiFetch<MetricsSnapshotRead>("/monitoring/metrics");
 }
 
-export async function monitoringPrometheus(): Promise<string> {
-  const response = await ensureAuthed("/monitoring/prometheus", {});
+export type CertificateEntryRead = {
+  profile_id: string;
+  profile_name: string;
+  core: string;
+  protocol: string;
+  security: string;
+  server_name: string | null;
+  node_id: string;
+  node_name: string;
+  node_host: string;
+  status: string;
+};
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      clearTokens();
-      onAuthLost?.();
-    }
-    const e = await readError(response);
-    throw new ApiError(e.message, response.status, e.code);
-  }
-  return response.text();
+export type CertificateNodeGroupRead = {
+  node_id: string;
+  node_name: string;
+  node_host: string;
+  secure_count: number;
+  insecure_count: number;
+  entries: CertificateEntryRead[];
+};
+
+export type CertificatesRead = {
+  total: number;
+  secure: number;
+  reality: number;
+  insecure: number;
+  nodes: CertificateNodeGroupRead[];
+};
+
+
+export type ManagedCertificate = {
+  id: string;
+  domain: string;
+  source: string;
+  status: string;
+  issuer: string;
+  not_before: string | null;
+  not_after: string | null;
+  last_error: string;
+  renewed_at: string | null;
+  created_at: string;
+};
+
+export function listCertificates() {
+  return apiFetch<ManagedCertificate[]>("/certificates");
 }
+
+export function importCertificate(body: { domain: string; cert_pem: string; key_pem: string }) {
+  return apiFetch<ManagedCertificate>("/certificates", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function requestAcmeCertificate(domain: string) {
+  return apiFetch<ManagedCertificate>("/certificates/acme", {
+    method: "POST",
+    body: JSON.stringify({ domain }),
+  });
+}
+
+export function deleteCertificate(id: string) {
+  return apiFetch<void>(`/certificates/${id}`, { method: "DELETE" });
+}
+
+export type NotificationSettingsRead = {
+  notify_enabled: boolean;
+  notify_expiring_days: number;
+  notify_usage_percent: number;
+  notify_node_down: boolean;
+  webhook_address: string;
+  discord_webhook_url: string;
+  telegram_bot_token: string;
+  telegram_chat_ids: string;
+};
+
+export function getNotificationSettings() {
+  return apiFetch<NotificationSettingsRead>("/settings/notifications");
+}
+
+export function updateNotificationSettings(body: Partial<NotificationSettingsRead>) {
+  return apiFetch<NotificationSettingsRead>("/settings/notifications", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function testNotificationSettings(body: Partial<NotificationSettingsRead>) {
+  return apiFetch<{ status: string }>("/settings/notifications/test", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 
 export function logoutAll() {
   return apiFetch<void>("/auth/logout-all", { method: "POST" });

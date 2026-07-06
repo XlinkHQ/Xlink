@@ -12,7 +12,46 @@ from app.domain.node import Node
 from app.domain.profile import Profile
 from app.providers.base.models import ProviderKind
 
-SUPPORTED_SUBSCRIPTION_PROTOCOLS = frozenset({"vless", "vmess", "trojan"})
+SUPPORTED_SUBSCRIPTION_PROTOCOLS = frozenset(
+    {
+        "vless",
+        "vmess",
+        "trojan",
+        "shadowsocks",
+        "shadowsocks2022",
+        "shadowtls",
+        "hysteria2",
+        "tuic",
+        "socks",
+        "http",
+        "naive",
+        "wireguard",
+    }
+)
+
+
+def _resolve_host(protocol: str, settings: Mapping[str, Any], node_host: str) -> str:
+    if protocol == "wireguard":
+        host = settings.get("endpoint") or node_host
+    else:
+        host = settings.get("address") or node_host
+    host = str(host).split("/", 1)[0].strip()
+    # The host is interpolated raw into the URI authority (…@host:port#label).
+    # Strip characters that would break out into userinfo/query/fragment or
+    # inject a second host, so an admin/reseller address can't corrupt links.
+    for ch in ("@", "?", "#", " ", "\t", "\r", "\n"):
+        host = host.replace(ch, "")
+    return host
+
+
+_DEFAULT_PORT: dict[str, int] = {"wireguard": 51820}
+
+
+def _resolve_port(protocol: str, settings: Mapping[str, Any], node_port: int) -> int:
+    port = settings.get("port")
+    if port:
+        return int(port)
+    return _DEFAULT_PORT.get(protocol, node_port)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +88,10 @@ class ProviderConfig:
         assignment = source.assignment
         profile = source.profile
         node = source.node
+        user = assignment.user
+
+        expires_at = assignment.expires_at or getattr(user, "expire_at", None)
+        data_limit = assignment.traffic_limit_bytes or getattr(user, "data_limit_bytes", None)
         return cls(
             assignment_id=assignment.id,
             user_id=assignment.user_id,
@@ -58,12 +101,26 @@ class ProviderConfig:
             client_id=assignment.provider_client_id or str(assignment.id),
             email=str(settings.get("email", "")) or None,
             inbound_tag=profile.slug,
-            host=node.host,
-            port=node.port,
-            expires_at=assignment.expires_at,
-            traffic_limit_bytes=assignment.traffic_limit_bytes,
+            host=_resolve_host(profile.protocol.strip().lower(), settings, node.host),
+            port=_resolve_port(profile.protocol.strip().lower(), settings, node.port),
+            expires_at=expires_at,
+            traffic_limit_bytes=data_limit,
             settings=MappingProxyType(dict(settings)),
         )
+
+    @property
+    def resolved_uuid(self) -> str:
+        value = self.settings.get("uuid")
+        if value not in (None, ""):
+            return str(value)
+        return self.client_id
+
+    @property
+    def resolved_password(self) -> str:
+        value = self.settings.get("password")
+        if value not in (None, ""):
+            return str(value)
+        return self.client_id
 
 
 @dataclass(frozen=True, slots=True)

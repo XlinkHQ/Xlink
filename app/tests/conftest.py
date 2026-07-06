@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 
 os.environ.setdefault("XLINK_ENV", "testing")
 os.environ.setdefault("XLINK_RATE_LIMIT_ENABLED", "false")
+os.environ.setdefault("XLINK_REGISTRATION_ENABLED", "true")
 os.environ.setdefault("XLINK_JWT_SECRET_KEY", "testing-secret-key-32-chars-minimum-9x")
 
 os.environ.setdefault("XLINK_ARGON2_TIME_COST", "1")
@@ -48,16 +49,22 @@ async def app_state(settings: Settings) -> AsyncIterator[AppState]:
 
     event_registry = EventRegistry()
     register_default_handlers(event_registry)
+    from app.middleware.audit_writer import AuditWriter
+
+    audit_writer = AuditWriter(db)
+    audit_writer.start()
     state = AppState(
         settings=settings,
         db=db,
         cache=cache,
         providers=build_registry(),
         events=EventBus(event_registry),
+        audit_writer=audit_writer,
     )
     try:
         yield state
     finally:
+        await audit_writer.stop()
         await cache.client.aclose()
         await db.dispose()
 

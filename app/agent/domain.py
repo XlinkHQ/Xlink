@@ -21,6 +21,7 @@ class CommandKind(StrEnum):
     RESTART = "restart"
     UPGRADE = "upgrade"
     ROLLBACK = "rollback"
+    UPDATE_GEO = "update_geo"
     COLLECT_DIAGNOSTICS = "collect_diagnostics"
     PROVIDER_HEALTHCHECK = "provider_healthcheck"
 
@@ -74,6 +75,7 @@ class NodeCommand(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     attempts: Mapped[int] = mapped_column(default=0, nullable=False)
+    lease_count: Mapped[int] = mapped_column(default=0, nullable=False, server_default=text("0"))
     max_attempts: Mapped[int] = mapped_column(default=3, nullable=False)
     result: Mapped[dict[str, Any]] = mapped_column(_JSON_VARIANT, default=dict, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

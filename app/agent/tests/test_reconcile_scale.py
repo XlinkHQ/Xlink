@@ -25,7 +25,7 @@ async def _seed_nodes(app_state: AppState, count: int) -> None:
         user = User(
             email=f"u-{uuid.uuid4().hex[:8]}@x.io",
             username=f"u-{uuid.uuid4().hex[:8]}",
-            hashed_password=hash_password("strong-password-1234"),
+            hashed_password=hash_password("strong-password-1234-AB!"),
             role=UserRole.USER,
         )
         session.add(user)

@@ -13,15 +13,43 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /build
 
 # Build deps for asyncpg / argon2-cffi wheels (if no manylinux wheel available)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev
 
-# Install into an isolated prefix we can copy to the runtime stage
+# Install into an isolated prefix we can copy to the runtime stage.
+# hatchling builds the wheel from `packages = ["app"]`, so the app tree must be
+# present before `pip install .` — copy it here (not just in the runtime stage).
 COPY pyproject.toml README.md ./
+COPY app ./app
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip && pip install .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && pip install .
+
+# ─────────────────────────────────────────────────────────────
+# Xray-core: used only to run local proxy-latency tests for outbounds.
+FROM debian:bookworm-slim AS xray
+ARG TARGETARCH
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates
+ARG XRAY_VERSION=v25.3.6
+RUN --mount=type=cache,target=/dl \
+    set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) XA=64 ;; \
+      arm64) XA=arm64-v8a ;; \
+      *) XA=64 ;; \
+    esac; \
+    f="/dl/xray-${XRAY_VERSION}-${XA}.zip"; \
+    if [ ! -s "$f" ]; then \
+      curl -fsSL -o "$f" "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/Xray-linux-${XA}.zip"; \
+    fi; \
+    unzip -o "$f" xray -d /usr/local/bin; \
+    chmod +x /usr/local/bin/xray; \
+    /usr/local/bin/xray version
 
 # ─────────────────────────────────────────────────────────────
 FROM python:3.13-slim AS runtime
@@ -32,11 +60,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     XLINK_ENV=production
 
 # Runtime-only system libs
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
-    && rm -rf /var/lib/apt/lists/* \
+    postgresql-client \
+    curl \
+    ca-certificates \
     && groupadd --system --gid 1001 xlink \
     && useradd --system --uid 1001 --gid xlink --no-create-home xlink
+
+COPY --from=xray /usr/local/bin/xray /usr/local/bin/xray
 
 WORKDIR /app
 
@@ -44,19 +78,24 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=xlink:xlink alembic.ini ./
 COPY --chown=xlink:xlink alembic ./alembic
 COPY --chown=xlink:xlink app ./app
+COPY --chown=xlink:xlink node-agent ./node-agent
 COPY --chown=xlink:xlink docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+    && mkdir -p /app/data/providers \
+    && chown -R xlink:xlink /app/data
 
 USER xlink
 
 EXPOSE 8000
 
 ENTRYPOINT ["entrypoint.sh"]
-# Gunicorn with uvicorn workers; worker count tuned via env at deploy time.
+# Gunicorn with uvicorn workers. Worker count comes from the WEB_CONCURRENCY env
+# (gunicorn reads it natively when --workers is omitted), the SAME value the
+# pool-safety check in config.py uses, so DB connection fan-out stays bounded.
+ENV WEB_CONCURRENCY=4
 CMD ["gunicorn", "app.main:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
-     "--workers", "4", \
      "--bind", "0.0.0.0:8000", \
      "--timeout", "60", \
      "--graceful-timeout", "30", \

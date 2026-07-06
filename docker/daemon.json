@@ -1,0 +1,16 @@
+{
+  "builder": {
+    "gc": {
+      "enabled": true,
+      "defaultKeepStorage": "3GB",
+      "policy": [
+        { "keepStorage": "3GB", "all": true }
+      ]
+    }
+  },
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}

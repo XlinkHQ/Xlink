@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,6 +57,21 @@ class TrafficService:
         raise RuntimeError("unreachable")
 
     async def _ingest_once(self, batch: TrafficBatch) -> TrafficIngestResult:
+        # Idempotency gate: a resent or concurrently-duplicated batch (same
+        # deterministic batch_id) is claimed once; a repeat is a no-op so usage
+        # deltas are never double-applied.
+        if batch.batch_id and not await self._repo.claim_batch(batch.node_id, batch.batch_id):
+            logger.info(
+                "traffic_batch_duplicate", node_id=str(batch.node_id), batch_id=batch.batch_id
+            )
+            return TrafficIngestResult(
+                node_id=batch.node_id,
+                batch_id=batch.batch_id,
+                received=len(batch.samples),
+                inserted=0,
+                duplicates=len(batch.samples),
+                skipped=0,
+            )
         owned = await self._owned_assignment_ids(batch)
         filtered = self._filter_to_owned(batch, owned)
         prepared = self._collector.prepare(filtered)
@@ -74,9 +89,25 @@ class TrafficService:
         if coeff != 1.0:
             deltas = {aid: round(d * coeff) for aid, d in deltas.items()}
         await self._repo.apply_usage_deltas(deltas)
-        for assignment_id in deltas:
-            if assignment_id in owned:
-                await self._session.refresh(owned[assignment_id], ["used_bytes"])
+        # Refresh the just-updated columns in ONE query instead of a per-assignment
+        # session.refresh() (which issued one SELECT each on this hot path). The
+        # UPDATE ran with synchronize_session=False, so the ORM copies are stale;
+        # pull fresh values with a single IN and write them back in-memory.
+        owned_ids = [aid for aid in deltas if aid in owned]
+        if owned_ids:
+            fresh = (
+                await self._session.execute(
+                    select(
+                        ClientAssignment.id,
+                        ClientAssignment.used_bytes,
+                        ClientAssignment.traffic_limit_bytes,
+                    ).where(ClientAssignment.id.in_(owned_ids))
+                )
+            ).all()
+            for aid, used, limit in fresh:
+                obj = owned[aid]
+                obj.used_bytes = used
+                obj.traffic_limit_bytes = limit
         await self._check_limits(owned, deltas)
         logger.info(
             "traffic_ingested",
@@ -104,12 +135,19 @@ class TrafficService:
         user = await self._session.get(User, user_id)
         if user is None:
             return count
-        user.users_data_usage = 0
+        await self._session.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(users_data_usage=0)
+            .execution_options(synchronize_session=False)
+        )
         node_ids: list[uuid.UUID] = []
         if user.is_active and not user.removed:
             node_ids = await self._repo.reactivate_disabled_assignments(user_id)
+            # LIMITED→ACTIVE brought slots back; recompute so current_users is right.
+            await self._resync_node_counts(node_ids)
         await self._session.flush()
-        await self._wake_nodes(node_ids)
+        await self._wake_nodes(node_ids, user_ids=[user_id])
         return count
 
     async def usage_for_users(
@@ -209,14 +247,17 @@ class TrafficService:
         owned: dict[uuid.UUID, ClientAssignment],
         deltas: dict[uuid.UUID, int],
     ) -> None:
-        for assignment_id, _delta in deltas.items():
+        # Persist user usage to the DB first so both the per-assignment and the
+        # per-user limit checks below decide from the same, freshly-written view.
+        await self._bump_user_usage(owned, deltas)
+        for assignment_id in deltas:
             assignment = owned.get(assignment_id)
             if assignment is None or assignment.traffic_limit_bytes is None:
                 continue
             new_total = assignment.used_bytes or 0
             if new_total >= assignment.traffic_limit_bytes:
-                await self._enforce_limit(assignment)
-                if self._events is not None:
+                transitioned = await self._enforce_limit(assignment)
+                if transitioned and self._events is not None:
                     await self._events.publish(
                         TrafficLimitReached(
                             assignment_id=assignment_id,
@@ -225,28 +266,42 @@ class TrafficService:
                             used_bytes=new_total,
                         )
                     )
-        await self._bump_user_usage(owned, deltas)
+        await self._enforce_user_limits(self._delta_user_ids(owned, deltas))
+
+    @staticmethod
+    def _delta_user_ids(
+        owned: dict[uuid.UUID, ClientAssignment],
+        deltas: dict[uuid.UUID, int],
+    ) -> list[uuid.UUID]:
+        return sorted(
+            {owned[aid].user_id for aid in deltas if aid in owned and deltas[aid] > 0}
+        )
 
     async def _bump_user_usage(
         self,
         owned: dict[uuid.UUID, ClientAssignment],
         deltas: dict[uuid.UUID, int],
     ) -> None:
-        user_ids = {
-            owned[aid].user_id for aid in deltas if aid in owned and deltas[aid] > 0
-        }
+        user_ids = self._delta_user_ids(owned, deltas)
         if not user_ids:
             return
-        totals = await self._repo.usage_sum_by_user(sorted(user_ids))
-        for user_id in sorted(user_ids):
-            await self._session.execute(
-                update(User)
-                .where(User.id == user_id)
-                .values(users_data_usage=totals.get(user_id, 0))
-                .execution_options(synchronize_session=False)
+        totals = await self._repo.usage_sum_by_user(user_ids)
+        # One UPDATE with a per-user CASE instead of a UPDATE per user on the
+        # ingest hot path.
+        ids = list(user_ids)
+        await self._session.execute(
+            update(User)
+            .where(User.id.in_(ids))
+            .values(
+                users_data_usage=case(
+                    {uid: totals.get(uid, 0) for uid in ids},
+                    value=User.id,
+                    else_=0,
+                )
             )
+            .execution_options(synchronize_session=False)
+        )
         await self._session.flush()
-        await self._enforce_user_limits(list(user_ids))
 
     async def _enforce_user_limits(self, user_ids: Sequence[uuid.UUID]) -> None:
         rows = (
@@ -279,28 +334,56 @@ class TrafficService:
             .values(status=AssignmentStatus.LIMITED)
             .execution_options(synchronize_session=False)
         )
+        await self._resync_node_counts(node_ids)
         await self._session.flush()
-        await self._wake_nodes(node_ids)
+        await self._wake_nodes(node_ids, user_ids=over)
 
-    async def _enforce_limit(self, assignment: ClientAssignment) -> None:
+    async def _enforce_limit(self, assignment: ClientAssignment) -> bool:
         if assignment.status is not AssignmentStatus.ACTIVE:
-            return
+            return False
         assignment.status = AssignmentStatus.LIMITED
+        await self._session.flush()
+        if assignment.node_id is not None:
+            await self._resync_node_counts([assignment.node_id])
+            await self._wake_nodes([assignment.node_id], user_ids=[assignment.user_id])
+        return True
+
+    async def _resync_node_counts(self, node_ids: Sequence[uuid.UUID]) -> None:
+        # Recompute current_users from a COUNT of ACTIVE assignments rather than
+        # maintaining fragile ±1 deltas that drift when transitions are missed
+        # (e.g. LIMITED→ACTIVE on reset never re-incremented).
+        ids = [nid for nid in node_ids if nid is not None]
+        if not ids:
+            return
+        active_count = (
+            select(func.count())
+            .select_from(ClientAssignment)
+            .where(
+                ClientAssignment.node_id == Node.id,
+                ClientAssignment.status == AssignmentStatus.ACTIVE,
+            )
+            .scalar_subquery()
+        )
         await self._session.execute(
             update(Node)
-            .where(Node.id == assignment.node_id, Node.current_users > 0)
-            .values(current_users=Node.current_users - 1)
+            .where(Node.id.in_(ids))
+            .values(current_users=active_count)
             .execution_options(synchronize_session=False)
         )
         await self._session.flush()
-        if assignment.node_id is not None:
-            await self._wake_nodes([assignment.node_id])
 
-    async def _wake_nodes(self, node_ids: Sequence[uuid.UUID]) -> None:
-        if self._cache is None or not node_ids:
+    async def _wake_nodes(
+        self, node_ids: Sequence[uuid.UUID], user_ids: Sequence[uuid.UUID] = ()
+    ) -> None:
+        if self._cache is None:
             return
-        keys = [key async for key in self._cache.client.scan_iter(match="subscription:*")]
-        if keys:
-            await self._cache.client.delete(*keys)
+        # Invalidate only the affected users' cached feeds (subscription:{uid}:*)
+        # instead of scanning/wiping the entire keyspace on the traffic hot path.
+        for uid in set(user_ids):
+            keys = [
+                key async for key in self._cache.client.scan_iter(match=f"subscription:{uid}:*")
+            ]
+            if keys:
+                await self._cache.client.delete(*keys)
         for nid in node_ids:
             await self._cache.publish_node_event(nid, "config_changed")

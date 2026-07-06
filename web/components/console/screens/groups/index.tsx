@@ -17,17 +17,15 @@ import {
   type ProfileRead,
 } from "@/lib/api";
 import {
-  WarpBadge,
   WarpButton,
   WarpEmpty,
   WarpHead,
   WarpRow,
   WarpSkeleton,
-  WarpStat,
-  WarpStatRow,
   WarpTableCard,
 } from "../warp-table";
 import { Plus } from "lucide-react";
+import { DgSearch } from "../../dg-icons";
 import { GroupDialog } from "./dialog";
 import { ServiceSettings } from "./settings";
 
@@ -68,65 +66,9 @@ export function GroupsScreen() {
 
   const needle = search.trim().toLowerCase();
   const filtered = needle ? groups.filter((g) => g.name.toLowerCase().includes(needle)) : groups;
-  const totalInbounds = groups.reduce((n, g) => n + g.profile_ids.length, 0);
-  const totalUsers = (() => {
-    const ids = new Set<string>();
-    const inbounds = new Set(groups.flatMap((g) => g.profile_ids));
-    for (const a of assignments) if (inbounds.has(a.profile_id)) ids.add(a.user_id);
-    return ids.size;
-  })();
-
-  return (
-    <div className="mx-auto w-full max-w-6xl">
-      <WarpStatRow>
-        <WarpStat label="Total Services" value={groups.length} />
-        <WarpStat label="Total Users" value={totalUsers} />
-        <WarpStat label="Total Inbounds" value={totalInbounds} />
-      </WarpStatRow>
-
-      <WarpTableCard
-        toolbar={
-          <>
-            <WarpButton primary onClick={() => setEditing("new")}>
-              <Plus size={14} /> Add Service
-            </WarpButton>
-            <input
-              className="warp-tb-search warp-tb-spacer"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search services…"
-            />
-          </>
-        }
-      >
-        <WarpHead cols={["#", "Name", "Users", "Inbounds"]} actions />
-        {query.isLoading ? (
-          <WarpSkeleton />
-        ) : filtered.length === 0 ? (
-          <WarpEmpty icon="fa-layer-group">
-            {search ? "No matches." : "No services yet."}
-          </WarpEmpty>
-        ) : (
-          filtered.map((g, i) => (
-            <WarpRow
-              key={g.id}
-              onClick={() => setDetail(g)}
-              menu={[
-                { label: "Edit", icon: "edit", onClick: () => setEditing(g) },
-                { label: "Delete", icon: "delete", danger: true, onClick: () => remove(g) },
-              ]}
-              cells={[
-                i + 1,
-                <span className="font-medium">{g.name}</span>,
-                <WarpBadge tone="blue">{usersForGroup(g)}</WarpBadge>,
-                <WarpBadge tone="green">{g.profile_ids.length}</WarpBadge>,
-              ]}
-            />
-          ))
-        )}
-      </WarpTableCard>
-
-      {detail ? (
+  if (detail) {
+    return (
+      <>
         <ServiceSettings
           group={detail}
           profiles={profiles}
@@ -142,7 +84,68 @@ export function GroupsScreen() {
             setDetail(null);
           }}
         />
-      ) : null}
+        {editing ? (
+          <GroupDialog
+            group={editing === "new" ? null : editing}
+            profiles={profiles}
+            nodeName={nodeName}
+            onClose={() => setEditing(null)}
+            onSaved={() => {
+              setEditing(null);
+              refresh();
+            }}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-6xl">
+      <div className="warp-table-top">
+        <span className="title">All services</span>
+        <div className="right">
+          <span className="warp-tb-search-wrap" style={{ maxWidth: 321, flex: 1 }}>
+            <DgSearch size={16} />
+            <input
+              className="warp-tb-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Find service"
+            />
+          </span>
+          <WarpButton primary onClick={() => setEditing("new")}>
+            <Plus size={16} strokeWidth={1.8} /> Add Service
+          </WarpButton>
+        </div>
+      </div>
+
+      <WarpTableCard className="warp-users-table">
+        <WarpHead cols={["Name", "Users", "Inbounds"]} actions />
+        {query.isLoading ? (
+          <WarpSkeleton />
+        ) : filtered.length === 0 ? (
+          <WarpEmpty icon="fa-layer-group">
+            {search ? "No matches." : "No services yet."}
+          </WarpEmpty>
+        ) : (
+          filtered.map((g) => (
+            <WarpRow
+              key={g.id}
+              onClick={() => setDetail(g)}
+              menu={[
+                { label: "Edit", icon: "edit", onClick: () => setEditing(g) },
+                { label: "Delete", icon: "delete", danger: true, onClick: () => remove(g) },
+              ]}
+              cells={[
+                <span className="font-medium">{g.name}</span>,
+                <span className="warp-badge info">{usersForGroup(g)}</span>,
+                <span className="warp-badge success">{g.profile_ids.length}</span>,
+              ]}
+            />
+          ))
+        )}
+      </WarpTableCard>
 
       {editing ? (
         <GroupDialog

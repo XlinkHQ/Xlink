@@ -16,12 +16,14 @@ from app.providers.xray.exceptions import (
 )
 from app.providers.xray.payloads import (
     CLIENT_DEFAULTS,
+    PASSWORD_PROTOCOLS,
     SUPPORTED_NETWORKS,
     SUPPORTED_PROTOCOLS,
     SUPPORTED_SECURITIES,
     UUID_PROTOCOLS,
     XrayProtocol,
     XraySecurity,
+    methods_for,
 )
 
 
@@ -91,6 +93,16 @@ def validate_xray_client_payload(payload: dict) -> dict:
         raise XrayPayloadError("Client 'id' is required.")
     if protocol in UUID_PROTOCOLS:
         _require_uuid(client_id)
+    if protocol in PASSWORD_PROTOCOLS:
+        password = client.get("password")
+        if not isinstance(password, str) or not password.strip():
+            raise XrayPayloadError("Shadowsocks client requires a 'password'.")
+        method = client.get("method")
+        if not isinstance(method, str) or method not in methods_for(protocol):
+            raise UnsupportedProtocolError(
+                "Shadowsocks client 'method' is missing or unsupported.",
+                details={"method": method, "protocol": protocol},
+            )
     email = client.get("email")
     if not isinstance(email, str) or not email.strip():
         raise MissingEmailError()

@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "@fontsource-variable/inter";
-import "@fontsource/ibm-plex-mono";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 

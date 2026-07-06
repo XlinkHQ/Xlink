@@ -1,12 +1,14 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Clock, Plus, Search, Wifi, WifiOff } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
 import {
   ApiError,
+  deleteNode,
   disableNode,
   restartNodeCore,
   exportBackup,
@@ -17,19 +19,41 @@ import {
 } from "@/lib/api";
 import { NodeDetail } from "./detail";
 import { NodeDialog } from "./dialog";
-import { isNodeOnline, relativeTime } from "./util";
+import { relativeTime } from "./util";
 import {
-  WarpBadge,
   WarpButton,
   WarpEmpty,
   WarpHead,
   WarpMenu,
   WarpRow,
   WarpSkeleton,
-  WarpStat,
-  WarpStatRow,
   WarpTableCard,
 } from "../warp-table";
+import { SearchBox } from "@/components/ui/search-box";
+
+type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";
+function Badge({ variant, children }: { variant: BadgeVariant; children: React.ReactNode }) {
+  return <span className={`warp-badge ${variant}`}>{children}</span>;
+}
+const _TRANSITIONAL = new Set(["pending", "connecting", "syncing", "provisioning"]);
+function statusVariant(status: string): BadgeVariant {
+  const s = status.toLowerCase();
+  if (["active", "online", "healthy"].includes(s)) return "success";
+  if (["maintenance"].includes(s)) return "warning";
+  if (["offline", "unreachable", "sync_error", "provider_error"].includes(s)) return "critical";
+  return "neutral";
+}
+function StatusBadge({ status }: { status: string }) {
+  if (_TRANSITIONAL.has(status.toLowerCase())) {
+    return (
+      <span className="warp-badge info">
+        <Spinner size={11} />
+        {status}
+      </span>
+    );
+  }
+  return <Badge variant={statusVariant(status)}>{status}</Badge>;
+}
 
 export function NodesScreen() {
   const qc = useQueryClient();
@@ -57,62 +81,65 @@ export function NodesScreen() {
         [n.name, n.host, n.status, n.slug].some((v) => String(v).toLowerCase().includes(needle)),
       )
     : nodes;
-  const online = nodes.filter((n) => isNodeOnline(n.status)).length;
-  const totalUsers = nodes.reduce((s, n) => s + n.current_users, 0);
+
+  if (detail) {
+    const live = nodes.find((n) => n.id === detail.id) ?? detail;
+    return (
+      <>
+        <NodeDetail node={live} onClose={() => setDetail(null)} onEdit={() => { setEditing(live); setDetail(null); }} />
+        {editing ? (
+          <NodeDialog
+            node={editing === "new" ? null : editing}
+            onClose={() => setEditing(null)}
+            onSaved={() => {
+              setEditing(null);
+              refresh();
+            }}
+          />
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <WarpStatRow>
-        <WarpStat label="Total Nodes" value={nodes.length} />
-        <WarpStat label="Online" value={`${online} / ${nodes.length}`} />
-        <WarpStat label="Total Users" value={totalUsers} />
-      </WarpStatRow>
-
-      <WarpTableCard
-        toolbar={
-          <>
-            <WarpButton primary onClick={() => setEditing("new")}>
-              <Plus size={16} /> Add Node
-            </WarpButton>
-            <span className="warp-tb-spacer" />
-            <span className="warp-tb-search-wrap" style={{ maxWidth: 220, flex: "none" }}>
-              <Search size={13} style={{ position: "absolute", left: 14, color: "#707070", pointerEvents: "none" }} />
-              <input
-                className="warp-tb-search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search"
-              />
-            </span>
-            <WarpMenu
-              label="General Actions"
-              items={[
-                { label: "Refresh", icon: "refresh", onClick: () => refresh() },
-                {
-                  label: "Export Backup",
-                  icon: "download",
-                  onClick: async () => {
-                    try {
-                      const doc = await exportBackup();
-                      const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = "xlink-backup.json";
-                      a.click();
-                      URL.revokeObjectURL(url);
-                      toast("success", "Backup exported.");
-                    } catch (e) {
-                      toast("error", e instanceof ApiError ? e.message : "Export failed.");
-                    }
-                  },
+      <div className="warp-table-top">
+        <span className="title">All nodes</span>
+        <div className="right">
+          <SearchBox value={search} onChange={setSearch} placeholder="Find node" />
+          <WarpMenu
+            label="General Actions"
+            items={[
+              { label: "Refresh", icon: "refresh", onClick: () => refresh() },
+              {
+                label: "Export Backup",
+                icon: "download",
+                onClick: async () => {
+                  try {
+                    const doc = await exportBackup();
+                    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "xlink-backup.json";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast("success", "Backup exported.");
+                  } catch (e) {
+                    toast("error", e instanceof ApiError ? e.message : "Export failed.");
+                  }
                 },
-              ]}
-            />
-          </>
-        }
-      >
-        <WarpHead cols={["#", "Name", "Host", "Status", "Users", "Last Seen"]} actions />
+              },
+            ]}
+          />
+          <WarpButton primary onClick={() => setEditing("new")}>
+            <Plus size={16} strokeWidth={1.8} /> Add Node
+          </WarpButton>
+        </div>
+      </div>
+
+      <WarpTableCard className="warp-users-table">
+        <WarpHead cols={["Name", "Host", "Status"]} actions />
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
@@ -120,7 +147,7 @@ export function NodesScreen() {
             {search ? "No matches." : "No nodes yet."}
           </WarpEmpty>
         ) : (
-          filtered.map((n, i) => (
+          filtered.map((n) => (
             <WarpRow
               key={n.id}
               onClick={() => setDetail(n)}
@@ -150,21 +177,32 @@ export function NodesScreen() {
                       act(() => disableNode(n.id), "Node disabled.");
                   },
                 },
+                {
+                  label: "Delete",
+                  icon: "delete",
+                  danger: true,
+                  onClick: async () => {
+                    if (
+                      await confirmDialog({
+                        title: `Delete node "${n.name}"?`,
+                        message: "The node and its assignments are removed. This cannot be undone.",
+                        confirmLabel: "Delete",
+                        danger: true,
+                      })
+                    )
+                      act(() => deleteNode(n.id), "Node deleted.");
+                  },
+                },
               ]}
               cells={[
-                i + 1,
                 <span className="font-medium">{n.name}</span>,
                 <span className="warp-tb-mono">{n.host}:{n.port}</span>,
-                <WarpBadge tone={statusTone(n.status)}>{statusIcon(n.status)} {n.status}</WarpBadge>,
-                <WarpBadge tone={n.current_users > 0 ? "blue" : "gray"}>{n.current_users}</WarpBadge>,
-                relativeTime(n.last_seen_at),
+                <StatusBadge status={n.status} />,
               ]}
             />
           ))
         )}
       </WarpTableCard>
-
-      {detail ? <NodeDetail node={detail} onClose={() => setDetail(null)} onEdit={() => { setEditing(detail); setDetail(null); }} /> : null}
 
       {editing ? (
         <NodeDialog
@@ -180,19 +218,4 @@ export function NodesScreen() {
   );
 }
 
-function statusTone(status: string): "green" | "red" | "orange" | "gray" {
-  const s = status.toLowerCase();
-  if (["active", "online", "healthy"].includes(s)) return "green";
-  if (["maintenance"].includes(s)) return "orange";
-  if (["offline", "unreachable", "sync_error", "provider_error"].includes(s)) return "red";
-  return "gray";
-}
-
-function statusIcon(status: string) {
-  const s = status.toLowerCase();
-  if (["active", "online", "healthy"].includes(s)) return <Wifi size={13} />;
-  if (["maintenance"].includes(s)) return <Clock size={13} />;
-  if (["disabled"].includes(s)) return <Ban size={13} />;
-  return <WifiOff size={13} />;
-}
 

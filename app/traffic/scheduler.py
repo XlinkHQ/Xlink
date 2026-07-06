@@ -13,15 +13,17 @@ logger = get_logger("xlink.traffic.scheduler")
 async def run_retention(db: Database, *, retention_days: int) -> int:
     async with db.session() as session:
         retention = TrafficRetention(session, retention_days=retention_days)
-        deleted = await retention.purge()
-    return deleted
+        return await retention.purge()
 
 
 class TrafficRetentionJob:
-    def __init__(self, db: Database, *, interval_seconds: int, retention_days: int) -> None:
+    def __init__(
+        self, db: Database, *, interval_seconds: int, retention_days: int, leader=None
+    ) -> None:
         self._db = db
         self._interval = interval_seconds
         self._retention_days = retention_days
+        self._leader = leader
         self._task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
 
@@ -55,6 +57,8 @@ class TrafficRetentionJob:
                 await asyncio.wait_for(self._stopping.wait(), timeout=self._interval)
             if self._stopping.is_set():
                 break
+            if self._leader is not None and not self._leader.is_leader:
+                continue
             try:
                 await run_retention(self._db, retention_days=self._retention_days)
             except asyncio.CancelledError:

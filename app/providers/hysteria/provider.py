@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 
-from app.providers.base.exceptions import ClientNotFoundError
+from app.providers.base.exceptions import ClientAlreadyExistsError, ClientNotFoundError
 from app.providers.base.models import (
     ClientResult,
     ClientSpec,
@@ -40,7 +40,7 @@ class HysteriaProvider(Provider):
     async def create_client(self, spec: ClientSpec) -> ClientResult:
         self.ensure_capability(ProviderCapability.CREATE_CLIENT)
         if spec.client_id in self._clients:
-            return self._store(spec, existing=self._clients[spec.client_id])
+            raise ClientAlreadyExistsError(details={"client_id": spec.client_id})
         return self._store(spec)
 
     async def update_client(self, spec: ClientSpec) -> ClientResult:

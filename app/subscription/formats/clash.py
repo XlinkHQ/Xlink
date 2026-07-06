@@ -35,6 +35,17 @@ def _tls_fields(config: ProviderConfig, proxy: dict[str, Any]) -> None:
                 "public-key": str(setting(config, "publicKey", setting(config, "pbk", ""))),
                 "short-id": str(setting(config, "shortId", setting(config, "sid", ""))),
             }
+        alpn = setting(config, "alpn")
+        if alpn:
+            parsed = (
+                [str(a).strip() for a in alpn if str(a).strip()]
+                if isinstance(alpn, (list, tuple))
+                else [a.strip() for a in str(alpn).split(",") if a.strip()]
+            )
+            if parsed:
+                proxy["alpn"] = parsed
+        if setting(config, "allowInsecure"):
+            proxy["skip-cert-verify"] = True
 
 
 def _network_fields(config: ProviderConfig, proxy: dict[str, Any]) -> None:
@@ -121,6 +132,8 @@ def build_proxy(config: ProviderConfig, *, allowed: frozenset[str]) -> dict[str,
         if setting(config, "username"):
             proxy["username"] = str(setting(config, "username"))
             proxy["password"] = str(setting(config, "password", ""))
+    if protocol in ("vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022", "shadowtls"):
+        proxy["udp"] = True
     return proxy
 
 

@@ -93,13 +93,17 @@ class _BlockedSubscriptionError(Exception):
 
 
 def _match_admin_rules(user_agent: str, rules: list[dict[str, str]]) -> SubscriptionFormat | None:
+    # Bound the ReDoS surface: admin patterns run against an attacker-controlled
+    # User-Agent on a public endpoint. Cap both lengths so catastrophic
+    # backtracking can't stall a worker.
+    ua = user_agent[:512]
     for rule in rules:
         pattern = rule.get("pattern")
         result = rule.get("result")
-        if not pattern or not result:
+        if not pattern or not result or len(pattern) > 256:
             continue
         try:
-            if re.match(pattern, user_agent):
+            if re.match(pattern, ua):
                 if result == "block":
                     raise _BlockedSubscriptionError
                 fmt = _RULE_RESULT_FORMATS.get(result)
@@ -160,12 +164,12 @@ def _status_text(user: object, stats: object, cfg: object) -> tuple[str, str]:
     if getattr(user, "on_hold", False):
         return (cfg.onhold_status_text, "warn")
     now = int(time.time())
-    expire = getattr(stats, "expire_timestamp", 0)
-    limit = getattr(stats, "traffic_limit_bytes", 0)
+    expire = getattr(stats, "expire_timestamp", None)
+    limit = getattr(stats, "traffic_limit_bytes", None)
     used = getattr(stats, "used_bytes", 0)
-    if expire and expire < now:
+    if expire is not None and expire < now:
         return (cfg.expired_status_text, "bad")
-    if limit and used >= limit:
+    if limit is not None and used >= limit:
         return (cfg.limited_status_text, "bad")
     return (cfg.active_status_text, "ok")
 
@@ -300,46 +304,67 @@ async def public_subscription(
     users: UserServiceDep,
     format: str | None = Query(default=None, alias="format"),
     user_agent: str = Header(default=""),
+    x_hwid: str = Header(default=""),
 ) -> Response:
     user_id, scope, token_revision = verify_subscription_token(token, settings)
+    # Only per-USER links are publicly servable. PROFILE/ASSIGNMENT scopes have
+    # no per-user revocation or gating here and a PROFILE token would leak every
+    # user's config on that profile — refuse them on the public endpoint.
+    if scope is not FeedScope.USER:
+        raise HTTPException(status_code=404)
     cfg = await app_settings.get_subscription()
-    owner = None
-    if scope is FeedScope.USER:
-        owner = await users.get(user_id)
-        if owner.sub_revision != token_revision:
-            raise AuthenticationError("Subscription link revoked.", code="sub_token_revoked")
+    owner = await users.get(user_id)
+    if owner.sub_revision != token_revision:
+        raise AuthenticationError("Subscription link revoked.", code="sub_token_revoked")
 
-        await users.touch_subscription(user_id, user_agent)
+    await users.touch_subscription(user_id, user_agent)
 
-        if owner.device_limit:
-            client_ip = request.client.host if request.client else ""
-            allowed = await users.register_device(
-                user_id, user_agent, client_ip, owner.device_limit
-            )
-            if not allowed:
-                raise HTTPException(status_code=403, detail="Device limit reached.")
-
-    if owner is not None and format is None and _is_browser(user_agent):
-        text_feed = await subscriptions.feed(
-            _request(scope, user_id, SubscriptionFormat.TEXT, RenderVersion.V1, use_cache=True)
+    is_browser_preview = format is None and _is_browser(user_agent)
+    if owner.device_limit and not is_browser_preview:
+        client_ip = request.client.host if request.client else ""
+        allowed = await users.register_device(
+            user_id, user_agent, client_ip, owner.device_limit, hwid=x_hwid
         )
-        configs = [ln.strip() for ln in text_feed.content.splitlines() if "://" in ln]
-        try:
-            wg_feed = await subscriptions.feed(
-                _request(
-                    scope,
-                    user_id,
-                    SubscriptionFormat.WIREGUARD_CONF,
-                    RenderVersion.V1,
-                    use_cache=True,
-                )
+        if not allowed:
+            raise HTTPException(status_code=403, detail="Device limit reached.")
+
+    # Gate once, up front (lightweight quota read — no heavy TrafficRecord join),
+    # so an expired/limited user still gets the status PAGE in a browser instead
+    # of a raw 422 from the quota-enforcing feed() call below.
+    quota = await subscriptions.get_user_quota(user_id)
+    now_ts = int(time.time())
+    not_servable = (
+        not owner.is_active
+        or (quota.expire_timestamp is not None and quota.expire_timestamp < now_ts)
+        or (
+            quota.traffic_limit_bytes is not None
+            and quota.used_bytes >= quota.traffic_limit_bytes
+        )
+    )
+
+    if is_browser_preview:
+        configs: list[str] = []
+        if not not_servable:
+            text_feed = await subscriptions.feed(
+                _request(scope, user_id, SubscriptionFormat.TEXT, RenderVersion.V1, use_cache=True)
             )
-            raw = wg_feed.content.strip()
-            if "[Interface]" in raw:
-                blocks = ["[Interface]" + b for b in raw.split("[Interface]") if b.strip()]
-                configs.extend(b.strip() for b in blocks)
-        except Exception:
-            pass
+            configs = [ln.strip() for ln in text_feed.content.splitlines() if "://" in ln]
+            try:
+                wg_feed = await subscriptions.feed(
+                    _request(
+                        scope,
+                        user_id,
+                        SubscriptionFormat.WIREGUARD_CONF,
+                        RenderVersion.V1,
+                        use_cache=True,
+                    )
+                )
+                raw = wg_feed.content.strip()
+                if "[Interface]" in raw:
+                    blocks = ["[Interface]" + b for b in raw.split("[Interface]") if b.strip()]
+                    configs.extend(b.strip() for b in blocks)
+            except Exception:
+                pass
         stats = await subscriptions.get_user_traffic_stats(user_id)
         status_label, status_tone = _status_text(owner, stats, cfg)
         custom = (getattr(cfg, "custom_page_html", "") or "").strip()
@@ -378,7 +403,8 @@ async def public_subscription(
                 "cache-control": "no-store",
                 "content-security-policy": (
                     "default-src 'none'; style-src 'unsafe-inline'; "
-                    "script-src 'unsafe-inline'; img-src data:; base-uri 'none'"
+                    "script-src 'unsafe-inline'; img-src 'self' data:; "
+                    "connect-src 'self'; base-uri 'none'"
                 ),
             },
         )
@@ -390,11 +416,6 @@ async def public_subscription(
 
     stats = await subscriptions.get_user_traffic_stats(user_id)
 
-    not_servable = owner is not None and (
-        not owner.is_active
-        or (stats.expire_timestamp and stats.expire_timestamp < int(time.time()))
-        or (stats.traffic_limit_bytes and stats.used_bytes >= stats.traffic_limit_bytes)
-    )
     if not_servable and cfg.placeholder_if_disabled:
         feed = await subscriptions.placeholder_feed(
             cfg.placeholder_remark, detected_format, RenderVersion.V1
@@ -420,12 +441,11 @@ async def public_subscription(
 
     fname = (owner.username if owner else None) or cfg.profile_title or "xlink"
     fname = "".join(c for c in fname if c.isalnum() or c in "-_.") or "xlink"
-    update_days = max(1, round(cfg.update_interval_hours / 24))
     headers = {
         "subscription-userinfo": userinfo,
         "content-disposition": f'attachment; filename="{fname}"',
         "cache-control": "no-store",
-        "profile-update-interval": str(update_days),
+        "profile-update-interval": str(max(1, cfg.update_interval_hours)),
         "profile-web-page-url": str(request.url).split("?", 1)[0],
     }
     if cfg.profile_title:
