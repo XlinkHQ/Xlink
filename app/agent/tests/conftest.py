@@ -14,8 +14,8 @@ os.environ.setdefault("XLINK_ARGON2_PARALLELISM", "1")
 
 # Register every ORM model on Base.metadata so create_all builds the full
 # schema (config_sync reads certificates / routing_rules / outbounds, etc.).
-import app.domain.certificate  # noqa: F401
-import app.domain.outbound  # noqa: F401
+import app.domain.certificate
+import app.domain.outbound
 import app.domain.routing_rule  # noqa: F401
 from app.core.config import Settings
 from app.core.lifespan import AppState

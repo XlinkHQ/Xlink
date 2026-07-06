@@ -66,11 +66,11 @@ _ACTION_LABELS: dict[str, str] = {
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise ValueError(f"Webhook redirect refused (to {newurl}).")
 
 
-import http.client  # noqa: E402
+import http.client
 
 
 def _guarded_connect(conn: http.client.HTTPConnection) -> None:
@@ -89,12 +89,12 @@ def _guarded_connect(conn: http.client.HTTPConnection) -> None:
 
 
 class _GuardedHTTPHandler(urllib.request.HTTPHandler):
-    def http_open(self, req):  # noqa: ANN001, ANN201
+    def http_open(self, req):
         return self.do_open(_guarded_http_conn, req)
 
 
 class _GuardedHTTPSHandler(urllib.request.HTTPSHandler):
-    def https_open(self, req):  # noqa: ANN001, ANN201
+    def https_open(self, req):
         return self.do_open(_guarded_https_conn, req)
 
 

@@ -29,12 +29,12 @@ from app.repositories.refresh_token import RefreshTokenRepository
 from app.repositories.user import UserRepository
 from app.scheduler.service import SmartSchedulerService
 from app.services.auth_service import AuthService
+from app.services.certificate_service import CertificateService
 from app.services.client_assignment_service import ClientAssignmentService
 from app.services.group_service import GroupService
 from app.services.inbound_host_service import InboundHostService
 from app.services.node_service import NodeService
 from app.services.profile_service import ProfileService
-from app.services.certificate_service import CertificateService
 from app.services.settings_service import SettingsService
 from app.services.token_service import TokenService
 from app.services.user_service import UserService

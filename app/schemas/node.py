@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import ipaddress
+import re
 import uuid
 from datetime import datetime
 from typing import Any
-
-import ipaddress
-import re
 
 from pydantic import Field, field_serializer, field_validator
 

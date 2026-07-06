@@ -7,7 +7,6 @@ from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
-import app.domain
 from app.core.config import get_settings
 from app.db.base import Base
 

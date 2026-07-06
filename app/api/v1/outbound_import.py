@@ -33,7 +33,7 @@ def _host_port(netloc: str) -> tuple[str, str]:
 
 
 def _stream_from_qs(qs: dict[str, list[str]]) -> dict[str, Any]:
-    g = lambda k: qs.get(k, [""])[0]  # noqa: E731
+    g = lambda k: qs.get(k, [""])[0]
     out: dict[str, Any] = {}
     net = g("type") or "tcp"
     if net and net != "tcp":

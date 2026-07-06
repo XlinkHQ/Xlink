@@ -289,6 +289,7 @@ def _grpc_ready() -> bool:
         return True
     try:
         import grpc  # type: ignore
+
         from app.agent.grpc import agent_pb2 as pb  # type: ignore
         from app.agent.grpc import agent_pb2_grpc as pbg  # type: ignore
     except Exception as exc:
@@ -1007,7 +1008,7 @@ def check_provider_health(
                 status[kind] = "healthy"
                 continue
             status[kind] = "healthy" if healthy else "unhealthy"
-        except Exception as exc:  # noqa: BLE001 - never let one core sink the rest
+        except Exception as exc:
             _log(f"{kind}: health probe failed: {exc}")
             status[kind] = "unhealthy"
     return status
@@ -1475,7 +1476,7 @@ def _do_poll_commands() -> None:
     # the agent token (X-Agent-Token) — the panel is the only authenticated source.
     try:
         sc, resp = _call("POST", "/commands/lease", {})
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _log(f"command lease error: {exc}")
         return
     if sc != 200 or not isinstance(resp, dict):
@@ -1493,7 +1494,7 @@ def _do_poll_commands() -> None:
         _log(f"executing command {kind} ({cid})")
         try:
             success, result = _run_command(kind, payload)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             success, result = False, {"error": str(exc)}
         # Deliver the result with retries: a lost POST leaves the command LEASED,
         # so it re-leases and re-executes after expiry (at-least-once). Retrying
@@ -1515,7 +1516,7 @@ def _do_poll_commands() -> None:
                 if rsc == 200:
                     delivered = True
                     break
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             time.sleep(2)
         if not delivered:
@@ -1585,7 +1586,7 @@ def cycle() -> None:
     def _installed_safe(k: str) -> bool:
         try:
             return _core_installed(k, CORES[k])
-        except Exception:  # noqa: BLE001
+        except Exception:
             return False
 
     health_kinds = active_kinds | {k for k in CORES if _installed_safe(k)}

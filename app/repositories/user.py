@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime
 from typing import Any, ClassVar
 
 from sqlalchemy import func, or_, select, tuple_

@@ -10,7 +10,6 @@ from sqlalchemy import func, select, update
 from app.core.cache import CacheProtocol
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.logging import get_logger
-from app.core.pagination import decode_cursor, encode_cursor
 from app.core.security import hash_password_async
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.user import User, UserExpireStrategy, UserRole
