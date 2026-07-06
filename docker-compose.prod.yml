@@ -2,16 +2,16 @@ name: xlink
 
 services:
   api:
-    image: ${XLINK_IMAGE_API:-ghcr.io/parsago92/xlink-api:${XLINK_IMAGE_TAG:-latest}}
+    image: ${XLINK_IMAGE_API:-ghcr.io/${XLINK_IMAGE_OWNER:-theok09}/xlink-api:${XLINK_IMAGE_TAG:-latest}}
     pull_policy: always
     build: !reset null
 
   web:
-    image: ${XLINK_IMAGE_WEB:-ghcr.io/parsago92/xlink-web:${XLINK_IMAGE_TAG:-latest}}
+    image: ${XLINK_IMAGE_WEB:-ghcr.io/${XLINK_IMAGE_OWNER:-theok09}/xlink-web:${XLINK_IMAGE_TAG:-latest}}
     pull_policy: always
     build: !reset null
 
   migrate:
-    image: ${XLINK_IMAGE_API:-ghcr.io/parsago92/xlink-api:${XLINK_IMAGE_TAG:-latest}}
+    image: ${XLINK_IMAGE_API:-ghcr.io/${XLINK_IMAGE_OWNER:-theok09}/xlink-api:${XLINK_IMAGE_TAG:-latest}}
     pull_policy: always
     build: !reset null
