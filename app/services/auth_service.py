@@ -110,15 +110,23 @@ class AuthService:
             # fudge=1s absorbs clock granularity for password change; logout-all
             # is a deliberate revocation, so use fudge=0 (reject a token issued in
             # the same second) — the safe direction for a revocation control.
-            for ts, msg, code, fudge in (
-                (user.password_changed_at, "Token invalidated by a password change.", "password_changed", 1),
-                (user.sessions_revoked_at, "Session was logged out.", "session_revoked", 0),
+            # password change: fudge=1s absorbs clock granularity (a token issued
+            # in the same second as the change stays valid). logout-all is a hard
+            # revocation, so reject a token issued in the SAME second too (<=),
+            # closing a same-second refresh-vs-revoke race.
+            for ts, msg, code, reject_equal in (
+                (user.password_changed_at, "Token invalidated by a password change.", "password_changed", False),
+                (user.sessions_revoked_at, "Session was logged out.", "session_revoked", True),
             ):
                 if ts is None:
                     continue
                 if ts.tzinfo is None:
                     ts = ts.replace(tzinfo=UTC)
-                if token_issued_at < int(ts.timestamp()) - fudge:
+                cutoff = int(ts.timestamp())
+                if reject_equal:
+                    if token_issued_at <= cutoff:
+                        raise AuthenticationError(msg, code=code)
+                elif token_issued_at < cutoff - 1:
                     raise AuthenticationError(msg, code=code)
         return user
 
