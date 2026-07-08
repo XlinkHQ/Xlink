@@ -61,9 +61,12 @@ export function NodesScreen() {
   const nodes = (query.data?.items ?? []) as NodeRead[];
 
   const [editing, setEditing] = useState<NodeRead | "new" | null>(null);
-  const [detail, setDetail] = useState<NodeRead | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const [editInline, setEditInline] = useState(false);
   const [search, setSearch] = useState("");
+  // Resolve the open detail node live from the query, so a rename reflects and a
+  // deletion closes the view (was falling back to a stale snapshot).
+  const detail = detailId ? (nodes.find((n) => n.id === detailId) ?? null) : null;
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["nodes"] });
   const act = async (fn: () => Promise<unknown>, ok?: string) => {
@@ -84,18 +87,17 @@ export function NodesScreen() {
     : nodes;
 
   if (detail) {
-    const live = nodes.find((n) => n.id === detail.id) ?? detail;
     return (
       <NodeDetail
-        node={live}
-        onClose={() => { setDetail(null); setEditInline(false); }}
+        node={detail}
+        onClose={() => { setDetailId(null); setEditInline(false); }}
         onEdit={() => setEditInline((v) => !v)}
         editing={editInline}
         editForm={
           editInline ? (
             <NodeDialog
               variant="inline"
-              node={live}
+              node={detail}
               onClose={() => setEditInline(false)}
               onSaved={() => { setEditInline(false); refresh(); }}
             />
@@ -154,7 +156,7 @@ export function NodesScreen() {
           filtered.map((n) => (
             <WarpRow
               key={n.id}
-              onClick={() => setDetail(n)}
+              onClick={() => setDetailId(n.id)}
               menu={[
                 { label: "Edit", icon: "edit", onClick: () => setEditing(n) },
                 {
