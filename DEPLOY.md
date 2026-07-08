@@ -1,44 +1,62 @@
-# XLink deploy
+# Deploying XLink
 
-## Panel server (94.183.218.221)
+There are two machines: the **panel server** (runs the web console, API, Postgres,
+Redis) and one or more **node servers** (run the VPN cores and the pull-based
+agent). Nodes connect out to the panel's API — the panel never needs to reach
+into a node.
 
-1. Copy this folder to the server, then:
+## Panel server
+
+The one-command installer does everything (Docker, clone, secret generation,
+build/pull, migrations, start):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Theok09/Xlink/main/scripts/install.sh)
+```
+
+When it finishes it prints the panel URL and a one-time admin password. Re-run it
+any time to update in place (your `.env` is preserved). Append `--build` to build
+the images locally instead of pulling.
+
+Prefer to drive it yourself? Clone the repo and use the manager script:
+
+```bash
+git clone https://github.com/Theok09/Xlink.git /opt/xlink
+cd /opt/xlink
+./xlink.sh install          # generate .env + secrets, pull, migrate, start
+```
+
+Open the firewall for the web port (default `3000`) and the API port
+(default `8000` — nodes connect here). For a domain + automatic HTTPS, set the
+domain in `.env` and the stack brings up the bundled Caddy edge proxy (the `tls`
+compose profile); otherwise it serves plain ports for local/IP use.
+
+## Node server
+
+1. In the panel: **Nodes → add a node** (its public host + core port), then
+   provision its **agent token**. Copy the node id and token.
+
+2. On the node server, run the agent installer with the values from step 1:
 
    ```bash
-   cd xlink
-   cp deploy.env.production .env
-   docker compose build
-   docker compose up -d
+   curl -fsSL https://<panel-host>:8000/agent/install.sh \
+     | sudo -E bash -s https://<panel-host> <node-id> <agent-token>
    ```
 
-2. Wait for health, then open the panel:
+   Restrict the cores it installs with `--cores=xray,wireguard` (default: all).
 
-   `http://94.183.218.221:3000`
-
-   Login: `admin` / (the password in `deploy.env.production`).
-
-3. Open the firewall: 3000 (web), 8000 (api — nodes connect here).
-
-## Node server (185.130.47.51)
-
-1. In the panel: Nodes → add a node (host `185.130.47.51`, port 443),
-   then provision its **agent token**. Copy the node id + token.
-
-2. Copy the `node-agent/` folder to the node server, then:
+3. Verify the agent is talking to the panel:
 
    ```bash
-   cd node-agent
-   sudo XLINK_PANEL_URL=http://94.183.218.221:8000 \
-        XLINK_NODE_ID=<node-uuid> \
-        XLINK_AGENT_TOKEN=<token> \
-        bash install-remote.sh
+   journalctl -u xlink-agent -f      # expect "pulled config" every cycle
    ```
 
-3. Verify: `journalctl -u xlink-agent -f` — should show `pulled config`.
-   The node goes `active` in the panel within ~30s.
+   The node flips to **active** in the panel within ~30s.
 
 ## Notes
 
-- API port 8000 must be reachable from the node server.
-- For TLS / a domain, put a reverse proxy (caddy/nginx) in front of web:3000 and api:8000.
-- Secrets live in `.env` — keep it off git.
+- The API port must be reachable from every node server.
+- Secrets live in `.env` on the panel server — it is git-ignored; never commit it.
+- Back up the database regularly: `xlink backup`.
+- `./xlink.sh` is the single install/update entrypoint on the panel; the curl
+  one-liner above is just a bootstrap that hands off to it.

@@ -48,6 +48,13 @@ cd web && npm install && npm run dev
 ruff check . && mypy app && pytest
 ```
 
+## Contributing & security
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — local setup and how to open a PR
+- [SECURITY.md](SECURITY.md) — reporting a vulnerability (do not open a public issue)
+- [CHANGELOG.md](CHANGELOG.md) — release history
+- [DEPLOY.md](DEPLOY.md) — panel + node deployment
+
 ## License
 
 [Apache-2.0](LICENSE) © 2026 ParsaGo92

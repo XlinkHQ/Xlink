@@ -1,0 +1,55 @@
+# Changelog
+
+All notable changes to this project are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project aims to
+follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Fixed
+
+- **Node agent** — corrected per-protocol auth mapping so hysteria, naive, SOCKS,
+  shadowtls, tuic and wireguard clients authenticate and are counted correctly;
+  keyed hysteria/traffic stats by assignment id; WireGuard restarts no longer
+  re-count an interface's whole lifetime; capped the traffic WAL below the panel's
+  batch limit; drop non-UUID samples so one bad row can't reject a whole batch.
+- **Subscriptions** — shadowtls now renders in sing-box/clash feeds instead of
+  being silently dropped; an admin/panel preview no longer consumes a
+  START_ON_FIRST_USE user's expiry window.
+- **Quotas & admin state** — a reseller at their user cap can now set a data limit
+  on an existing unlimited user; suspending then restoring an owner no longer
+  clobbers users an admin disabled individually; profile disable→enable restores
+  the affected assignments; bulk quota/expiry edits invalidate the feed cache.
+- **Security** — closed a device-limit bypass via a forged browser user-agent on
+  the subscription status page.
+- **Web console** — metrics screen reads the correct endpoint; token refresh now
+  covers CSV/backup downloads and survives a network blip without logging out;
+  full pagination for group membership/counts; soft-deleted users can be shown
+  and restored; detail views have working back/edit controls; several date and
+  form-reset fixes.
+
+### Changed
+
+- Removed the redundant `deploy.sh` wrapper; `xlink.sh` is the single install /
+  update entrypoint (with `scripts/install.sh` as the curl bootstrap).
+- Relicensed to Apache-2.0 (patent grant, trademark clause, `NOTICE`).
+
+## [1.0.0] - 2026-07
+
+Initial release.
+
+### Added
+
+- Multi-node VPN management panel: FastAPI + PostgreSQL + Redis backend, Next.js
+  admin console, and a pull-based node agent.
+- Cores: **xray, sing-box, hysteria, wireguard** (vless / vmess / trojan /
+  shadowsocks / shadowtls / hysteria2 / tuic / naive / socks / wireguard).
+- Per-user data, expiry, on-hold and device limits; HMAC subscription tokens with
+  per-user scope and revocation.
+- Multi-node load-balancing and failover, traffic accounting, and database
+  backups.
+- Role-based access control with sudo admins and scoped reseller-admins.
+- One-command installer and containerized deployment.
+
+[Unreleased]: https://github.com/Theok09/Xlink/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Theok09/Xlink/releases/tag/v1.0.0
