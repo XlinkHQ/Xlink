@@ -17,6 +17,27 @@ from app.domain.audit_log import AuditLog
 router = APIRouter(prefix="/audit", tags=["audit"])
 
 
+def _audit_query(
+    *,
+    actor: str | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    limit: int,
+):
+    # One place builds the audit filter for both the JSON and CSV endpoints.
+    stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+    if actor:
+        # Escape LIKE wildcards so a literal % / _ in the search term isn't
+        # treated as a pattern (match-everything / index-defeating scan).
+        needle = actor.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        stmt = stmt.where(AuditLog.actor_username.ilike(f"%{needle}%", escape="\\"))
+    if date_from:
+        stmt = stmt.where(AuditLog.created_at >= date_from)
+    if date_to:
+        stmt = stmt.where(AuditLog.created_at <= date_to)
+    return stmt
+
+
 class AuditEntry(BaseModel):
     id: uuid.UUID
     actor_id: uuid.UUID | None
@@ -39,13 +60,7 @@ async def list_audit(
     date_to: datetime | None = Query(default=None),
 ) -> list[AuditEntry]:
     async with database.session() as session:
-        stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
-        if actor:
-            stmt = stmt.where(AuditLog.actor_username.ilike(f"%{actor}%"))
-        if date_from:
-            stmt = stmt.where(AuditLog.created_at >= date_from)
-        if date_to:
-            stmt = stmt.where(AuditLog.created_at <= date_to)
+        stmt = _audit_query(actor=actor, date_from=date_from, date_to=date_to, limit=limit)
         rows = (await session.execute(stmt)).scalars().all()
     return [AuditEntry.model_validate(r, from_attributes=True) for r in rows]
 
@@ -66,13 +81,7 @@ async def export_audit_csv(
     date_to: datetime | None = Query(default=None),
 ) -> StreamingResponse:
     async with database.session() as session:
-        stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(100000)
-        if actor:
-            stmt = stmt.where(AuditLog.actor_username.ilike(f"%{actor}%"))
-        if date_from:
-            stmt = stmt.where(AuditLog.created_at >= date_from)
-        if date_to:
-            stmt = stmt.where(AuditLog.created_at <= date_to)
+        stmt = _audit_query(actor=actor, date_from=date_from, date_to=date_to, limit=100000)
         rows = (await session.execute(stmt)).scalars().all()
     buffer = io.StringIO()
     writer = csv.writer(buffer)

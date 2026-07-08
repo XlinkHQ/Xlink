@@ -188,7 +188,7 @@ class TrafficService:
     async def usage_total_for_profile(self, profile_id: uuid.UUID) -> int:
         return await self._repo.usage_total_for_profile(profile_id)
 
-    async def online_user_ids(self, window_seconds: int = 90) -> set[uuid.UUID]:
+    async def online_user_ids(self, window_seconds: int = 45) -> set[uuid.UUID]:
         cutoff = datetime.now(UTC) - timedelta(seconds=max(1, window_seconds))
         stmt = (
             select(ClientAssignment.user_id)

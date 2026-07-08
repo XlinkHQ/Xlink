@@ -1669,6 +1669,7 @@ def cycle() -> None:
 
 def sse_listener() -> None:
     url = f"{BASE}/events"
+    _sse_fail = 0
     while True:
         try:
             req = urllib.request.Request(
@@ -1678,10 +1679,16 @@ def sse_listener() -> None:
             # half-open/stalled stream (LB idle-drop, no RST) then raises instead
             # of wedging this thread forever with timeout=None.
             with _OPENER.open(req, timeout=90) as resp:
+                _sse_fail = 0
                 for raw in resp:
                     if raw.decode("utf-8", "ignore").startswith("data:"):
                         _wake.set()
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
+            # Log occasionally (not every 5s) so a persistently-dead event stream
+            # (bad token, TLS, DNS) is visible instead of an invisible retry loop.
+            _sse_fail += 1
+            if _sse_fail == 1 or _sse_fail % 12 == 0:
+                _log(f"event stream reconnecting: {exc}")
             time.sleep(5)
 
 

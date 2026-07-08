@@ -81,11 +81,14 @@ class UserRepository(BaseRepository[User]):
         if owner_id is not None:
             conditions.append(User.owner_id == owner_id)
         if search:
-            needle = f"%{search.strip().lower()}%"
+            # Escape LIKE wildcards so a literal % / _ isn't a match-everything
+            # pattern (or an index-defeating scan) on the user table.
+            esc = search.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            needle = f"%{esc}%"
             conditions.append(
                 or_(
-                    func.lower(User.username).like(needle),
-                    func.lower(func.coalesce(User.email, "")).like(needle),
+                    func.lower(User.username).like(needle, escape="\\"),
+                    func.lower(func.coalesce(User.email, "")).like(needle, escape="\\"),
                 )
             )
         return conditions

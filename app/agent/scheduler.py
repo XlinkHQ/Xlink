@@ -26,7 +26,7 @@ class NodeAgentScheduler:
         events: EventBus | None = None,
         dispatcher: WebhookDispatcher | None = None,
         interval_seconds: int = 30,
-        offline_after_seconds: int = 90,
+        offline_after_seconds: int = 120,
         leader: LeaderElector | None = None,
     ) -> None:
         self._db = db
