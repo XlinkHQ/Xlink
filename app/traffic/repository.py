@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -196,6 +197,9 @@ class TrafficRepository:
             await self.session.commit()
             if n < batch:
                 break
+            # Yield between chunks so a large backlog purge doesn't monopolize the
+            # event loop / a DB connection back-to-back.
+            await asyncio.sleep(0)
         # Keep the idempotency ledger LONGER than the records it guards. If a node
         # is offline past the record-retention window and still holds buffered WAL,
         # purging both the records AND its batch_ids at the same cutoff lets the

@@ -108,6 +108,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             providers,
             interval_seconds=settings.metrics_summary_refresh_seconds,
             ttl_seconds=settings.metrics_summary_ttl_seconds,
+            leader=leader,
         )
         metrics_job.start()
 

@@ -74,12 +74,14 @@ class MetricsRefreshJob:
         *,
         interval_seconds: int,
         ttl_seconds: int,
+        leader=None,
     ) -> None:
         self._db = db
         self._cache = cache
         self._providers = providers
         self._interval = interval_seconds
         self._ttl = ttl_seconds
+        self._leader = leader
         self._task: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
 
@@ -103,16 +105,24 @@ class MetricsRefreshJob:
             self._task = None
         logger.info("metrics_refresh_stopped")
 
+    def _is_leader(self) -> bool:
+        return self._leader is None or self._leader.is_leader
+
     async def _run(self) -> None:
-        try:
-            await refresh_summary(self._db, self._cache, self._providers, ttl_seconds=self._ttl)
-        except Exception:
-            logger.exception("metrics_refresh_failed")
+        if self._is_leader():
+            try:
+                await refresh_summary(self._db, self._cache, self._providers, ttl_seconds=self._ttl)
+            except Exception:
+                logger.exception("metrics_refresh_failed")
         while not self._stopping.is_set():
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(self._stopping.wait(), timeout=self._interval)
             if self._stopping.is_set():
                 break
+            # Only the leader refreshes — otherwise N replicas each run the full
+            # collect + last-writer-wins on one Redis key.
+            if not self._is_leader():
+                continue
             try:
                 await refresh_summary(self._db, self._cache, self._providers, ttl_seconds=self._ttl)
             except asyncio.CancelledError:

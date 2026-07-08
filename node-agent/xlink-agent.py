@@ -1855,8 +1855,17 @@ def main() -> int:
     if not DRY_RUN:
         with contextlib.suppress(OSError):
             os.makedirs(os.path.dirname(XRAY_ERROR_LOG) or ".", exist_ok=True)
-    threading.Thread(target=sse_listener, daemon=True).start()
-    threading.Thread(target=fast_enforce_loop, daemon=True).start()
+    workers = {
+        "sse": (sse_listener, None),
+        "fast-enforce": (fast_enforce_loop, None),
+    }
+
+    def _spawn(target):
+        th = threading.Thread(target=target, daemon=True)
+        th.start()
+        return th
+
+    threads = {name: _spawn(fn) for name, (fn, _) in workers.items()}
     while True:
         try:
             cycle()
@@ -1866,6 +1875,12 @@ def main() -> int:
             poll_commands()
         except Exception as exc:
             _log(f"command poll error: {exc}")
+        # Respawn any worker thread that died (a BaseException in the loop
+        # scaffolding would otherwise silently stop fast-enforce / SSE wakes).
+        for name, (fn, _) in workers.items():
+            if not threads[name].is_alive():
+                _log(f"worker '{name}' died — respawning")
+                threads[name] = _spawn(fn)
         _wake.wait(timeout=INTERVAL)
         _wake.clear()
 

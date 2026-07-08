@@ -151,6 +151,9 @@ class AssignmentExpirationJob:
                         ),
                     ),
                 )
+                # Cap per run so a large backlog (clock jump / long downtime) doesn't
+                # load the entire expired set into memory; the rest expires next cycle.
+                .limit(5000)
             )
             result = await session.execute(stmt)
             expired = result.scalars().all()
