@@ -1122,12 +1122,31 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
         if core_clients:
             _log(f"{kind}: not installed on this node — skipping {len(core_clients)} client(s)")
         return True
-    # No clients for this core → nothing to serve. Skip building (wireguard's
-    # builder would raise on an empty client list, spamming errors and stalling
-    # the config version every cycle).
-    if not core_clients:
-        return True
+    # No clients for this core this cycle. If the core was NEVER serving (no prior
+    # config on disk) just skip — building an empty config is pointless and the
+    # wireguard builder would raise on an empty client list. But if it WAS serving
+    # (config exists on disk), we must actually TEAR IT DOWN — otherwise the old
+    # users keep being served and an over-quota drop / de-provision silently fails
+    # (the core keeps the stale config forever). See C1.
     path = core["path"]
+    if not core_clients:
+        if not os.path.exists(path):
+            return True
+        # Drain: stop serving. wireguard has no empty-config form (needs a key),
+        # so bring the interface down; the json cores get an empty-inbound config.
+        if kind == "wireguard":
+            _run("wg-quick down wg0 2>/dev/null; ip link delete wg0 2>/dev/null")
+            with contextlib.suppress(OSError):
+                os.remove(path)
+            _log(f"{kind}: drained (no clients) — interface down")
+            return True
+        empty = {"inbounds": [], "outbounds": [{"type": "direct"} if kind == "sing-box" else {"protocol": "freedom"}]}
+        if kind == "sing-box":
+            empty = {"log": {"level": "warn"}, "inbounds": [], "outbounds": [{"type": "direct"}]}
+        _write(path, empty, "json")
+        rc, out = _run(core["reload"])
+        _log(f"{kind}: drained (no clients) — emptied config, reload rc={rc}")
+        return rc == 0
     root, ext = os.path.splitext(path)
     tmp = f"{root}.tmp{ext}"
     backup = f"{root}.bak{ext}"

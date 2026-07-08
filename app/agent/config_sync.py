@@ -220,6 +220,11 @@ def _user_serviceable(now: datetime):
     return and_(
         User.is_active.is_(True),
         User.removed.is_(False),
+        # on-hold accounts haven't started their clock yet — activation happens on
+        # the first subscription pull, not on the node config path. Don't let the
+        # node serve them before that, or an on-hold user gets service with
+        # expire_at never set (effectively unlimited time).
+        User.on_hold.is_(False),
         or_(User.expire_at.is_(None), User.expire_at > now),
         or_(
             User.data_limit_bytes.is_(None),

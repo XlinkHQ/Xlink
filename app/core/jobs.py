@@ -165,6 +165,20 @@ class AssignmentExpirationJob:
                 .where(ClientAssignment.id.in_(ids))
                 .values(status=AssignmentStatus.EXPIRED)
             )
+            # Close the on-hold escape hatch: an on-hold user whose activation
+            # deadline passed must have on_hold cleared + expire_at set to now, or a
+            # later quota/expiry edit re-activates them (expire_at is None → looks
+            # "not expired") and hands out free service. Mirror activate_on_hold.
+            await session.execute(
+                update(User)
+                .where(
+                    User.on_hold.is_(True),
+                    User.activation_deadline.isnot(None),
+                    User.activation_deadline < now,
+                )
+                .values(on_hold=False, expire_at=now)
+                .execution_options(synchronize_session=False)
+            )
             if node_ids:
                 from sqlalchemy import func
 

@@ -88,18 +88,14 @@ class SubscriptionRepository:
         return list(value) if value else []
 
     async def get_user_quota(self, user_id: uuid.UUID) -> UserTrafficStats:
-        # Lightweight quota check: denormalized used_bytes + user limits only,
-        # no per-poll SUM over the large TrafficRecord table.
-        used = int(
-            await self._session.scalar(
-                select(func.coalesce(func.sum(ClientAssignment.used_bytes), 0)).where(
-                    ClientAssignment.user_id == user_id,
-                    ClientAssignment.status == AssignmentStatus.ACTIVE,
-                )
-            )
-            or 0
-        )
+        # Use the maintained account total (users_data_usage), NOT a sum over
+        # ACTIVE assignments: once a user hits their limit their assignment flips
+        # to LIMITED, so an ACTIVE-only sum reads 0 — the quota gate would then
+        # think they're under limit and serve them a (filtered-empty) feed while
+        # the status page shows "0 used / active". users_data_usage counts all
+        # statuses, matching every enforcement path.
         user = await self._session.get(User, user_id)
+        used = int(user.users_data_usage or 0) if user else 0
         limit = user.data_limit_bytes if user else None
         expire_ts = int(user.expire_at.timestamp()) if user and user.expire_at is not None else None
         return UserTrafficStats(
@@ -111,16 +107,6 @@ class SubscriptionRepository:
         )
 
     async def get_user_traffic_stats(self, user_id: uuid.UUID) -> UserTrafficStats:
-        used = int(
-            await self._session.scalar(
-                select(func.coalesce(func.sum(ClientAssignment.used_bytes), 0)).where(
-                    ClientAssignment.user_id == user_id,
-                    ClientAssignment.status == AssignmentStatus.ACTIVE,
-                )
-            )
-            or 0
-        )
-
         from app.traffic.models import TrafficRecord
 
         up, down = (
@@ -139,6 +125,7 @@ class SubscriptionRepository:
         ).one()
 
         user = await self._session.get(User, user_id)
+        used = int(user.users_data_usage or 0) if user else 0
         limit = user.data_limit_bytes if user else None
         expire_ts = int(user.expire_at.timestamp()) if user and user.expire_at is not None else None
         return UserTrafficStats(
