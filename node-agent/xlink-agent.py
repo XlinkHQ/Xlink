@@ -1481,7 +1481,10 @@ def _local_enforce(clients: list[dict], samples: list[dict]) -> list[dict]:
         lim = c.get("data_limit_bytes")
         if lim:
             user_limit[uid] = int(lim)
-        user_base[uid] = user_base.get(uid, 0) + int(c.get("used_bytes", 0) or 0)
+        # used_bytes is the per-USER account total (same value on every one of the
+        # user's clients), so SET it once — do NOT sum, or a user with N
+        # assignments on this node counts N× their usage and is dropped early.
+        user_base[uid] = int(c.get("used_bytes", 0) or 0)
     for s in samples:
         uid = asg_user.get(s.get("assignment_id"))
         if uid is None:

@@ -84,6 +84,21 @@ def test_multi_user_only_over_dropped():
     assert [c["user_id"] for c in out] == ["u2"]
 
 
+def test_multi_assignment_used_bytes_not_summed():
+    # used_bytes is the per-USER total, repeated on every one of the user's
+    # clients. Two assignments for one user, each carrying used_bytes=600 (the
+    # account total), limit 1000: base must be 600 (SET), not 1200 (summed).
+    # With no new delta the user is UNDER limit and must be kept.
+    _reset()
+    clients = [
+        {"assignment_id": "a1", "user_id": "u1", "data_limit_bytes": 1000, "used_bytes": 600},
+        {"assignment_id": "a2", "user_id": "u1", "data_limit_bytes": 1000, "used_bytes": 600},
+    ]
+    out = m._local_enforce(clients, [])
+    assert len(out) == 2, "user wrongly dropped — used_bytes double-counted"
+    assert "u1" not in m._over_users
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
