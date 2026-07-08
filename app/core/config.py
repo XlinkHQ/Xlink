@@ -120,7 +120,10 @@ class Settings(BaseSettings):
     jwt_secret_key: SecretStr = SecretStr("insecure-dev-key-change-me")
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: int = 15
-    refresh_token_expire_days: int = 7
+    # 30d refresh window: with the frontend's silent refresh-on-401, an admin who
+    # logs in once stays signed in for a month of activity without re-entering
+    # credentials (each use rotates the refresh token forward).
+    refresh_token_expire_days: int = 30
 
     argon2_time_cost: int = 3
     argon2_memory_cost: int = 65536
