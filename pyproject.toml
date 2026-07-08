@@ -5,7 +5,7 @@ description = "Multi-node VPN management panel (FastAPI + PostgreSQL + Redis)"
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [{ name = "ParsaGo92" }]
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 
 dependencies = [
     "fastapi>=0.115.0",

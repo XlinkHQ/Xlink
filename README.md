@@ -50,4 +50,4 @@ ruff check . && mypy app && pytest
 
 ## License
 
-[MIT](LICENSE) © 2026 ParsaGo92
+[Apache-2.0](LICENSE) © 2026 ParsaGo92
