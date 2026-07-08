@@ -13,7 +13,7 @@ help:
 	@echo "  make test      run the backend test suite"
 
 install:
-	./deploy.sh
+	./xlink.sh install pull
 
 up:
 	docker compose up -d
@@ -22,7 +22,7 @@ down:
 	docker compose down
 
 deploy:
-	./deploy.sh
+	./xlink.sh install pull
 
 migrate:
 	docker compose run --rm migrate
