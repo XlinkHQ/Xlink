@@ -59,12 +59,14 @@ class SubscriptionRepository:
             if dl < now:
                 user.expire_at = now
                 user.on_hold = False
-                await self._session.commit()
+                # flush, not commit: the request-scoped session owns the
+                # transaction and commits at the end (app/db/session.py).
+                await self._session.flush()
                 return
         if user.on_hold_duration_seconds:
             user.expire_at = now + timedelta(seconds=user.on_hold_duration_seconds)
         user.on_hold = False
-        await self._session.commit()
+        await self._session.flush()
 
     async def get_assignment_source(self, assignment_id: uuid.UUID) -> SubscriptionSource | None:
         rows = await self._sources(ClientAssignment.id == assignment_id)

@@ -84,6 +84,11 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # True only while disabled by an owner-suspend cascade; lets restore re-enable
+    # exactly these users without clobbering an admin's manual disable.
+    suspended_by_owner: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default=text("false")
+    )
 
     data_limit_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     expire_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

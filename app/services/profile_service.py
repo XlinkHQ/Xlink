@@ -98,17 +98,29 @@ class ProfileService:
                 profile.provider_kind, data.protocol or profile.protocol, data.settings
             )
             profile.settings = data.settings
+        reenabled = False
         if data.is_active is not None:
+            reenabled = data.is_active and not profile.is_active
             profile.is_active = data.is_active
 
         flushed = await self._flush(profile)
+        if reenabled:
+            # Restore the assignments a prior disable() cut (mirrors set_active).
+            await self._restore_profile_disabled_assignments(profile_id)
         await self._invalidate_subscription_cache(flushed.node_id)
         return flushed
 
     async def set_active(self, profile_id: uuid.UUID, is_active: bool) -> Profile:
         profile = await self.get(profile_id)
+        was_active = profile.is_active
         profile.is_active = is_active
-        return await self._flush(profile)
+        flushed = await self._flush(profile)
+        if is_active and not was_active:
+            # Re-enabling: restore the assignments disable() cut, else every user
+            # on this profile stays DISABLED until re-enabled one by one.
+            await self._restore_profile_disabled_assignments(profile_id)
+        await self._invalidate_subscription_cache(flushed.node_id)
+        return flushed
 
     async def disable(self, profile_id: uuid.UUID) -> Profile:
         profile = await self.set_active(profile_id, False)
@@ -125,6 +137,11 @@ class ProfileService:
         decrements: dict[uuid.UUID, int] = {}
         for assignment in active_assignments:
             assignment.status = AssignmentStatus.DISABLED
+            # Mark WHY it was disabled so re-enabling the profile can restore
+            # exactly these (and not assignments an admin disabled by hand).
+            creds = dict(assignment.credentials or {})
+            creds["profile_disabled"] = True
+            assignment.credentials = creds
             if assignment.node_id is not None:
                 decrements[assignment.node_id] = decrements.get(assignment.node_id, 0) + 1
         for node_id, count in decrements.items():
@@ -137,7 +154,37 @@ class ProfileService:
                 .execution_options(synchronize_session=False)
             )
         await self._repo.session.flush()
+        await self._invalidate_subscription_cache(profile.node_id)
         return profile
+
+    async def _restore_profile_disabled_assignments(self, profile_id: uuid.UUID) -> None:
+        """Re-activate assignments this profile's disable() cut, on re-enable."""
+        from sqlalchemy import func, select, update
+
+        from app.domain.node import Node
+
+        stmt = select(ClientAssignment).where(
+            ClientAssignment.profile_id == profile_id,
+            ClientAssignment.status == AssignmentStatus.DISABLED,
+        )
+        rows = (await self._repo.session.execute(stmt)).scalars().all()
+        increments: dict[uuid.UUID, int] = {}
+        for assignment in rows:
+            creds = dict(assignment.credentials or {})
+            if not creds.pop("profile_disabled", None):
+                continue  # disabled for another reason (admin, ip-limit) — leave it
+            assignment.status = AssignmentStatus.ACTIVE
+            assignment.credentials = creds
+            if assignment.node_id is not None:
+                increments[assignment.node_id] = increments.get(assignment.node_id, 0) + 1
+        for node_id, count in increments.items():
+            await self._repo.session.execute(
+                update(Node)
+                .where(Node.id == node_id)
+                .values(current_users=Node.current_users + count)
+                .execution_options(synchronize_session=False)
+            )
+        await self._repo.session.flush()
 
     async def delete(self, profile_id: uuid.UUID) -> None:
         from sqlalchemy import func, select

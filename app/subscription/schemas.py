@@ -46,6 +46,10 @@ class FeedRequest(BaseModel):
     use_cache: bool = True
 
     shuffle: bool = False
+    # Only the real client fetch (public subscription endpoint) may consume a
+    # START_ON_FIRST_USE window — an admin/panel preview must NOT start the
+    # customer's expiry clock just by reading the feed.
+    activate_first_use: bool = False
 
 
 class ConfigRead(BaseModel):

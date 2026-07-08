@@ -50,7 +50,13 @@ class SubscriptionRenderer:
                     reason=str(exc),
                 )
         rendered = tuple(rendered_list)
-        content = self._registry.render(feed_format, tuple(r.config for r in rendered))
+        # Build the feed body from the ORIGINAL configs, not the URI-render
+        # survivors: some protocols (e.g. shadowtls) have no single-line URI form
+        # yet are fully renderable by the sing-box / clash format renderers, which
+        # each filter to what they support. Pre-filtering on render_uri here would
+        # silently drop those from every feed. `rendered` still drives per-item
+        # URI metadata below.
+        content = self._registry.render(feed_format, configs)
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return RenderedFeed(
             configs=rendered,

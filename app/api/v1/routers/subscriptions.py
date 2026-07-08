@@ -363,7 +363,11 @@ async def public_subscription(
 
     if is_browser_preview:
         configs: list[str] = []
-        if not not_servable:
+        # device_ok MUST gate the embed: a browser preview isn't hard-rejected, but
+        # an over-device-limit client (incl. a forged "Mozilla" UA) must not receive
+        # working configs on the status page — that would be an unlimited-device
+        # bypass.
+        if not not_servable and device_ok:
             text_feed = await subscriptions.feed(
                 _request(scope, user_id, SubscriptionFormat.TEXT, RenderVersion.V1, use_cache=True)
             )
@@ -448,6 +452,9 @@ async def public_subscription(
                 version=RenderVersion.V1,
                 use_cache=not cfg.shuffle_configs,
                 shuffle=cfg.shuffle_configs,
+                # Real client fetch: this is the "first use" that starts an
+                # on-hold user's window.
+                activate_first_use=True,
             )
         )
 

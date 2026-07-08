@@ -100,14 +100,27 @@ class UserService:
             await self._notify(events.USER_DATA_RESET, user)
 
     async def _enforce_owner_quota(
-        self, owner_id: uuid.UUID, new_limit_bytes: int | None, *, old_limit_bytes: int | None = None
+        self,
+        owner_id: uuid.UUID,
+        new_limit_bytes: int | None,
+        *,
+        old_limit_bytes: int | None = None,
+        is_update: bool = False,
     ) -> None:
         owner = await self._repo.session.scalar(
             select(User).where(User.id == owner_id).with_for_update()
         )
         if owner is None:
             return
-        if owner.admin_user_limit is not None and owner.admin_user_limit > 0 and old_limit_bytes is None:
+        # The user-COUNT cap only applies when adding a user. An update never adds
+        # a user, so gate on is_update — NOT on `old_limit_bytes is None`, which is
+        # also true when updating an existing *unlimited* user and would wrongly
+        # reject that edit once the owner is at their user cap.
+        if (
+            not is_update
+            and owner.admin_user_limit is not None
+            and owner.admin_user_limit > 0
+        ):
             count = await self._repo.session.scalar(
                 select(func.count())
                 .select_from(User)
@@ -384,7 +397,7 @@ class UserService:
                 and (new_limit or 0) > (old_limit or 0)
             ):
                 await self._enforce_owner_quota(
-                    user.owner_id, new_limit, old_limit_bytes=old_limit
+                    user.owner_id, new_limit, old_limit_bytes=old_limit, is_update=True
                 )
             user.data_limit_bytes = new_limit
             serviceability_changed = True
@@ -727,7 +740,10 @@ class UserService:
                             and limit_value > (target.data_limit_bytes or 0)
                         ):
                             await self._enforce_owner_quota(
-                                target.owner_id, limit_value, old_limit_bytes=target.data_limit_bytes
+                                target.owner_id,
+                                limit_value,
+                                old_limit_bytes=target.data_limit_bytes,
+                                is_update=True,
                             )
                         target.data_limit_bytes = limit_value
                     elif action == "set_expiry":
@@ -741,6 +757,11 @@ class UserService:
                         raise ValidationError("Unknown bulk action.", code="unknown_bulk_action")
                 if action in ("set_data_limit", "set_expiry", "extend_expiry", "set_reset_strategy"):
                     await self._invalidate(uid)
+                # Also drop the cached subscription feed for actions that change
+                # what the feed serves — else bulk quota/expiry edits keep serving
+                # the stale (old) configs for up to cache_ttl (matches update_quota).
+                if action in ("set_data_limit", "set_expiry", "extend_expiry"):
+                    await self._invalidate_user_feed(uid)
                 # Raising a limit / extending expiry can make a LIMITED/expired
                 # user serviceable again — flip them back to ACTIVE, matching the
                 # single-edit update_quota path (else bulk-raise leaves them cut).
@@ -853,33 +874,56 @@ class UserService:
         admin = await self.get(admin_id)
         if admin.role is not UserRole.ADMIN:
             raise ValidationError("Not an admin.", code="not_an_admin")
+        # SUSPEND: only touch users currently ENABLED, and stamp them so restore
+        # knows they were cut by the cascade (not by an admin's manual disable).
+        # RESTORE: only re-enable users carrying that stamp — never force-enable a
+        # user an admin disabled individually.
+        base = [
+            User.owner_id == admin_id,
+            User.role == UserRole.USER,
+            User.removed.is_(False),
+        ]
+        if active:
+            base.append(User.suspended_by_owner.is_(True))
+        else:
+            base.append(User.is_active.is_(True))
         ids = (
-            (
-                await self._repo.session.execute(
-                    select(User.id).where(
-                        User.owner_id == admin_id,
-                        User.role == UserRole.USER,
-                        User.removed.is_(False),
-                    )
-                )
-            )
-            .scalars()
-            .all()
+            (await self._repo.session.execute(select(User.id).where(*base))).scalars().all()
         )
         if not ids:
             return 0
         await self._repo.session.execute(
-            update(User).where(User.id.in_(ids)).values(is_active=active)
+            update(User)
+            .where(User.id.in_(ids))
+            .values(is_active=active, suspended_by_owner=not active)
         )
-        await self._repo.session.execute(
-            update(ClientAssignment)
-            .where(
-                ClientAssignment.user_id.in_(ids),
-                ClientAssignment.status
-                == (AssignmentStatus.DISABLED if active else AssignmentStatus.ACTIVE),
+        # Only flip assignments this cascade owns: on suspend, ACTIVE ones (leaving
+        # any already-DISABLED, e.g. ip-limited, untouched); on restore, only those
+        # we disabled — matched via the profile_disabled/owner marker is not on
+        # assignments here, so restore re-activates the DISABLED set for these users
+        # but skips ip-limited ones (which carry the ip_limited credential marker).
+        if active:
+            rows = (
+                await self._repo.session.execute(
+                    select(ClientAssignment).where(
+                        ClientAssignment.user_id.in_(ids),
+                        ClientAssignment.status == AssignmentStatus.DISABLED,
+                    )
+                )
+            ).scalars().all()
+            for a in rows:
+                if (a.credentials or {}).get("ip_limited"):
+                    continue  # disabled by the ip-limit enforcer — leave it
+                a.status = AssignmentStatus.ACTIVE
+        else:
+            await self._repo.session.execute(
+                update(ClientAssignment)
+                .where(
+                    ClientAssignment.user_id.in_(ids),
+                    ClientAssignment.status == AssignmentStatus.ACTIVE,
+                )
+                .values(status=AssignmentStatus.DISABLED)
             )
-            .values(status=AssignmentStatus.ACTIVE if active else AssignmentStatus.DISABLED)
-        )
         node_rows = await self._repo.session.execute(
             select(ClientAssignment.node_id).where(ClientAssignment.user_id.in_(ids)).distinct()
         )

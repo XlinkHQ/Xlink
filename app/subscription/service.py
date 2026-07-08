@@ -68,7 +68,11 @@ class SubscriptionService:
 
     async def feed(self, request: FeedRequest) -> FeedRead:
         if request.scope is FeedScope.USER:
-            await self._repository.activate_on_hold(request.subject_id)
+            # Consuming the on-hold "first use" starts the expiry clock, so only do
+            # it for a genuine client fetch — never for an admin/panel preview,
+            # which would burn the customer's window on a read.
+            if request.activate_first_use:
+                await self._repository.activate_on_hold(request.subject_id)
             await self._enforce_user_quota(request.subject_id)
 
         use_cache = request.use_cache and not request.shuffle
