@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core.authz import owner_scope
-from app.core.exceptions import ValidationError
+from app.core.exceptions import PermissionDeniedError, ValidationError
 from app.dependencies.auth import AdminUser, CurrentUser, SudoAdminUser, WriteAdminUser
 from app.dependencies.core import DatabaseDep
 from app.dependencies.pagination import ListPaginationDep
@@ -177,6 +177,16 @@ async def create_user(
     assignments: AssignmentServiceDep,
 ) -> UserRead:
     owner_id = None if admin.is_sudo else admin.id
+    # Enforce the SAME profile-scope check the dedicated /assignments endpoint
+    # does — otherwise a reseller could auto-assign an owned user onto a profile/
+    # node outside their scope (capacity theft / cross-tenant) via this shortcut.
+    if payload.profile_ids and not admin.is_sudo and not admin.all_groups_access:
+        scoped_profiles = await users.scoped_profile_ids(admin.id)
+        for profile_id in payload.profile_ids:
+            if profile_id not in scoped_profiles:
+                raise PermissionDeniedError(
+                    "This profile is not in your scope.", code="profile_out_of_scope"
+                )
     user = await users.create(payload, owner_id=owner_id)
     # Optional one-call provisioning: assign the new user to the given profiles so
     # a raw API client (bot) gets user + working config without a second request.

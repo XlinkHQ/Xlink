@@ -334,12 +334,17 @@ async def public_subscription(
     await users.touch_subscription(user_id, user_agent)
 
     is_browser_preview = format is None and _is_browser(user_agent)
-    if owner.device_limit and not is_browser_preview:
+    device_ok = True
+    if owner.device_limit:
         client_ip = request.client.host if request.client else ""
-        allowed = await users.register_device(
+        device_ok = await users.register_device(
             user_id, user_agent, client_ip, owner.device_limit, hwid=x_hwid
         )
-        if not allowed:
+        # A non-browser client over the limit is rejected outright. A browser
+        # preview isn't hard-rejected (so the user can still see their status
+        # page), but it must NOT be handed working configs — otherwise a forged
+        # "Mozilla" UA is an unlimited-device bypass. device_ok gates the embed.
+        if not device_ok and not is_browser_preview:
             raise HTTPException(status_code=403, detail="Device limit reached.")
 
     # Gate once, up front (lightweight quota read — no heavy TrafficRecord join),

@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.dependencies.auth import AdminUser, SudoAdminUser
+from app.dependencies.auth import AdminUser, SudoAdminUser, WriteAdminUser
 from app.dependencies.core import DatabaseDep, SettingsDep
 from app.dependencies.services import (
     AssignmentServiceDep,
@@ -235,7 +235,7 @@ async def users_last_seen(
 @router.post("/users/{user_id}/reset", response_model=ResetUsageResult)
 async def reset_user_usage(
     user_id: uuid.UUID,
-    admin: AdminUser,
+    admin: WriteAdminUser,
     traffic: TrafficServiceDep,
     users: UserServiceDep,
 ) -> ResetUsageResult:
