@@ -1,0 +1,7 @@
+# Default owner for everything in the repo.
+* @Theok09
+
+# Areas can get dedicated owners as the team grows, e.g.:
+# /app/          @backend-team
+# /web/          @frontend-team
+# /node-agent/   @backend-team

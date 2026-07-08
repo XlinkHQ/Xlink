@@ -220,6 +220,7 @@ check the web app instead. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
 - [docs/API.md](docs/API.md) — the full HTTP API reference
 - [DEPLOY.md](DEPLOY.md) — deploying the panel and nodes step by step
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setting up locally and sending changes
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community expectations
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability
 - [CHANGELOG.md](CHANGELOG.md) — what changed, release by release
 
