@@ -4,24 +4,28 @@ Multi-node VPN management panel — FastAPI + PostgreSQL + Redis backend, Next.j
 
 Supports **xray, sing-box, hysteria, wireguard** cores (vless / vmess / trojan / shadowsocks / hysteria2 / tuic / wireguard) with per-user data/expiry/device limits, multi-node load-balancing + failover, traffic accounting, and backups.
 
-## Quick start
+## Install (one command)
+
+On a fresh server, as root:
 
 ```bash
-cp .env.example .env
-# set XLINK_JWT_SECRET_KEY (openssl rand -hex 32), XLINK_POSTGRES_PASSWORD,
-# and XLINK_ADMIN_USERNAME / XLINK_ADMIN_PASSWORD
-
-make install     # generate secret, build, migrate, start
+bash <(curl -fsSL https://raw.githubusercontent.com/Theok09/Xlink/main/scripts/install.sh)
 ```
 
-Open the panel at `http://localhost:3000` and log in with the `XLINK_ADMIN_*` credentials.
+It installs Docker if missing, clones the repo to `/opt/xlink`, generates fresh
+secrets, builds/pulls the images, runs migrations, starts everything, and prints
+the panel URL + one-time admin password. Re-run it any time to update.
 
-## Commands
+Force a local build (no registry): append `--build`.
+
+## Manage
 
 ```bash
-make up | make down | make deploy | make logs
-./xlink user list
-./xlink admin reset-password -u admin -p NEWPASS
+xlink up | down | restart | status | logs
+xlink update            # pull latest, migrate, restart
+xlink backup            # snapshot the database
+xlink cli user list
+xlink admin reset-password -u admin -p NEWPASS
 ```
 
 ## Stack
