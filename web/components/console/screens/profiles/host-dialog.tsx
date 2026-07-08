@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { Field } from "../parts";
+import { InlineEditPanel } from "../settings-kit";
 
 const NETWORKS = ["", "tcp", "ws", "grpc", "httpupgrade", "xhttp", "splithttp", "kcp"];
 const SECURITIES = ["", "none", "tls", "reality", "inbound_default"];
@@ -38,11 +39,13 @@ export function HostDialog({
   host,
   onClose,
   onSaved,
+  variant = "modal",
 }: {
   profileId: string;
   host: InboundHostRead | null;
   onClose: () => void;
   onSaved: () => void;
+  variant?: "modal" | "inline";
 }) {
   const editing = !!host;
   const [remark, setRemark] = useState(host?.remark ?? "");
@@ -100,8 +103,9 @@ export function HostDialog({
     }
   };
 
+  const Shell = variant === "inline" ? InlineEditPanel : Modal;
   return (
-    <Modal
+    <Shell
       title={editing ? "Edit address" : "Add address"}
       onClose={onClose}
       onSubmit={submit}
@@ -228,7 +232,7 @@ export function HostDialog({
           ) : null}
         </Section>
       </div>
-    </Modal>
+    </Shell>
   );
 }
 

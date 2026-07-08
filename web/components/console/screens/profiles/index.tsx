@@ -64,7 +64,10 @@ export function ProfilesScreen() {
 
   const [search, setSearch] = useState("");
   const [editingInbound, setEditingInbound] = useState<ProfileRead | "new" | null>(null);
-  const [detail, setDetail] = useState<ProfileRead | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [editInline, setEditInline] = useState(false);
+  // resolve the open detail from live query data so edits reflect in the view
+  const detail = detailId ? (profiles.find((p) => p.id === detailId) ?? null) : null;
 
   const refreshInbounds = () => {
     qc.invalidateQueries({ queryKey: ["profiles"] });
@@ -114,28 +117,30 @@ export function ProfilesScreen() {
 
   if (detail) {
     return (
-      <>
-        <HostsDrawer
-          profile={detail}
-          nodeName={nodeName(detail.node_id)}
-          onClose={() => setDetail(null)}
-          onEdit={() => {
-            setEditingInbound(detail);
-            setDetail(null);
-          }}
-        />
-        {editingInbound ? (
-          <ProfileDialog
-            profile={editingInbound === "new" ? null : editingInbound}
-            nodes={nodes}
-            onClose={() => setEditingInbound(null)}
-            onSaved={() => {
-              setEditingInbound(null);
-              refreshInbounds();
-            }}
-          />
-        ) : null}
-      </>
+      <HostsDrawer
+        profile={detail}
+        nodeName={nodeName(detail.node_id)}
+        onClose={() => {
+          setDetailId(null);
+          setEditInline(false);
+        }}
+        editing={editInline}
+        onEdit={() => setEditInline((v) => !v)}
+        editForm={
+          editInline ? (
+            <ProfileDialog
+              variant="inline"
+              profile={detail}
+              nodes={nodes}
+              onClose={() => setEditInline(false)}
+              onSaved={() => {
+                setEditInline(false);
+                refreshInbounds();
+              }}
+            />
+          ) : null
+        }
+      />
     );
   }
 
@@ -171,7 +176,7 @@ export function ProfilesScreen() {
           filtered.map((p) => (
             <WarpRow
               key={p.id}
-              onClick={() => setDetail(p)}
+              onClick={() => setDetailId(p.id)}
               menu={[
                 { label: "Edit", icon: "edit", onClick: () => setEditingInbound(p) },
                 p.is_active
@@ -210,11 +215,17 @@ function HostsDrawer({
   nodeName,
   onClose,
   onEdit,
+  editing = false,
+  editForm = null,
 }: {
   profile: ProfileRead;
   nodeName: string;
   onClose: () => void;
   onEdit: () => void;
+  /** whether the inline edit box is open (drives the Edit button state) */
+  editing?: boolean;
+  /** inline edit form rendered below the content when editing */
+  editForm?: React.ReactNode;
 }) {
   const qc = useQueryClient();
   const hostsQuery = useQuery({
@@ -269,7 +280,12 @@ function HostsDrawer({
             <span className="crumb active">{profile.name}</span>
           </div>
           <div className="ml-auto">
-            <button type="button" className="warp-tb-button" onClick={onEdit}>
+            <button
+              type="button"
+              className={cn("warp-tb-button", editing && "is-active")}
+              onClick={onEdit}
+              aria-pressed={editing}
+            >
               <Pencil size={14} /> Edit
             </button>
           </div>
@@ -357,6 +373,7 @@ function HostsDrawer({
 
       {hostDialog ? (
         <HostDialog
+          variant="inline"
           profileId={profile.id}
           host={hostDialog === "new" ? null : hostDialog}
           onClose={() => setHostDialog(null)}
@@ -366,6 +383,8 @@ function HostsDrawer({
           }}
         />
       ) : null}
+
+      {editForm}
     </div>
   );
 }

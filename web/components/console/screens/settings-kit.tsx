@@ -1,7 +1,9 @@
 "use client";
 
+import { X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { cn } from "@/lib/cn";
 
 /**
  * DefGuard-style "marked section" primitives for XLink settings.
@@ -42,5 +44,54 @@ export function SettingsSection({
         </div>
       </section>
     </>
+  );
+}
+
+/**
+ * Inline edit panel — a bordered `warp-settings-card` that hosts an edit form
+ * directly below a list on the same screen (no modal / no drawer). Mirrors the
+ * Modal shell (title bar, scrolling body, footer) so dialogs can reuse their
+ * fields verbatim by swapping this shell in for `Modal` when rendered inline.
+ */
+export function InlineEditPanel({
+  title,
+  onClose,
+  onSubmit,
+  footer,
+  children,
+  className,
+}: {
+  title: string;
+  onClose: () => void;
+  onSubmit?: (e: FormEvent) => void;
+  footer?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  /** accepted for shell-swap parity with Modal; not used inline */
+  width?: string;
+}) {
+  return (
+    <form
+      onSubmit={onSubmit}
+      className={cn("warp-settings-card mt-4 flex w-full flex-col overflow-hidden p-0", className)}
+    >
+      <div className="flex flex-none items-center justify-between border-b border-hairline px-5 py-4">
+        <h3 className="text-base font-medium text-fg">{title}</h3>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="grid h-7 w-7 place-items-center rounded text-fg-muted transition-colors hover:bg-muted hover:text-fg"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-col gap-3.5 p-5">{children}</div>
+      {footer ? (
+        <div className="flex flex-none justify-end gap-2 border-t border-hairline px-5 py-4">
+          {footer}
+        </div>
+      ) : null}
+    </form>
   );
 }

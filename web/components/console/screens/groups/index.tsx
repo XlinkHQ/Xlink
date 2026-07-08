@@ -50,8 +50,11 @@ export function GroupsScreen() {
   };
 
   const [editing, setEditing] = useState<GroupRead | "new" | null>(null);
-  const [detail, setDetail] = useState<GroupRead | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [editInline, setEditInline] = useState(false);
   const [search, setSearch] = useState("");
+  // resolve the open detail from live query data so renames/saves reflect here
+  const detail = detailId ? (groups.find((g) => g.id === detailId) ?? null) : null;
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["groups"] });
   const remove = async (g: GroupRead) => {
@@ -69,35 +72,34 @@ export function GroupsScreen() {
   const filtered = needle ? groups.filter((g) => g.name.toLowerCase().includes(needle)) : groups;
   if (detail) {
     return (
-      <>
-        <ServiceSettings
-          group={detail}
-          profiles={profiles}
-          nodeName={nodeName}
-          assignments={assignments}
-          onClose={() => setDetail(null)}
-          onEdit={() => {
-            setEditing(detail);
-            setDetail(null);
-          }}
-          onSaved={() => {
-            refresh();
-            setDetail(null);
-          }}
-        />
-        {editing ? (
-          <GroupDialog
-            group={editing === "new" ? null : editing}
-            profiles={profiles}
-            nodeName={nodeName}
-            onClose={() => setEditing(null)}
-            onSaved={() => {
-              setEditing(null);
-              refresh();
-            }}
-          />
-        ) : null}
-      </>
+      <ServiceSettings
+        group={detail}
+        profiles={profiles}
+        nodeName={nodeName}
+        assignments={assignments}
+        onClose={() => {
+          setDetailId(null);
+          setEditInline(false);
+        }}
+        editing={editInline}
+        onEdit={() => setEditInline((v) => !v)}
+        editForm={
+          editInline ? (
+            <GroupDialog
+              variant="inline"
+              group={detail}
+              profiles={profiles}
+              nodeName={nodeName}
+              onClose={() => setEditInline(false)}
+              onSaved={() => {
+                setEditInline(false);
+                refresh();
+              }}
+            />
+          ) : null
+        }
+        onSaved={refresh}
+      />
     );
   }
 
@@ -133,7 +135,7 @@ export function GroupsScreen() {
           filtered.map((g) => (
             <WarpRow
               key={g.id}
-              onClick={() => setDetail(g)}
+              onClick={() => setDetailId(g.id)}
               menu={[
                 { label: "Edit", icon: "edit", onClick: () => setEditing(g) },
                 { label: "Delete", icon: "delete", danger: true, onClick: () => remove(g) },

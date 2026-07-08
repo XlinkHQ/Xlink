@@ -4494,6 +4494,7 @@ input.switch:focus-visible {
   transition: background-color 0.2s ease;
 }
 .warp-tb-button:hover { background-color: var(--bg-active); }
+.warp-tb-button.is-active { background-color: var(--bg-active); box-shadow: 0 0 0 1px var(--accent); color: var(--accent); }
 .warp-tb-button-primary { background-color: var(--accent); color: #fff; border-color: var(--accent); box-shadow: none; }
 .warp-tb-button-primary:hover { background-color: var(--accent-hover); border-color: var(--accent-hover); }
 .warp-tb-search {
@@ -5658,7 +5659,7 @@ input.switch:focus-visible {
 .xlink-dark .warp-sched-row { border-color:#32363B; }
 .warp-sched-row.is-chosen { border-color: var(--accent); background: var(--accent-muted); }
 .warp-sched-head { display:flex; align-items:center; gap:10px; }
-.warp-sched-name { font-size:13px; font-weight:500; color: var(--fg-default); }
+.warp-sched-name { font-size:13px; font-weight:500; color: var(--fg-default); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .warp-sched-score { margin-left:auto; font-family: var(--font-mono); font-size:13px; font-weight:600; color: var(--fg-default); }
 .warp-sched-reasons { margin:8px 0 0; padding-left:16px; display:flex; flex-direction:column; gap:2px; }
 .warp-sched-reasons li { font-size:12px; color: var(--fg-muted); }
@@ -5877,7 +5878,7 @@ input.switch:focus-visible {
 }
 .xlink-dark .warp-cert-row { border-color: #32363B; }
 .warp-cert-row-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-.warp-cert-name { font-size:13px; font-weight:500; color: var(--fg); }
+.warp-cert-name { font-size:13px; font-weight:500; color: var(--fg); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .warp-cert-meta { display:flex; flex-wrap:wrap; gap:16px; font-size:12px; color: var(--fg-muted); }
 .warp-cert-meta b { color: var(--fg); font-weight:500; }
 .warp-cert-actions { display:flex; gap:8px; margin: 2px 0 18px; }
@@ -6397,7 +6398,11 @@ input.switch:focus-visible {
   gap: 0;
   border-bottom: 1px solid var(--border-default);
   padding-top: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.warp-pd-tabs::-webkit-scrollbar { display: none; }
+.warp-pd-tab { flex: none; white-space: nowrap; }
 /* settings: underline row bleeds to the content area's left/right edges + hugs topbar; labels indented */
 .warp-settings-tabs {
   margin-left: -2rem; margin-right: -2rem;
@@ -6505,10 +6510,12 @@ input.switch:focus-visible {
 .warp-svc-row-name {
   font-family: var(--warp-font); font-weight: 500; font-size: 14px; line-height: 20px;
   color: var(--fg-default);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .warp-svc-row-node {
   font-family: var(--warp-font); font-weight: 400; font-size: 12px; line-height: 16px;
   color: var(--fg-muted);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .warp-svc-row-usage {
   font-family: var(--warp-font); font-weight: 400; font-size: 13px; line-height: 18px;
@@ -6626,6 +6633,7 @@ input.switch:focus-visible {
   padding: 0 20px 20px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .warp-table-top .title {
@@ -6966,4 +6974,58 @@ input.switch:focus-visible {
   .warp-login-page { grid-template-columns: 1fr; }
   .warp-login-aside { display: none; }
   .warp-login-track { grid-column: 1 / -1; padding: var(--space-12) var(--space-6); align-items: center; }
+}
+
+/* =========================================================================
+   Narrow-viewport responsiveness (phones/tablets). Additive overrides that
+   keep every screen inside the viewport; desktop layout is untouched.
+   ========================================================================= */
+@media (max-width: 720px) {
+  /* Page header rows (title + search + buttons): allow the action group to
+     drop to its own full-width line and the search to stretch. */
+  .warp-table-top .right { margin-left: 0; flex-wrap: wrap; }
+  .warp-table-top .right,
+  .warp-table-top .right .warp-tb-search-wrap { flex: 1 1 auto; }
+  .warp-table-top .right .warp-tb-search-wrap { max-width: 100%; }
+
+  /* Settings header: tabs row + Save/Restart actions stack instead of clipping. */
+  .warp-set-tabs-row { flex-wrap: wrap; align-items: stretch; gap: 12px; }
+  .warp-set-tabs-row > .warp-pd-tabs { flex: 1 1 100%; }
+
+  /* Settings form rows: label block stacks above the control, control goes
+     full width instead of overflowing at a fixed 200px + 20px margin. */
+  .warp-set-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .warp-set-row-control { flex: 1 1 auto; min-width: 0; }
+  .warp-set-row-control input,
+  .warp-set-row-control select { width: 100%; max-width: 100%; margin-left: 0; }
+  /* control may wrap an <input> + button in an existing flex span — allow it to
+     wrap so the input + button don't overflow side by side. */
+  .warp-set-row-control > .flex { flex-wrap: wrap; }
+  .warp-set-input,
+  .warp-set-input-wide { flex: 1 1 auto; width: 100%; min-width: 0; max-width: 100%; margin-left: 0; }
+
+  /* Cores/Xray header (core select + status + version + restart): children are
+     flex:none, so let the row wrap instead of overflowing. */
+  .warp-xray-head { flex-wrap: wrap; }
+
+  /* Certificate action buttons wrap instead of overflowing. */
+  .warp-cert-actions { flex-wrap: wrap; }
+
+  /* Section-select cards: drop the fixed 90px image column so the text + arrow
+     fit on a phone. */
+  .warp-section-select { grid-template-columns: 1fr calc(40px + 20px); }
+  .warp-section-select-img { display: none; }
+
+  /* Detail/breadcrumb action clusters (Edit / Reset / Disable …) wrap. */
+  .warp-breadcrumbs .track { flex-wrap: wrap; row-gap: 8px; }
+  .warp-breadcrumbs .track > .ml-auto,
+  .warp-detail-actions .warp-breadcrumbs-actions { flex-wrap: wrap; }
+
+  /* Toolbar search inputs shouldn't force a min-width that overflows. */
+  .warp-tb-search { min-width: 0; }
+  .warp-tb-toolbar .warp-tb-search-wrap,
+  .warp-tb-searchbar > .warp-tb-search-wrap { max-width: 100%; }
+
+  /* Any table on a phone scrolls inside its card rather than the page. */
+  .warp-tb-scroll { -webkit-overflow-scrolling: touch; }
 }

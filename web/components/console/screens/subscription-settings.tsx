@@ -267,7 +267,7 @@ export function SubscriptionSettingsScreen() {
             {rules.map((rule, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Input
-                  className="h-9 flex-1 font-mono"
+                  className="h-9 min-w-0 flex-1 font-mono"
                   value={rule.pattern}
                   onChange={(e) =>
                     setRules((r) => r.map((x, j) => (j === i ? { ...x, pattern: e.target.value } : x)))

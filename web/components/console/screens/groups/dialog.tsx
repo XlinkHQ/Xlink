@@ -8,6 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { ApiError, createGroup, type GroupRead, type ProfileRead, updateGroup } from "@/lib/api";
 import { Field } from "../parts";
+import { InlineEditPanel } from "../settings-kit";
 
 export function GroupDialog({
   group,
@@ -15,12 +16,14 @@ export function GroupDialog({
   nodeName,
   onClose,
   onSaved,
+  variant = "modal",
 }: {
   group: GroupRead | null;
   profiles: ProfileRead[];
   nodeName: (id: string) => string;
   onClose: () => void;
   onSaved: () => void;
+  variant?: "modal" | "inline";
 }) {
   const [name, setName] = useState(group?.name ?? "");
   const [slug, setSlug] = useState(group?.slug ?? "");
@@ -58,22 +61,25 @@ export function GroupDialog({
     }
   };
 
+  const title = group ? "Edit service" : "Create service";
+  const footer = (
+    <>
+      <Button type="button" variant="outline" onClick={onClose}>
+        Cancel
+      </Button>
+      <Button type="submit" variant="primary" disabled={busy || !name.trim()}>
+        {busy ? "Saving…" : group ? "Save" : "Create service"}
+      </Button>
+    </>
+  );
+  const Shell = variant === "inline" ? InlineEditPanel : Modal;
   return (
-    <Modal
-      title={group ? "Edit service" : "Create service"}
+    <Shell
+      title={title}
       width="sm:w-[40rem]"
       onClose={onClose}
       onSubmit={submit}
-      footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" disabled={busy || !name.trim()}>
-            {busy ? "Saving…" : group ? "Save" : "Create service"}
-          </Button>
-        </>
-      }
+      footer={footer}
     >
       <p className="warp-dlg-section-title">Details</p>
       <div className="warp-dlg-2col">
@@ -108,6 +114,6 @@ export function GroupDialog({
           )}
         </div>
       </Field>
-    </Modal>
+    </Shell>
   );
 }

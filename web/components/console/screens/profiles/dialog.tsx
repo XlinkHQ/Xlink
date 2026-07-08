@@ -17,6 +17,7 @@ import {
   updateProfile,
 } from "@/lib/api";
 import { Field } from "../parts";
+import { InlineEditPanel } from "../settings-kit";
 import { PROTOCOLS, PROVIDERS, protocolsFor } from "./util";
 import { BOOL_KEYS, NUMERIC_KEYS, type TField, TRANSPORT_KEYS, transportFields } from "../transport";
 
@@ -45,11 +46,13 @@ export function ProfileDialog({
   nodes,
   onClose,
   onSaved,
+  variant = "modal",
 }: {
   profile: ProfileRead | null;
   nodes: NodeRead[];
   onClose: () => void;
   onSaved: () => void;
+  variant?: "modal" | "inline";
 }) {
   const providersQuery = useQuery({ queryKey: ["providers"], queryFn: listProviders });
   const providerKinds =
@@ -226,8 +229,9 @@ export function ProfileDialog({
   const network = fields.filter((f) => !used.has(f.key));
   const showGenerate = cfg.security === "reality" || protocol === "wireguard";
 
+  const Shell = variant === "inline" ? InlineEditPanel : Modal;
   return (
-    <Modal
+    <Shell
       title={profile ? "Edit inbound" : "Add inbound"}
       onClose={onClose}
       onSubmit={submit}
@@ -396,7 +400,7 @@ export function ProfileDialog({
       ) : (
         <JsonArea value={previewJson} readOnly />
       )}
-    </Modal>
+    </Shell>
   );
 }
 

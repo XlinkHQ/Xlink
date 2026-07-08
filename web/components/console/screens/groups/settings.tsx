@@ -51,6 +51,8 @@ export function ServiceSettings({
   onClose,
   onEdit,
   onSaved,
+  editing = false,
+  editForm = null,
 }: {
   group: GroupRead;
   profiles: ProfileRead[];
@@ -59,6 +61,10 @@ export function ServiceSettings({
   onClose: () => void;
   onEdit: () => void;
   onSaved: () => void;
+  /** whether the inline edit box is open (drives the Edit button state) */
+  editing?: boolean;
+  /** inline edit form rendered below the list when editing */
+  editForm?: React.ReactNode;
 }) {
   const [tab, setTab] = useState<"inbounds" | "users">("inbounds");
 
@@ -83,7 +89,12 @@ export function ServiceSettings({
             <span className="crumb active">{group.name}</span>
           </div>
           <div className="ml-auto">
-            <button type="button" className="warp-tb-button" onClick={onEdit}>
+            <button
+              type="button"
+              className={cn("warp-tb-button", editing && "is-active")}
+              onClick={onEdit}
+              aria-pressed={editing}
+            >
               <Pencil size={14} /> Edit
             </button>
           </div>
@@ -107,6 +118,8 @@ export function ServiceSettings({
       ) : (
         <UsersTab group={group} assignments={assignments} />
       )}
+
+      {editForm}
     </div>
   );
 }
