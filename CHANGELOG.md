@@ -6,6 +6,18 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-08
+
+### Added
+
+- Automatic detection of the server's real public IP for the dashboard: when the
+  local egress address is private (the Docker case) the panel resolves the real
+  public IP externally, with optional `XLINK_PUBLIC_IP` / `XLINK_PUBLIC_MAC`
+  overrides; the installer also writes the detected IP into `.env`.
+- Plaintext SOCKS5 inbound support (sing-box).
+- Community & docs: `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, GitHub
+  issue/PR templates, and a full HTTP API reference (`docs/API.md`).
+
 ### Fixed
 
 - **Node agent** — corrected per-protocol auth mapping so hysteria, naive, SOCKS,
@@ -25,8 +37,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Web console** — metrics screen reads the correct endpoint; token refresh now
   covers CSV/backup downloads and survives a network blip without logging out;
   full pagination for group membership/counts; soft-deleted users can be shown
-  and restored; detail views have working back/edit controls; several date and
-  form-reset fixes.
+  and restored; detail views have working back/edit controls; usage/metrics
+  charts are theme-aware (were invisible grid lines + a white tooltip on dark);
+  branding preview stays legible in dark mode; the bulk-action bar fits one row
+  without overflowing; several date and form-reset fixes.
 
 ### Changed
 
@@ -51,5 +65,6 @@ Initial release.
 - Role-based access control with sudo admins and scoped reseller-admins.
 - One-command installer and containerized deployment.
 
-[Unreleased]: https://github.com/Theok09/Xlink/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Theok09/Xlink/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Theok09/Xlink/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Theok09/Xlink/releases/tag/v1.0.0

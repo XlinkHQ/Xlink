@@ -1,6 +1,6 @@
 [project]
 name = "xlink"
-version = "1.0.0"
+version = "1.1.0"
 description = "Multi-node VPN management panel (FastAPI + PostgreSQL + Redis)"
 readme = "README.md"
 requires-python = ">=3.13"
