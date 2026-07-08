@@ -1,14 +1,20 @@
 <div align="center">
 
-# XLink
+<img src="docs/assets/logo.png" alt="XLink" width="420" />
 
-**Multi-node VPN management panel for xray, sing-box, hysteria, and WireGuard.**
+### Multi-node VPN management panel for xray, sing-box, hysteria, and WireGuard
 
 FastAPI + PostgreSQL + Redis backend · Next.js admin console · pull-based node agent
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](pyproject.toml)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15-black.svg)](web/package.json)
+[![Cores](https://img.shields.io/badge/cores-xray%20·%20sing--box%20·%20hysteria%20·%20wireguard-2645d3.svg)](#features)
+[![Deploy](https://img.shields.io/badge/deploy-one--command-success.svg)](#quick-start)
+
+<br />
+
+<img src="docs/assets/hero.png" alt="XLink — one control plane, many nodes" width="440" />
 
 </div>
 
@@ -71,17 +77,17 @@ traffic and health back. A node only needs outbound access to the panel's API.
 ## Architecture
 
 ```
-                     ┌───────────────── Panel server ─────────────────┐
-   Admin browser ───▶│  web (:3000) ──▶ api (:8000) ──▶ postgres       │
-                     │                      │      └──▶ redis           │
-                     │                      └──▶ migrate (one-shot)     │
-                     └──────────────────────▲─────────────────────────┘
-                                            │ pull config / report traffic (HTTPS)
-                          ┌─────────────────┴───────────────────┐
-                          │              Node servers            │
-                          │  xlink-agent ──▶ xray / sing-box /   │
-                          │                  hysteria / wireguard│
-                          └──────────────────────────────────────┘
+                    ┌─────────────────────── Panel server ───────────────────────┐
+                    │ web (:3000)  ──▶  api (:8000)  ──▶  postgres               │
+                    │                       └──▶  redis                          │
+                    │                  └──▶  migrate (one-shot)                  │
+                    └────────────────────────────────────────────────────────────┘
+                                                   │  ▲
+                                node dials out ──▶ │  │ ◀── reports traffic
+                                                   ▼  │   (HTTPS)
+                    ┌─────────────────────── Node servers ───────────────────────┐
+                    │ xlink-agent  ──▶  xray / sing-box / hysteria / wireguard   │
+                    └────────────────────────────────────────────────────────────┘
 ```
 
 The backend follows a clean layering — `api → services → repositories → db` —
@@ -229,10 +235,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
 
 ## Documentation
 
+- [docs/API.md](docs/API.md) — complete HTTP API reference
 - [DEPLOY.md](DEPLOY.md) — panel and node deployment in detail
 - [CONTRIBUTING.md](CONTRIBUTING.md) — local setup and how to contribute
 - [SECURITY.md](SECURITY.md) — reporting a vulnerability
 - [CHANGELOG.md](CHANGELOG.md) — release history
+
+Interactive API docs (Swagger UI) are served at `http://<panel>:8000/docs` in
+non-production environments.
 
 ## Security
 
