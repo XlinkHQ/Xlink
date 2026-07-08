@@ -168,8 +168,9 @@ export function UsersScreen() {
   const onlineQuery = useQuery({
     queryKey: ["users-online"],
     queryFn: () => onlineUsers(),
-    refetchInterval: 10000,
+    refetchInterval: 5000,
     refetchIntervalInBackground: false,
+    staleTime: 0,
   });
   const onlineSet = useMemo(
     () => new Set(onlineQuery.data?.user_ids ?? []),

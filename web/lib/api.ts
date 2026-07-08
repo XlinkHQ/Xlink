@@ -647,7 +647,7 @@ export function trafficSummary() {
   return apiFetch<TrafficTotals>("/traffic/summary");
 }
 
-export function onlineUsers(windowSeconds = 180) {
+export function onlineUsers(windowSeconds = 45) {
   return apiFetch<{ user_ids: string[]; window_seconds: number }>(
     `/traffic/online${query({ window_seconds: windowSeconds })}`,
   );

@@ -51,7 +51,7 @@ async def traffic_summary(
 async def online_users(
     _admin: SudoAdminUser,
     traffic: TrafficServiceDep,
-    window_seconds: int = 90,
+    window_seconds: int = 45,
 ) -> OnlineUsersRead:
     ids = await traffic.online_user_ids(window_seconds)
     return OnlineUsersRead(user_ids=[str(i) for i in ids], window_seconds=window_seconds)
