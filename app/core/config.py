@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     host: str = "0.0.0.0"
     port: int = 8000
+    # Public domain (XLINK_DOMAIN). When set, the edge proxy serves HTTPS via ACME
+    # and Host-header hardening applies. Empty = plain-port / IP-only deployment.
+    domain: str = ""
+    acme_email: str = ""
     # The panel usually runs in a container, where auto-detected IP/MAC are the
     # Docker bridge address (172.x) and a virtual NIC — meaningless to the
     # operator. Set these to the real server's public IP/MAC to show them in the
