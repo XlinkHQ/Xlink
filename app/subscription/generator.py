@@ -134,7 +134,15 @@ class SubscriptionGenerator:
     ) -> tuple[ProviderConfig, ...]:
         configs: list[ProviderConfig] = []
 
-        used_total = sum(int(s.assignment.used_bytes or 0) for s in sources)
+        # Use the per-user account total (users_data_usage) for the displayed
+        # usage/remaining, matching the quota gate — summing per-assignment
+        # used_bytes over only the ACTIVE sources under-reports a LIMITED user.
+        used_total = 0
+        if sources:
+            user = sources[0].assignment.user
+            used_total = int(getattr(user, "users_data_usage", 0) or 0)
+        if used_total == 0:
+            used_total = sum(int(s.assignment.used_bytes or 0) for s in sources)
         for source in sources:
             try:
                 configs.extend(
