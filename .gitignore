@@ -30,3 +30,8 @@ data/
 # Local Claude Code permissions (dev/test placeholders, machine-specific)
 .claude/settings.json
 .claude/settings.local.json
+
+# Real production secrets — never commit
+deploy.env.production
+deploy.env.*
+!deploy.env.example
