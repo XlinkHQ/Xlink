@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     host: str = "0.0.0.0"
     port: int = 8000
+    # The panel usually runs in a container, where auto-detected IP/MAC are the
+    # Docker bridge address (172.x) and a virtual NIC — meaningless to the
+    # operator. Set these to the real server's public IP/MAC to show them in the
+    # dashboard System-info card. Empty = fall back to auto-detection.
+    public_ip: str = ""
+    public_mac: str = ""
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     trusted_hosts: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["*"])
 

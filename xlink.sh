@@ -118,6 +118,17 @@ gen_env() {
   [ -n "$dom" ] && [ -z "$acme" ] && acme="admin@${dom}"
   cors="*"; th="*"
   [ -n "$dom" ] && cors="https://$dom" && th="$dom"
+  # Detect the server's real public IP HERE (on the host — inside the container
+  # detection only sees the docker bridge). Prefer an external lookup, fall back
+  # to the default-route source address.
+  local pub_ip
+  pub_ip="${XLINK_PUBLIC_IP:-}"
+  if [ -z "$pub_ip" ]; then
+    pub_ip="$(curl -fsS --max-time 4 https://api.ipify.org 2>/dev/null || true)"
+  fi
+  if [ -z "$pub_ip" ]; then
+    pub_ip="$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++)if($i=="src"){print $(i+1);exit}}' || true)"
+  fi
   cat > "$env" <<EOF
 XLINK_ADMIN_USERNAME=admin
 XLINK_ADMIN_PASSWORD=$admin_pw
@@ -126,6 +137,7 @@ XLINK_DEBUG=false
 XLINK_HOST=0.0.0.0
 XLINK_PORT=8000
 XLINK_WEB_PORT=3000
+XLINK_PUBLIC_IP=$pub_ip
 XLINK_DOMAIN=$dom
 XLINK_ACME_EMAIL=$acme
 XLINK_CORS_ORIGINS=$cors
