@@ -35,3 +35,6 @@ data/
 deploy.env.production
 deploy.env.*
 !deploy.env.example
+
+# Internal Claude tooling/skills — not part of the shipped project
+.claude/
