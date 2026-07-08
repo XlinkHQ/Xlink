@@ -368,6 +368,42 @@ export function listUsers(
   );
 }
 
+// The backend clamps page size to max_page_size (100), so "give me everything"
+// callers must walk the cursor. Capped so a huge install can't spin forever.
+const MAX_LIST_PAGES = 50;
+
+async function fetchAllPages<T>(
+  page: (cursor?: string) => Promise<CursorPage<T>>,
+  what: string,
+): Promise<T[]> {
+  const items: T[] = [];
+  let cursor: string | undefined;
+  for (let i = 0; i < MAX_LIST_PAGES; i += 1) {
+    const res = await page(cursor);
+    items.push(...res.items);
+    if (!res.next_cursor) return items;
+    cursor = res.next_cursor;
+  }
+  console.warn(
+    `${what}: stopped after ${MAX_LIST_PAGES} pages (${items.length} items); list may be incomplete.`,
+  );
+  return items;
+}
+
+export function listAllUsers(opts: { role?: string; includeRemoved?: boolean } = {}) {
+  return fetchAllPages(
+    (cursor) => listUsers({ ...opts, size: 100, cursor }),
+    "listAllUsers",
+  );
+}
+
+export function listAllAssignments(opts: { userId?: string; status?: string } = {}) {
+  return fetchAllPages(
+    (cursor) => listAssignments({ ...opts, size: 100, cursor }),
+    "listAllAssignments",
+  );
+}
+
 export function usersTotal(role = "user") {
   return apiFetch<{ items: UserRead[]; meta: { total: number } }>(
     `/users${query({ page: 1, size: 1, role })}`,

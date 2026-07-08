@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
-import { Activity, Gauge, Plus } from "lucide-react";
+import { Activity, ArrowLeft, ChevronRight, Gauge, Pencil, Plus } from "lucide-react";
 import {
   ApiError,
   deleteInboundHost,
@@ -250,6 +250,31 @@ function HostsDrawer({
 
   return (
     <div className="w-full px-4 pb-6 pt-0">
+      <div className="warp-breadcrumbs">
+        <div className="track">
+          <button
+            type="button"
+            className="warp-breadcrumbs-back"
+            aria-label="Back"
+            onClick={onClose}
+          >
+            <ArrowLeft size={20} strokeWidth={1.9} aria-hidden />
+          </button>
+          <span className="warp-breadcrumbs-divider" />
+          <div className="links">
+            <button type="button" className="crumb" onClick={onClose}>
+              Hosts
+            </button>
+            <ChevronRight size={20} strokeWidth={2} className="crumb-sep" aria-hidden />
+            <span className="crumb active">{profile.name}</span>
+          </div>
+          <div className="ml-auto">
+            <button type="button" className="warp-tb-button" onClick={onEdit}>
+              <Pencil size={14} /> Edit
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="warp-pd-tabs warp-profile-tabs">
         {([["general", "General"], ["traffic", "Inbound Traffic"], ["addresses", "Addresses"]] as const).map(([key, label]) => (
           <button

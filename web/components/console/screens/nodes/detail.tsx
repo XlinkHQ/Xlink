@@ -24,7 +24,7 @@ import {
   updateCoreTemplate,
   xrayVersions,
 } from "@/lib/api";
-import { Activity, ArrowRightLeft, ChevronDown, Cpu, Info, KeyRound, Layers as LayersIcon, RotateCw, Server } from "lucide-react";
+import { Activity, ArrowLeft, ArrowRightLeft, ChevronDown, ChevronRight, Cpu, Info, KeyRound, Layers as LayersIcon, Pencil, RotateCw, Server } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
@@ -144,6 +144,31 @@ export function NodeDetail({
 
   return (
     <div className="w-full px-4 pb-6 pt-0">
+      <div className="warp-breadcrumbs">
+        <div className="track">
+          <button
+            type="button"
+            className="warp-breadcrumbs-back"
+            aria-label="Back"
+            onClick={onClose}
+          >
+            <ArrowLeft size={20} strokeWidth={1.9} aria-hidden />
+          </button>
+          <span className="warp-breadcrumbs-divider" />
+          <div className="links">
+            <button type="button" className="crumb" onClick={onClose}>
+              Nodes
+            </button>
+            <ChevronRight size={20} strokeWidth={2} className="crumb-sep" aria-hidden />
+            <span className="crumb active">{node.name}</span>
+          </div>
+          <div className="ml-auto">
+            <button type="button" className="warp-tb-button" onClick={onEdit}>
+              <Pencil size={14} /> Edit
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="warp-pd-tabs warp-profile-tabs">
         {(
           [

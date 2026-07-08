@@ -2,11 +2,13 @@
 
 import { useQuery } from "@tanstack/react-query";
 import {
+  ArrowLeft,
   Check,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Pencil,
   Users,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -16,11 +18,10 @@ import {
   ApiError,
   type AssignmentRead,
   type GroupRead,
-  listUsers,
+  listAllUsers,
   onlineUsers,
   type ProfileRead,
   updateGroup,
-  type UserRead,
 } from "@/lib/api";
 import { bytes } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -63,6 +64,31 @@ export function ServiceSettings({
 
   return (
     <div className="w-full px-4 pb-6 pt-0">
+      <div className="warp-breadcrumbs">
+        <div className="track">
+          <button
+            type="button"
+            className="warp-breadcrumbs-back"
+            aria-label="Back"
+            onClick={onClose}
+          >
+            <ArrowLeft size={20} strokeWidth={1.9} aria-hidden />
+          </button>
+          <span className="warp-breadcrumbs-divider" />
+          <div className="links">
+            <button type="button" className="crumb" onClick={onClose}>
+              Services
+            </button>
+            <ChevronRight size={20} strokeWidth={2} className="crumb-sep" aria-hidden />
+            <span className="crumb active">{group.name}</span>
+          </div>
+          <div className="ml-auto">
+            <button type="button" className="warp-tb-button" onClick={onEdit}>
+              <Pencil size={14} /> Edit
+            </button>
+          </div>
+        </div>
+      </div>
       <div className="warp-pd-tabs warp-profile-tabs">
         {([["inbounds", "Inbounds"], ["users", "Users"]] as const).map(([key, label]) => (
           <button
@@ -196,10 +222,11 @@ function UsersTab({
   group: GroupRead;
   assignments: AssignmentRead[];
 }) {
-  const usersQuery = useQuery({ queryKey: ["users", "all"], queryFn: () => listUsers({ size: 500 }) });
+  // listAllUsers walks the cursor — the backend clamps single pages to 100 rows.
+  const usersQuery = useQuery({ queryKey: ["users", "all"], queryFn: () => listAllUsers() });
   const onlineQuery = useQuery({ queryKey: ["users-online"], queryFn: () => onlineUsers(), refetchInterval: 30000 });
   const onlineSet = new Set(onlineQuery.data?.user_ids ?? []);
-  const users = (usersQuery.data?.items ?? []) as UserRead[];
+  const users = usersQuery.data ?? [];
   const members = useMemo(() => {
     const inbounds = new Set(group.profile_ids);
     const ids = new Set<string>();

@@ -9,7 +9,7 @@ import {
   type AssignmentRead,
   deleteGroup,
   type GroupRead,
-  listAssignments,
+  listAllAssignments,
   listGroups,
   listNodes,
   listProfiles,
@@ -34,11 +34,12 @@ export function GroupsScreen() {
   const query = useQuery({ queryKey: ["groups"], queryFn: () => listGroups() });
   const profilesQuery = useQuery({ queryKey: ["profiles"], queryFn: () => listProfiles() });
   const nodesQuery = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes() });
-  const assignmentsQuery = useQuery({ queryKey: ["assignments"], queryFn: () => listAssignments() });
+  // listAllAssignments walks the cursor — a single page misses members past 100.
+  const assignmentsQuery = useQuery({ queryKey: ["assignments"], queryFn: () => listAllAssignments() });
   const groups = query.data ?? [];
   const profiles = (profilesQuery.data?.items ?? []) as ProfileRead[];
   const nodes = (nodesQuery.data?.items ?? []) as NodeRead[];
-  const assignments = (assignmentsQuery.data?.items ?? []) as AssignmentRead[];
+  const assignments = (assignmentsQuery.data ?? []) as AssignmentRead[];
   const nodeName = (id: string) => nodes.find((n) => n.id === id)?.name ?? id.slice(0, 8);
 
   const usersForGroup = (g: GroupRead) => {
