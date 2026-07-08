@@ -12,10 +12,6 @@ FastAPI + PostgreSQL + Redis backend · Next.js admin console · pull-based node
 [![Cores](https://img.shields.io/badge/cores-xray%20·%20sing--box%20·%20hysteria%20·%20wireguard-2645d3.svg)](#features)
 [![Deploy](https://img.shields.io/badge/deploy-one--command-success.svg)](#quick-start)
 
-<br />
-
-<img src="docs/assets/hero.png" alt="XLink — one control plane, many nodes" width="440" />
-
 </div>
 
 ---
