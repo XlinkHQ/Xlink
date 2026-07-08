@@ -118,8 +118,9 @@ class SubscriptionRepository:
                 .select_from(TrafficRecord)
                 .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
                 .where(
+                    # All statuses (not ACTIVE-only): a LIMITED user's assignments
+                    # aren't ACTIVE, so filtering would show up/down 0 while used>0.
                     ClientAssignment.user_id == user_id,
-                    ClientAssignment.status == AssignmentStatus.ACTIVE,
                 )
             )
         ).one()

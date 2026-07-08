@@ -701,12 +701,15 @@ def build_singbox_config(clients: list[dict]) -> dict:
         protocol = cl.get("protocol", "vless")
         s = cl.get("settings") or {}
         port = int(s.get("port", 443) or 443)
-        secure = (s.get("security") or "none").lower() in ("tls", "reality")
-        # Include method in the key: shadowsocks users with different methods
-        # (esp. ss2022 16B vs 32B keys) must NOT collapse into one inbound, or the
-        # second user's password is invalid for the first user's method.
+        sec_mode = (s.get("security") or "none").lower()
+        secure = sec_mode in ("tls", "reality")
+        # Key by the RESOLVED security mode (tls/reality/none), not a bool — a tls
+        # client and a reality client on the same port/protocol/method must NOT
+        # collapse into one inbound (the first's handshake would win and the other
+        # can't connect). Also key on SNI so different server_names don't merge.
         key = (
-            port, protocol, secure,
+            port, protocol, sec_mode,
+            str(s.get("sni") or s.get("serverName") or ""),
             str(s.get("method", "")),
             json.dumps(_singbox_transport(s) or {}, sort_keys=True),
         )
@@ -736,7 +739,10 @@ def build_singbox_config(clients: list[dict]) -> dict:
                 # method must match the password format (non-2022 for arbitrary pw).
                 sni = s.get("sni") or s.get("handshake") or "www.microsoft.com"
                 ss_tag = f"sstls-ss-{port}-{len(inbounds)}"
-                detour_port = 40000 + (port % 20000)
+                # Unique loopback port per detour via a monotonic counter, not a
+                # hash of the public port (two public ports could hash to the same
+                # detour → bind conflict → sing-box rejects the whole config).
+                detour_port = 40000 + len(detours)
                 ib["version"] = 3
                 ib["handshake"] = {"server": sni, "server_port": 443}
                 ib["detour"] = ss_tag
@@ -1189,17 +1195,21 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
         if not os.path.exists(path):
             return True
         # Drain: stop serving. wireguard has no empty-config form (needs a key),
-        # so bring the interface down; the json cores get an empty-inbound config.
+        # so bring the interface down; the json cores get a real empty config built
+        # by their own builder (keeps api/stats/log/policy blocks so the traffic
+        # gRPC keeps working — a hand-rolled {inbounds:[]} would drop those).
         if kind == "wireguard":
             _run("wg-quick down wg0 2>/dev/null; ip link delete wg0 2>/dev/null")
             with contextlib.suppress(OSError):
                 os.remove(path)
             _log(f"{kind}: drained (no clients) — interface down")
             return True
-        empty = {"inbounds": [], "outbounds": [{"type": "direct"} if kind == "sing-box" else {"protocol": "freedom"}]}
-        if kind == "sing-box":
-            empty = {"log": {"level": "warn"}, "inbounds": [], "outbounds": [{"type": "direct"}]}
-        _write(path, empty, "json")
+        try:
+            empty = core["builder"]([])
+        except Exception as exc:
+            _log(f"{kind}: drain build error: {exc}")
+            return False
+        _write(path, empty, core["fmt"])
         rc, out = _run(core["reload"])
         _log(f"{kind}: drained (no clients) — emptied config, reload rc={rc}")
         return rc == 0
@@ -1254,6 +1264,19 @@ def apply_config(clients: list[dict], version: str) -> set[str]:
         core = CORES.get(kind)
         if core is None:
             _log(f"unsupported core '{kind}' — skipping {len(core_clients)} client(s)")
+            continue
+        # Drained core (no clients): don't build/digest — the wireguard builder
+        # raises on an empty list, which would skip the teardown entirely and wedge
+        # the cycle. apply_one owns the drain (empty config / interface down).
+        if not core_clients:
+            try:
+                if apply_one(kind, core, []):
+                    _core_hash.pop(kind, None)
+                else:
+                    ok = False
+            except Exception as exc:  # noqa: BLE001
+                ok = False
+                _log(f"{kind} drain error: {exc}")
             continue
         try:
             built = core["builder"](core_clients)
@@ -1374,7 +1397,7 @@ def _singbox_traffic() -> list[dict]:
                 "v2ray.core.app.stats.command.StatsService/QueryStats",
             ],
             timeout=10,
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.DEVNULL,
         )
         data = json.loads(out or b"{}")
     except Exception as exc:
@@ -1473,6 +1496,8 @@ def _local_enforce(clients: list[dict], samples: list[dict]) -> list[dict]:
 
 _XLINK_CLI = os.environ.get("XLINK_CLI", "/usr/local/bin/xlink")
 _UPGRADE_TIMEOUT = 900
+# Normalize the core name the panel may send ("singbox"/"wg") to the CORES key.
+_CORE_ALIAS = {"singbox": "sing-box", "wg": "wireguard"}
 
 
 def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
@@ -1483,6 +1508,7 @@ def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
         return True, {"note": "config refresh scheduled"}
     if kind == "restart":
         core = str(payload.get("core") or "").lower()
+        core = _CORE_ALIAS.get(core, core)
         spec = CORES.get(core)
         if spec is None:
             return False, {"error": f"unknown core {core}"}
@@ -1497,6 +1523,7 @@ def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
         return rc == 0, {"core": core, "rc": rc, "output": out[-500:] if out else ""}
     if kind == "upgrade":
         core = str(payload.get("core") or "").lower()
+        core = _CORE_ALIAS.get(core, core)
         if core not in CORES:
             return False, {"error": f"unknown or missing core {core!r}"}
         alias = {"sing-box": "singbox", "wireguard": "wg"}.get(core, core)
