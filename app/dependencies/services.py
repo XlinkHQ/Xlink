@@ -11,6 +11,7 @@ from app.backup.service import BackupService
 from app.dependencies.core import (
     CacheDep,
     DatabaseDep,
+    DispatcherDep,
     EventsDep,
     ProvidersDep,
     SessionDep,
@@ -104,10 +105,12 @@ def get_user_service(
     cache: CacheDep,
     settings: SettingsDep,
     subscription_service: SubscriptionServiceDep,
+    dispatcher: DispatcherDep = None,
 ) -> UserService:
-    return UserService(
-        repo, cache, WebhookDispatcher(settings), subscription_service=subscription_service
-    )
+    # Use the shared lifespan-owned dispatcher (drained on shutdown); fall back to
+    # a fresh one only if state has none (e.g. some tests).
+    disp = dispatcher or WebhookDispatcher(settings)
+    return UserService(repo, cache, disp, subscription_service=subscription_service)
 
 
 def get_token_service(

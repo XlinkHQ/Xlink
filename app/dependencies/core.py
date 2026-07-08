@@ -38,6 +38,12 @@ def get_database(state: Annotated[AppState, Depends(get_state)]) -> Database:
     return state.db
 
 
+def get_dispatcher(state: Annotated[AppState, Depends(get_state)]):
+    # Shared, lifespan-owned dispatcher — its fire-and-forget webhook tasks are
+    # drained on shutdown. Building one per request orphaned those tasks.
+    return state.dispatcher
+
+
 async def get_session(
     state: Annotated[AppState, Depends(get_state)],
 ) -> AsyncIterator[AsyncSession]:
@@ -51,3 +57,4 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 ProvidersDep = Annotated[ProviderRegistry, Depends(get_providers)]
 EventsDep = Annotated[EventBus, Depends(get_events)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
+DispatcherDep = Annotated[object, Depends(get_dispatcher)]

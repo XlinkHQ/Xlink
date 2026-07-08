@@ -46,6 +46,7 @@ class AppState:
     cache: RedisCache
     providers: ProviderRegistry
     events: EventBus
+    dispatcher: "WebhookDispatcher | None" = None
     cleanup_job: TokenCleanupJob | None = None
     metrics_job: MetricsRefreshJob | None = None
     traffic_retention_job: TrafficRetentionJob | None = None
@@ -237,6 +238,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         cache=cache,
         providers=providers,
         events=events,
+        dispatcher=dispatcher,
         cleanup_job=cleanup_job,
         metrics_job=metrics_job,
         traffic_retention_job=traffic_retention_job,
