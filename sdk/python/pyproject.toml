@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xlink-sdk"
+version = "0.1.0"
+description = "Official Python SDK for the XLink panel HTTP API."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "XLink" }]
+keywords = ["xlink", "vpn", "sdk", "api"]
+dependencies = ["httpx>=0.24"]
+
+[project.urls]
+Homepage = "https://github.com/theok09/xlink"
+
+[tool.hatch.build.targets.wheel]
+packages = ["xlink_sdk"]

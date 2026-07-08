@@ -23,6 +23,13 @@ services:
       # Set WEB_CONCURRENCY in .env to pin it.
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-}
       XLINK_WEB_CONCURRENCY: ${WEB_CONCURRENCY:-}
+      # Which upstream proxies uvicorn trusts for X-Forwarded-* (real client IP,
+      # proto, host). Empty keeps uvicorn's safe default (127.0.0.1). When the
+      # standalone subscription-page is enabled, set this to the compose network
+      # (e.g. FORWARDED_ALLOW_IPS=10.0.0.0/8 or the subpage container IP) so the
+      # panel reads the REAL client IP through the proxy — device-limit / HWID
+      # tracking and the advertised sub-URL host depend on it.
+      FORWARDED_ALLOW_IPS: ${XLINK_FORWARDED_ALLOW_IPS:-127.0.0.1}
     ports:
       - "${XLINK_PORT:-8000}:8000"
       - "${XLINK_GRPC_PORT:-50051}:50051"
@@ -134,6 +141,45 @@ services:
         condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Standalone subscription page. Enabled only with the "subpage" compose
+  # profile (off by default). Serves public /sub/{token} links WITHOUT exposing
+  # the panel's domain: it forwards to the panel's INTERNAL endpoint over this
+  # private network, so the panel API can be IP-restricted / not publicly
+  # exposed while subscription links still resolve on a separate domain.
+  #
+  # When enabled, point your sub-page domain at this service (port 8081 by
+  # default, or terminate TLS in front of it) and set SUB_PAGE_PUBLIC_HOST to
+  # that domain — the panel will then advertise subscription URLs on the
+  # sub-page domain instead of its own. See subscription-page/README.md.
+  subscription-page:
+    image: ghcr.io/${XLINK_IMAGE_OWNER:-xlinkhq}/xlink-subscription-page:${XLINK_IMAGE_TAG:-latest}
+    build:
+      context: ./subscription-page
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    profiles: ["subpage"]
+    environment:
+      # Panel API on the private network — never needs to be publicly exposed.
+      PANEL_INTERNAL_URL: ${SUB_PAGE_PANEL_URL:-http://api:8000}
+      PANEL_API_V1_PREFIX: ${XLINK_API_V1_PREFIX:-/api/v1}
+      # Public domain clients use to reach THIS service. Advertised to the panel
+      # as the subscription URL base so the panel's own domain never leaks.
+      SUB_PAGE_PUBLIC_HOST: ${SUB_PAGE_PUBLIC_HOST:-}
+      SUB_PAGE_PUBLIC_PROTO: ${SUB_PAGE_PUBLIC_PROTO:-https}
+      # Optional shared secret forwarded as X-Sub-Page-Token (panel does not
+      # require it today; here for a future panel-side allow rule).
+      PANEL_API_TOKEN: ${SUB_PAGE_PANEL_API_TOKEN:-}
+    ports:
+      - "${SUB_PAGE_PORT:-8081}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8080/healthz').status==200 else sys.exit(1)"]
       interval: 30s
       timeout: 5s
       retries: 3

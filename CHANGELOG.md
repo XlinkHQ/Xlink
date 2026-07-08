@@ -6,6 +6,26 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `docs/ARCHITECTURE.md` — system, auth, layering, agent-cycle, subscription and
+  data-model diagrams (GitHub-native Mermaid).
+- Official Python SDK under `sdk/python/` (`xlink-sdk`): an API-key client for the
+  common user / subscription / usage / node workflows.
+- Optional standalone **subscription page** service (`subscription-page/`, compose
+  profile `subpage`, off by default) that serves `/sub/{token}` on its own domain
+  so the panel API can be locked down without breaking subscription links.
+
+### Changed
+
+- Gunicorn workers auto-size to the host CPUs, capped by the database connection
+  budget (was a fixed 4).
+
+### Fixed
+
+- Database backup downloads are gzipped (SQL compresses ~5–10×), so the download
+  is fast; import transparently accepts both `.sql.gz` and older plain `.sql`.
+
 ## [1.1.0] - 2026-07-08
 
 ### Added

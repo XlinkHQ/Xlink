@@ -15,3 +15,8 @@ services:
     image: ${XLINK_IMAGE_API:-ghcr.io/${XLINK_IMAGE_OWNER:-xlinkhq}/xlink-api:${XLINK_IMAGE_TAG:-latest}}
     pull_policy: always
     build: !reset null
+
+  subscription-page:
+    image: ${XLINK_IMAGE_SUBPAGE:-ghcr.io/${XLINK_IMAGE_OWNER:-xlinkhq}/xlink-subscription-page:${XLINK_IMAGE_TAG:-latest}}
+    pull_policy: always
+    build: !reset null

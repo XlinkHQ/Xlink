@@ -217,7 +217,9 @@ check the web app instead. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
 
 ## Documentation
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how it all fits together, with diagrams
 - [docs/API.md](docs/API.md) — the full HTTP API reference
+- [sdk/python/](sdk/python/) — official Python SDK for the API
 - [DEPLOY.md](DEPLOY.md) — deploying the panel and nodes step by step
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setting up locally and sending changes
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community expectations
