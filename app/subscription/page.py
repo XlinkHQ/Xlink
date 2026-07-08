@@ -110,9 +110,16 @@ def render_custom_page(
         delta = expire_ts - int(datetime.now(UTC).timestamp())
         days_left = f"{max(0, delta // 86400)} days" if delta > 0 else "expired"
     pct = min(100, round(used / total * 100)) if total else 0
+    # Copy via an execCommand fallback too: navigator.clipboard is undefined on
+    # plain-HTTP origins (non-secure context), which is the common panel setup,
+    # so the bare writeText silently does nothing there.
     configs_html = "".join(
         f'<div class="x-config"><code>{e(c)}</code>'
-        f'<button onclick="navigator.clipboard.writeText({e(json.dumps(c))})">Copy</button></div>'
+        f"<button onclick=\"(function(v){{if(navigator.clipboard&&window.isSecureContext)"
+        f"{{navigator.clipboard.writeText(v)}}else{{var t=document.createElement('textarea');"
+        f"t.value=v;t.style.position='fixed';t.style.top='-9999px';document.body.appendChild(t);"
+        f"t.select();try{{document.execCommand('copy')}}catch(e){{}}document.body.removeChild(t)}}}})"
+        f'({e(json.dumps(c))})">Copy</button></div>'
         for c in configs
     )
     configs_lines = "\n".join(configs)
@@ -341,7 +348,11 @@ align-items:center;justify-content:center;padding:20px;z-index:9}}
 function tt(){{var r=document.documentElement;var cur=r.getAttribute('data-theme');
 var dark=cur?cur==='dark':matchMedia('(prefers-color-scheme:dark)').matches;
 var next=dark?'light':'dark';r.setAttribute('data-theme',next);localStorage.setItem('xlink-sub-theme',next);}}
-function cp(b,v){{navigator.clipboard&&navigator.clipboard.writeText(v);
-b.classList.add('ok');setTimeout(function(){{b.classList.remove('ok')}},1100)}}
+function cp(b,v){{var done=function(){{b.classList.add('ok');setTimeout(function(){{b.classList.remove('ok')}},1100)}};
+if(navigator.clipboard&&window.isSecureContext){{navigator.clipboard.writeText(v).then(done,function(){{fb(v);done()}})}}
+else{{fb(v);done()}}}}
+function fb(v){{try{{var t=document.createElement('textarea');t.value=v;t.setAttribute('readonly','');
+t.style.position='fixed';t.style.top='-9999px';document.body.appendChild(t);t.select();
+document.execCommand('copy');document.body.removeChild(t)}}catch(e){{}}}}
 function qr(src){{document.getElementById('mi').src=src;document.getElementById('m').classList.add('show')}}
 </script></body></html>"""
