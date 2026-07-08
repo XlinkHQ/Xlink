@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 import urllib.error
 import urllib.request
 from datetime import UTC, datetime
@@ -87,7 +88,10 @@ _log_offset: int = 0
 # stats are reset, and only cleared after the panel acks them. Guarantees no
 # byte of usage is lost across agent crashes or network outages.
 WAL_PATH = os.environ.get("XLINK_TRAFFIC_WAL", "/var/lib/xlink/traffic.wal")
-_WAL_MAX = 20000
+# MUST stay <= the panel's per-batch cap (10000, app/schemas/agent.py) or a
+# backlog >cap makes every delivery 422 → _wal_commit never runs → the WAL grows
+# forever and traffic accounting deadlocks. 5000 leaves headroom.
+_WAL_MAX = 5000
 # Serializes WAL access: the main cycle and the fast-enforce loop both append,
 # and the cycle loads+clears. Without this a clear could drop lines appended by
 # the fast loop after the load, losing usage.
@@ -637,13 +641,22 @@ def _singbox_user(protocol: str, cid: str, email: str, s: dict) -> dict:
         pw = s.get("password") or cid
         return {"uuid": cid, "password": pw, "name": email}
     if protocol == "naive":
-        # NaïveProxy authenticates with username:password; name tags it for stats.
-        return {"username": str(email), "password": cid, "name": str(email)}
+        # NaïveProxy authenticates with username:password — these MUST be the same
+        # values the subscription hands the client (settings/credentials
+        # username+password), not the assignment_id/cid, or auth fails. `name`
+        # tags the user for v2ray_api stats (assignment_id).
+        return {
+            "username": str(s.get("username") or email),
+            "password": str(s.get("password") or cid),
+            "name": str(email),
+        }
     if protocol == "socks":
+        # username/password MUST match what the subscription hands the client
+        # (settings/credentials), falling back to email/cid only when unset.
         # name= makes the user show up in sing-box v2ray_api stats so byte quota is
         # actually counted (sing-box tags per-user traffic by the "name" field).
         user = str(s.get("username") or email or cid)
-        return {"username": user, "password": cid, "name": str(email)}
+        return {"username": user, "password": str(s.get("password") or cid), "name": str(email)}
     if protocol == "shadowtls":
         # ShadowTLS v3 user (name+password); the real proxy runs in the ss detour.
         return {"name": str(email), "password": cid}
@@ -927,12 +940,29 @@ def build_wireguard_config(clients: list[dict]) -> str:
 def build_hysteria_config(clients: list[dict]) -> dict:
     s0 = (clients[0].get("settings") or {}) if clients else {}
     port = int(s0.get("port", 443) or 443)
-    passwords = [_client_id(c) for c in clients]
+    # hysteria is a single-instance daemon: one listen port per node. If profiles
+    # disagree on the port they silently collapse onto the first one — warn so the
+    # operator sees it instead of clients on the other port failing mysteriously.
+    other_ports = {int((c.get("settings") or {}).get("port", 443) or 443) for c in clients}
+    if len(other_ports) > 1:
+        _log(f"hysteria: multiple ports {sorted(other_ports)} collapse onto :{port} "
+             "(single-instance daemon) — clients on the other ports will not connect")
     core = _hysteria_core if isinstance(_hysteria_core, dict) else {}
+    # hysteria2 auth matches on the PASSWORD value (the client sends its credential
+    # = cid). trafficStats keys by the USERNAME. Key the userpass map
+    # {assignment_id: cid} so stats report the assignment_id the panel expects —
+    # not the cid, which the panel can't match and which (if non-UUID) would 422
+    # the whole traffic batch.
+    userpass = {}
+    for c in clients:
+        cid = _client_id(c)
+        aid = c.get("assignment_id")
+        if aid:
+            userpass[str(aid)] = cid
     config = {
         "listen": f":{port}",
         "tls": {"cert": TLS_CERT_PATH, "key": TLS_KEY_PATH},
-        "auth": {"type": "userpass", "userpass": {p: p for p in passwords}},
+        "auth": {"type": "userpass", "userpass": userpass},
         "trafficStats": {"listen": HYSTERIA_API_ADDR, "secret": HYSTERIA_API_SECRET},
     }
     for c in clients:
@@ -1110,7 +1140,14 @@ def _wireguard_traffic(clients: list[dict]) -> list[dict]:
         if assignment is None:
             continue
         rx_b, tx_b = int(rx or 0), int(tx or 0)
-        prev_rx, prev_tx = _wg_prev.get(peer, (0, 0))
+        if peer not in _wg_prev:
+            # First sight (incl. after an agent restart): wg counters are
+            # cumulative since the interface came up, so treat the current value
+            # as the baseline and emit NO delta — otherwise the whole lifetime is
+            # re-counted as fresh usage and the user is double-charged.
+            _wg_prev[peer] = (rx_b, tx_b)
+            continue
+        prev_rx, prev_tx = _wg_prev[peer]
         d_rx = rx_b - prev_rx if rx_b >= prev_rx else rx_b
         d_tx = tx_b - prev_tx if tx_b >= prev_tx else tx_b
         _wg_prev[peer] = (rx_b, tx_b)
@@ -1448,7 +1485,17 @@ def collect_traffic(active_kinds: set[str], clients: list[dict] | None = None) -
         samples += _hysteria_traffic()
     if "sing-box" in active_kinds and _v2ray_enabled():
         samples += _singbox_traffic()
-    return samples
+    # Drop samples whose assignment_id is not a UUID: the panel types it as
+    # uuid.UUID, so one malformed id (e.g. a mis-keyed core stat) would 422 the
+    # ENTIRE batch and stall traffic accounting. Skip the bad one, keep the rest.
+    clean = []
+    for s in samples:
+        try:
+            uuid.UUID(str(s.get("assignment_id")))
+        except (ValueError, AttributeError, TypeError):
+            continue
+        clean.append(s)
+    return clean
 
 
 def read_metrics() -> tuple[float, float]:

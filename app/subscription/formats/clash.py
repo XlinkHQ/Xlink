@@ -110,7 +110,9 @@ def build_proxy(config: ProviderConfig, *, allowed: frozenset[str]) -> dict[str,
         proxy["password"] = config.resolved_password
     elif protocol == "shadowtls":
         proxy["type"] = "ss"
-        proxy["cipher"] = str(setting(config, "method", "2022-blake3-aes-256-gcm"))
+        # Match the agent's shadowtls detour default (aes-128-gcm): the ss password
+        # is the arbitrary per-user credential, not a base64 2022-blake3 PSK.
+        proxy["cipher"] = str(setting(config, "method", "aes-128-gcm"))
         proxy["password"] = str(setting(config, "password", config.resolved_password))
         proxy["plugin"] = "shadow-tls"
         proxy["plugin-opts"] = {

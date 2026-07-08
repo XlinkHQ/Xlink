@@ -21,7 +21,11 @@ from app.events.bus import EventBus
 from app.events.models import NodeCommandIssued
 
 _TOKEN_HASH_KEY = "agent_token_hash"
-_LEASE_SECONDS = 120
+# Must exceed the agent's longest single command runtime (core upgrade, up to
+# _UPGRADE_TIMEOUT=900s in xlink-agent.py). If the lease expires mid-upgrade the
+# panel frees the command, re-leases it to the next poll, and the original
+# result POST is rejected as a stale lease → the SAME upgrade runs twice.
+_LEASE_SECONDS = 960
 
 
 class CommandService:

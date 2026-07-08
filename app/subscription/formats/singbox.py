@@ -103,8 +103,11 @@ def _shadowtls_outbounds(config: ProviderConfig, tag: str) -> list[dict[str, Any
     }
     inner = {
         "type": "shadowsocks",
-        "tag": tag,
-        "method": str(setting(config, "method", "2022-blake3-aes-256-gcm")),
+        # The inner-ss password defaults to the per-user credential (an arbitrary
+        # string), which is NOT a valid base64 32-byte 2022-blake3 PSK, and the
+        # agent's shadowtls detour defaults to aes-128-gcm — so the client default
+        # MUST match or the cipher negotiation fails on every out-of-box user.
+        "method": str(setting(config, "method", "aes-128-gcm")),
         "password": str(setting(config, "password", config.resolved_password)),
         "detour": st_tag,
     }
