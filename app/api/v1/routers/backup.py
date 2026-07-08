@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import gzip
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -91,10 +92,14 @@ async def backup_export_db(_admin: SudoAdminUser, settings: SettingsDep) -> Resp
     out, err = await _communicate(proc)
     if proc.returncode != 0:
         raise HTTPException(status_code=500, detail=f"pg_dump failed: {err.decode()[:300]}")
+    # gzip the dump: SQL text compresses ~5-10x, so the download transfers far
+    # faster (the main "backup is slow" complaint) and the file on disk is small.
+    # import-db transparently gunzips it back.
+    gzipped = await anyio.to_thread.run_sync(gzip.compress, out, 6)
     return Response(
-        content=out,
-        media_type="application/sql",
-        headers={"content-disposition": f'attachment; filename="xlink-db-{stamp}.sql"'},
+        content=gzipped,
+        media_type="application/gzip",
+        headers={"content-disposition": f'attachment; filename="xlink-db-{stamp}.sql.gz"'},
     )
 
 
@@ -108,6 +113,10 @@ async def backup_import_db(
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file.")
+    # Transparently accept gzipped dumps (new .sql.gz export) as well as plain
+    # .sql (older exports / hand-made dumps): sniff the gzip magic bytes.
+    if data[:2] == b"\x1f\x8b":
+        data = await anyio.to_thread.run_sync(gzip.decompress, data)
 
     if url.startswith("sqlite"):
         path = url.split("///", 1)[-1]
