@@ -522,7 +522,7 @@ def _client_id(cl: dict) -> str:
     protocol = (cl.get("protocol") or "vless").lower()
     if protocol in (
         "trojan", "shadowsocks", "shadowsocks2022", "shadowtls",
-        "hysteria2", "hysteria", "tuic", "naive",
+        "hysteria2", "hysteria", "tuic", "naive", "socks",
     ):
         secret = creds.get("password") or s.get("password")
     else:
@@ -540,13 +540,18 @@ def build_xray_config(clients: list[dict]) -> dict:
         cid = _client_id(cl)
         email = cl.get("assignment_id")
         if key not in inbounds:
-            settings: dict = {"clients": []}
-            if protocol == "vless":
-                settings["decryption"] = "none"
-            if protocol == "shadowsocks":
-                settings["method"] = s.get("method", "aes-256-gcm")
-            if isinstance(s.get("fallbacks"), list) and protocol in ("vless", "trojan"):
-                settings["fallbacks"] = s["fallbacks"]
+            # socks5 uses accounts[{user,pass}] + auth=password, not a clients[]
+            # list like the vmess/vless/trojan/ss protocols.
+            if protocol == "socks":
+                settings = {"auth": "password", "accounts": [], "udp": True}
+            else:
+                settings = {"clients": []}
+                if protocol == "vless":
+                    settings["decryption"] = "none"
+                if protocol == "shadowsocks":
+                    settings["method"] = s.get("method", "aes-256-gcm")
+                if isinstance(s.get("fallbacks"), list) and protocol in ("vless", "trojan"):
+                    settings["fallbacks"] = s["fallbacks"]
             network = (s.get("network") or "tcp").lower()
             inbounds[key] = {
                 "tag": f"in-{port}-{protocol}-{network}-{len(inbounds)}",
@@ -557,7 +562,12 @@ def build_xray_config(clients: list[dict]) -> dict:
                 "streamSettings": _stream_settings(s),
                 "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
             }
-        inbounds[key]["settings"]["clients"].append(_client_entry(protocol, cid, email, s))
+        if protocol == "socks":
+            merged = {**s, **(cl.get("credentials") or {})}
+            user = str(merged.get("username") or email or cid)
+            inbounds[key]["settings"]["accounts"].append({"user": user, "pass": cid})
+        else:
+            inbounds[key]["settings"]["clients"].append(_client_entry(protocol, cid, email, s))
 
     api_inbound = {
         "tag": "api",
@@ -608,6 +618,9 @@ def _singbox_user(protocol: str, cid: str, email: str, s: dict) -> dict:
     if protocol == "naive":
         # NaïveProxy authenticates with username:password; name tags it for stats.
         return {"username": str(email), "password": cid, "name": str(email)}
+    if protocol == "socks":
+        user = str(s.get("username") or email or cid)
+        return {"username": user, "password": cid}
     if protocol == "shadowtls":
         # ShadowTLS v3 user (name+password); the real proxy runs in the ss detour.
         return {"name": str(email), "password": cid}

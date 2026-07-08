@@ -254,6 +254,7 @@ _AGENT_CRED_ALLOW = frozenset(
         "obfs_password",
         "method",
         "flow",
+        "username",
     }
 )
 

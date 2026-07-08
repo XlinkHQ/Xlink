@@ -9,10 +9,12 @@ export const PROTOCOLS = [
   "wireguard",
   "hysteria2",
   "tuic",
+  "naive",
+  "socks",
 ];
 
 const PROVIDER_PROTOCOLS: Record<string, string[]> = {
-  xray: ["vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022"],
+  xray: ["vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022", "socks"],
   "sing-box": [
     "vless",
     "vmess",
@@ -22,6 +24,8 @@ const PROVIDER_PROTOCOLS: Record<string, string[]> = {
     "shadowtls",
     "hysteria2",
     "tuic",
+    "naive",
+    "socks",
   ],
   hysteria: ["hysteria2"],
   wireguard: ["wireguard"],

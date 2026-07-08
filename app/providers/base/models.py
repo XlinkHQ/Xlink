@@ -25,7 +25,7 @@ class ProviderKind(StrEnum):
 # protocolsFor(); keep the two in sync.
 PROVIDER_PROTOCOLS: dict[ProviderKind, frozenset[str]] = {
     ProviderKind.XRAY: frozenset(
-        {"vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022"}
+        {"vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022", "socks"}
     ),
     ProviderKind.SING_BOX: frozenset(
         {
@@ -38,6 +38,7 @@ PROVIDER_PROTOCOLS: dict[ProviderKind, frozenset[str]] = {
             "hysteria2",
             "tuic",
             "naive",
+            "socks",
         }
     ),
     ProviderKind.HYSTERIA: frozenset({"hysteria2"}),

@@ -12,6 +12,7 @@ from app.providers.xray.payloads import (
     OPERATION_UPDATE,
     PASSWORD_PROTOCOLS,
     PROVIDER_NAME,
+    SOCKS_PROTOCOLS,
     default_method_for,
     methods_for,
 )
@@ -39,6 +40,18 @@ def _build_client(spec: ClientSpec, protocol: str) -> dict[str, Any]:
         valid = methods_for(protocol)
         method = str(attrs.get("method", default_method_for(protocol))).strip().lower()
         client["method"] = method if method in valid else default_method_for(protocol)
+    if protocol in SOCKS_PROTOCOLS:
+        # socks5 = user + pass, no AEAD method. username defaults to the email tag.
+        password = attrs.get("password")
+        client["password"] = (
+            str(password).strip() if isinstance(password, str) and password.strip()
+            else secrets.token_urlsafe(16)
+        )
+        user = attrs.get("username")
+        client["username"] = (
+            str(user).strip() if isinstance(user, str) and user.strip()
+            else (client["email"] or str(spec.client_id))
+        )
     for field, default in CLIENT_DEFAULTS.items():
         value = attrs.get(field, default)
         try:

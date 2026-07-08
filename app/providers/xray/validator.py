@@ -17,6 +17,7 @@ from app.providers.xray.exceptions import (
 from app.providers.xray.payloads import (
     CLIENT_DEFAULTS,
     PASSWORD_PROTOCOLS,
+    SOCKS_PROTOCOLS,
     SUPPORTED_NETWORKS,
     SUPPORTED_PROTOCOLS,
     SUPPORTED_SECURITIES,
@@ -103,6 +104,13 @@ def validate_xray_client_payload(payload: dict) -> dict:
                 "Shadowsocks client 'method' is missing or unsupported.",
                 details={"method": method, "protocol": protocol},
             )
+    if protocol in SOCKS_PROTOCOLS:
+        password = client.get("password")
+        if not isinstance(password, str) or not password.strip():
+            raise XrayPayloadError("SOCKS client requires a 'password'.")
+        username = client.get("username")
+        if not isinstance(username, str) or not username.strip():
+            raise XrayPayloadError("SOCKS client requires a 'username'.")
     email = client.get("email")
     if not isinstance(email, str) or not email.strip():
         raise MissingEmailError()
