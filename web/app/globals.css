@@ -6660,7 +6660,7 @@ input.switch:focus-visible {
   box-sizing: border-box;
   padding: 4px 20px;
   margin: -0.5rem -2rem 24px;
-  border-bottom: 1px solid #DFE3E9;
+  border-bottom: 1px solid var(--border-default);
 }
 @media (min-width: 640px) {
   .warp-breadcrumbs { padding: 4px 20px; margin: -1rem -3rem 24px; }
@@ -6677,14 +6677,14 @@ input.switch:focus-visible {
   background: transparent; color: var(--fg-muted); cursor: pointer;
 }
 .warp-breadcrumbs-back:hover { background: var(--bg-emphasis); color: var(--fg-default); }
-.warp-breadcrumbs-divider { width: 1px; height: 24px; background: #DFE3E9; margin: 0 20px; }
+.warp-breadcrumbs-divider { width: 1px; height: 24px; background: var(--border-default); margin: 0 20px; }
 .warp-breadcrumbs .links { display: flex; align-items: center; column-gap: 8px; }
 .warp-breadcrumbs .crumb {
   border: 0; background: transparent; cursor: pointer; padding: 0;
   font: 400 12px/16px var(--warp-font); color: var(--accent);
 }
-.warp-breadcrumbs .crumb.active { color: #7E8794; pointer-events: none; }
-.warp-breadcrumbs .crumb-sep { color: #7E8794; }
+.warp-breadcrumbs .crumb.active { color: var(--fg-muted); pointer-events: none; }
+.warp-breadcrumbs .crumb-sep { color: var(--fg-subtle); }
 .warp-settings-card {
   border-radius: var(--radius-card);
   border: 1px solid #DFE3E9;
