@@ -7,17 +7,21 @@ import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { ApiError, createNode, type NodeRead, setNodeStatus, updateNode } from "@/lib/api";
 import { Field } from "../parts";
+import { InlineEditPanel } from "../settings-kit";
 import { STATUSES } from "./util";
 
 export function NodeDialog({
   node,
   onClose,
   onSaved,
+  variant = "modal",
 }: {
   node: NodeRead | null;
   onClose: () => void;
   onSaved: () => void;
+  variant?: "modal" | "inline";
 }) {
+  const Shell = variant === "inline" ? InlineEditPanel : Modal;
   const [name, setName] = useState(node?.name ?? "");
   const [slug, setSlug] = useState(node?.slug ?? "");
   const [host, setHost] = useState(node?.host ?? "");
@@ -83,7 +87,7 @@ export function NodeDialog({
   };
 
   return (
-    <Modal
+    <Shell
       title={node ? "Edit Node" : "Add Node"}
       onClose={onClose}
       onSubmit={submit}
@@ -140,6 +144,6 @@ export function NodeDialog({
           className="h-24 w-full resize-y rounded border border-hairline bg-transparent p-2.5 font-mono text-[11px] text-fg outline-none focus:border-primary"
         />
       </Field>
-    </Modal>
+    </Shell>
   );
 }

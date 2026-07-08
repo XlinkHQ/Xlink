@@ -62,6 +62,7 @@ export function NodesScreen() {
 
   const [editing, setEditing] = useState<NodeRead | "new" | null>(null);
   const [detail, setDetail] = useState<NodeRead | null>(null);
+  const [editInline, setEditInline] = useState(false);
   const [search, setSearch] = useState("");
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["nodes"] });
@@ -85,19 +86,22 @@ export function NodesScreen() {
   if (detail) {
     const live = nodes.find((n) => n.id === detail.id) ?? detail;
     return (
-      <>
-        <NodeDetail node={live} onClose={() => setDetail(null)} onEdit={() => { setEditing(live); setDetail(null); }} />
-        {editing ? (
-          <NodeDialog
-            node={editing === "new" ? null : editing}
-            onClose={() => setEditing(null)}
-            onSaved={() => {
-              setEditing(null);
-              refresh();
-            }}
-          />
-        ) : null}
-      </>
+      <NodeDetail
+        node={live}
+        onClose={() => { setDetail(null); setEditInline(false); }}
+        onEdit={() => setEditInline((v) => !v)}
+        editing={editInline}
+        editForm={
+          editInline ? (
+            <NodeDialog
+              variant="inline"
+              node={live}
+              onClose={() => setEditInline(false)}
+              onSaved={() => { setEditInline(false); refresh(); }}
+            />
+          ) : null
+        }
+      />
     );
   }
 

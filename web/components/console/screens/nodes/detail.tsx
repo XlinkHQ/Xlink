@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { selectDialog } from "@/components/ui/dialog";
 import {
@@ -134,10 +134,15 @@ export function NodeDetail({
   node,
   onClose,
   onEdit,
+  editing = false,
+  editForm = null,
 }: {
   node: NodeRead;
   onClose: () => void;
   onEdit: () => void;
+  editing?: boolean;
+  /** inline edit form rendered below the content when editing */
+  editForm?: ReactNode;
 }) {
   const [tab, setTab] = useState<"config" | "info" | "inbounds">("config");
   const running = isNodeOnline(node.status);
@@ -163,7 +168,12 @@ export function NodeDetail({
             <span className="crumb active">{node.name}</span>
           </div>
           <div className="ml-auto">
-            <button type="button" className="warp-tb-button" onClick={onEdit}>
+            <button
+              type="button"
+              className={cn("warp-tb-button", editing && "is-active")}
+              onClick={onEdit}
+              aria-pressed={editing}
+            >
               <Pencil size={14} /> Edit
             </button>
           </div>
@@ -191,6 +201,8 @@ export function NodeDetail({
       {tab === "config" ? <XrayBackendCard node={node} running={running} /> : null}
       {tab === "info" ? <NodeInfo node={node} /> : null}
       {tab === "inbounds" ? <NodeInboundsCard node={node} /> : null}
+
+      {editForm}
     </div>
   );
 }
@@ -375,8 +387,15 @@ function CoreConfig({ node, core }: { node: NodeRead; core: string }) {
   const remoteRaw = q.data?.templates?.[core] ?? "";
   const remote =
     remoteRaw.trim() && remoteRaw.trim() !== "{}" ? remoteRaw : CORE_DEFAULTS[core] ?? "{}";
+  // Seed the editor from the remote template ONCE per core, then leave it alone.
+  // Without this, a background refetch of the template query re-ran setText and
+  // wiped whatever the admin was typing — the config appeared to reset itself.
+  const loadedCore = useRef<string | null>(null);
   useEffect(() => {
-    if (q.data) setText(remote);
+    if (q.data && loadedCore.current !== core) {
+      setText(remote);
+      loadedCore.current = core;
+    }
   }, [q.data, remote, core]);
 
   const dirty = q.data ? text !== remote : false;
