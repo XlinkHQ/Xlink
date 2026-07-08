@@ -733,6 +733,7 @@ function NodeMetricsChart({ nodeId }: { nodeId: string }) {
     queryKey: ["node-metrics", nodeId],
     queryFn: () => nodeMetricsRecent(nodeId, 120),
     refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
   const samples = q.data ?? [];
   const pick = (name: string) =>
@@ -780,6 +781,7 @@ function NodeLogs({ nodeId, source }: { nodeId: string; source?: string }) {
     queryKey: ["node-logs", nodeId, source ?? "all"],
     queryFn: () => nodeLogs(nodeId, 100, source),
     refetchInterval: 10000,
+    refetchIntervalInBackground: false,
   });
   const logs = q.data ?? [];
 

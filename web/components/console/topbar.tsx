@@ -38,16 +38,19 @@ function TopBarStats() {
     queryKey: ["topbar-online-users"],
     queryFn: () => onlineUsers(),
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
   const usersQuery = useQuery({
     queryKey: ["topbar-users-total"],
     queryFn: () => usersTotal("user"),
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
   const nodesQuery = useQuery({
     queryKey: ["nodes"],
     queryFn: () => listNodes(),
     refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const totalUsers = usersQuery.data ? usersQuery.data.meta.total : null;

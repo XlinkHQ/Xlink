@@ -403,11 +403,13 @@ function ProfileUsageCard({ profileId }: { profileId: string }) {
     queryKey: ["profile-usage-series", profileId],
     queryFn: () => profileUsageSeries(profileId, 24),
     refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
   const totalQ = useQuery({
     queryKey: ["profile-usage-total", profileId],
     queryFn: () => profileUsageTotal(profileId),
     refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
   const total = totalQ.data?.total_bytes ?? 0;
 

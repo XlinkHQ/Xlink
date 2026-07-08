@@ -46,6 +46,7 @@ export function AuditLogScreen() {
         dateTo: dateTo || undefined,
       }),
     refetchInterval: 20000,
+    refetchIntervalInBackground: false,
   });
   const entries = (q.data ?? []) as AuditEntry[];
 

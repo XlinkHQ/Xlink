@@ -237,7 +237,7 @@ function UsersTab({
 }) {
   // listAllUsers walks the cursor — the backend clamps single pages to 100 rows.
   const usersQuery = useQuery({ queryKey: ["users", "all"], queryFn: () => listAllUsers() });
-  const onlineQuery = useQuery({ queryKey: ["users-online"], queryFn: () => onlineUsers(), refetchInterval: 30000 });
+  const onlineQuery = useQuery({ queryKey: ["users-online"], queryFn: () => onlineUsers(), refetchInterval: 30000, refetchIntervalInBackground: false });
   const onlineSet = new Set(onlineQuery.data?.user_ids ?? []);
   const users = usersQuery.data ?? [];
   const members = useMemo(() => {
