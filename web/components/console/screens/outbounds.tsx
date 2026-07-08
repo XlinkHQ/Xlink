@@ -223,19 +223,21 @@ function OutboundModal({
       const r = await importOutbound(importText.trim());
       const s = r.settings as Record<string, string>;
       setType(r.type);
-      if (s.address) setAddress(s.address);
-      if (s.id) setId(s.id);
-      if (s.password) setPassword(s.password);
-      if (s.method) setMethod(s.method);
-      if (s.flow) setFlow(s.flow);
-      if (s.network) setNetwork(s.network);
-      if (s.security) setSecurity(s.security);
-      if (s.sni) setSni(s.sni);
-      if (s.path) setPath(s.path);
-      if (s.host) setHost(s.host);
-      if (s.fingerprint) setFingerprint(s.fingerprint);
-      if (s.publicKey) setPublicKey(s.publicKey);
-      if (s.shortId) setShortId(s.shortId);
+      // Reset every field first so a second import that omits a field doesn't
+      // silently keep the previous value.
+      setAddress(s.address ?? "");
+      setId(s.id ?? "");
+      setPassword(s.password ?? "");
+      setMethod(s.method ?? "aes-256-gcm");
+      setFlow(s.flow ?? "");
+      setNetwork(s.network ?? "tcp");
+      setSecurity(s.security ?? "none");
+      setSni(s.sni ?? "");
+      setPath(s.path ?? "");
+      setHost(s.host ?? "");
+      setFingerprint(s.fingerprint ?? "");
+      setPublicKey(s.publicKey ?? "");
+      setShortId(s.shortId ?? "");
       setImportText("");
       toast("success", `Detected ${r.type} — fields filled.`);
     } catch (e) {
@@ -271,8 +273,10 @@ function OutboundModal({
       if (fingerprint) s.fingerprint = fingerprint;
       if (security === "reality") { if (publicKey) s.publicKey = publicKey; if (shortId) s.shortId = shortId; }
     }
-    if (network === "ws" || network === "httpupgrade") { if (path) s.path = path; if (host) s.host = host; }
-    if (network === "grpc" && serviceName) s.serviceName = serviceName;
+    if (HAS_STREAM.has(type)) {
+      if (network === "ws" || network === "httpupgrade") { if (path) s.path = path; if (host) s.host = host; }
+      if (network === "grpc" && serviceName) s.serviceName = serviceName;
+    }
     if (type === "wireguard") {
       s.secretKey = secretKey; s.address = wgAddress; s.endpoint = endpoint;
       if (publicKey) s.publicKey = publicKey;
@@ -285,6 +289,12 @@ function OutboundModal({
   const submit = async () => {
     const settings = buildSettings();
     if (settings === null) return;
+    // Validate the rule inputs BEFORE creating the outbound, so we don't persist
+    // an outbound then fail the rule and leave an orphan.
+    if (!editing && makeRule && ruleMatch !== "all" && !ruleValues.trim()) {
+      toast("error", "Enter match values for the routing rule (or pick All traffic).");
+      return;
+    }
     setBusy(true);
     try {
       const body = { tag: tag.trim(), type, settings, enabled };
@@ -295,15 +305,24 @@ function OutboundModal({
         await createOutbound(body);
         if (makeRule) {
           const isAll = ruleMatch === "all";
-          await createRoutingRule({
-            name: `${tag.trim()} route`,
-            match_type: isAll ? "domain" : ruleMatch,
-            match_values: isAll ? "geosite:geolocation-!cn" : ruleValues.trim(),
-            outbound: tag.trim(),
-            enabled: true,
-            priority: 0,
-          });
-          toast("success", "Outbound + routing rule added.");
+          try {
+            await createRoutingRule({
+              name: `${tag.trim()} route`,
+              match_type: isAll ? "domain" : ruleMatch,
+              match_values: isAll ? "geosite:geolocation-!cn" : ruleValues.trim(),
+              outbound: tag.trim(),
+              enabled: true,
+              priority: 0,
+            });
+            toast("success", "Outbound + routing rule added.");
+          } catch (e) {
+            // Outbound was created; surface the rule failure without losing it or
+            // implying the whole save failed (retry would duplicate the outbound).
+            toast(
+              "error",
+              `Outbound added, but the routing rule failed: ${e instanceof ApiError ? e.message : "unknown error"}`,
+            );
+          }
         } else {
           toast("success", "Outbound added.");
         }
