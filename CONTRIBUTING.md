@@ -1,203 +1,168 @@
 # Contributing to XLink
 
-Thank you for taking the time to contribute. This document explains how the
-project is organized, how to set up a local environment, the quality bar every
-change must meet, and how to get a pull request reviewed and merged. Reading it
-end-to-end once will save a round of review comments later.
+Glad you're here. This is the practical guide to working on XLink — how the code
+is laid out, how to get it running locally, what has to pass before a change can
+merge, and how the review works. It's worth reading once; it'll save you a
+round-trip in review.
 
-By participating you agree to keep interactions respectful and professional, and
-that your contributions are licensed under the project's [Apache-2.0](LICENSE)
-license.
+Two ground rules up front: keep things civil, and know that anything you
+contribute goes in under the project's [Apache-2.0](LICENSE) license.
 
-## Table of contents
+## What's worth contributing
 
-- [Ways to contribute](#ways-to-contribute)
-- [Project layout](#project-layout)
-- [Local setup](#local-setup)
-- [Running the stack](#running-the-stack)
-- [The quality bar](#the-quality-bar)
-- [Coding standards](#coding-standards)
-- [Database migrations](#database-migrations)
-- [Tests](#tests)
-- [Commit messages](#commit-messages)
-- [Pull requests](#pull-requests)
-- [Reporting bugs](#reporting-bugs)
-- [Security issues](#security-issues)
+Bug reports are always useful — the issue form asks for steps to reproduce, which
+part broke, and the version or commit, because those three things are what make a
+report actually fixable. Feature ideas are welcome too; describe the problem
+you're hitting before the solution you have in mind, since the problem often has a
+simpler fix than the feature. Documentation fixes are genuinely appreciated and
+make a great first PR. And if you want to fix a bug or build something bigger,
+open an issue first for anything non-trivial — it's no fun to write a feature and
+then find out in review it should have worked a different way.
 
-## Ways to contribute
-
-- **Report a bug** using the issue form — include steps to reproduce, the
-  affected component, and the version/commit.
-- **Propose a feature** using the feature-request form — describe the problem
-  first, then the proposed solution.
-- **Improve documentation** — corrections and clarifications are always welcome
-  and are a great first contribution.
-- **Fix a bug or build a feature** — for anything non-trivial, open an issue
-  first so the approach can be agreed before you invest time.
-
-## Project layout
+## How the code is laid out
 
 | Path | What it is |
 | ---- | ---------- |
-| `app/` | FastAPI backend. Strict layering: `api → services → repositories → db`; `domain` and `schemas` are dependency-free. |
-| `app/api/v1/routers/` | HTTP endpoints, one module per domain (users, nodes, profiles, traffic, subscriptions, …). |
-| `app/services/` | Business logic. Routers call services; services call repositories. |
-| `app/repositories/` | Data access. The only layer that talks to the database. |
-| `app/subscription/` | Subscription feed generator, per-format renderers, and the token layer. |
-| `app/agent/` | Node-facing plane: config sync, command lease/execute, traffic ingest, IP limits. |
+| `app/` | FastAPI backend. Layered: `api → services → repositories → db`; `domain` and `schemas` stay dependency-free. |
+| `app/api/v1/routers/` | HTTP endpoints, one module per area (users, nodes, profiles, traffic, subscriptions, …). |
+| `app/services/` | The business logic. Routers call services; services call repositories. |
+| `app/repositories/` | Data access — the only layer that touches the database. |
+| `app/subscription/` | Feed generator, the per-format renderers, and the token layer. |
+| `app/agent/` | Everything node-facing: config sync, command lease/execute, traffic ingest, IP limits. |
 | `app/providers/` | Per-core config builders (xray, sing-box, hysteria, wireguard). |
-| `web/` | Next.js 15 admin console (TypeScript). |
-| `node-agent/` | The pull-based Python agent that runs on each node. |
-| `alembic/` | Database migrations — a single linear head. |
-| `scripts/` | Installer and developer helpers. |
+| `web/` | The Next.js 15 console (TypeScript). |
+| `node-agent/` | The agent that runs on each node. |
+| `alembic/` | Database migrations — one linear head. |
+| `scripts/` | Installer and dev helpers. |
 
-Respect the layering: a router must not touch the database directly, and
-`domain`/`schemas` must not import from `services`/`repositories`. Reviews will
-flag layering violations.
+The layering isn't decorative. A router shouldn't reach into the database, and
+`domain`/`schemas` shouldn't import from `services` or `repositories`. It keeps the
+code testable and the dependencies pointing one direction, and review will push
+back on changes that cross those lines.
 
-## Local setup
+## Getting it running
 
-Requirements:
+You'll need Python 3.13+, [uv](https://docs.astral.sh/uv/) for the Python side,
+Node.js for the console, and Docker for Postgres and Redis.
 
-- **Python 3.13+**
-- **[uv](https://docs.astral.sh/uv/)** for Python dependency management
-- **Node.js** (for the web console)
-- **Docker** with Compose (for Postgres and Redis)
-
-Install dependencies:
+Install the dependencies:
 
 ```bash
-# Backend, including the dev extras (ruff, mypy, pytest)
-uv sync --extra dev
-
-# Web console
+uv sync --extra dev          # backend, with ruff/mypy/pytest
 cd web && npm install && cd ..
 ```
 
-## Running the stack
+Then bring up the stack:
 
 ```bash
-# 1. Datastores
-docker compose up -d postgres redis
+docker compose up -d postgres redis    # datastores
+uv run alembic upgrade head            # migrations
+uv run ./scripts/dev.sh                # the API, with hot reload
 
-# 2. Apply migrations
-uv run alembic upgrade head
-
-# 3. Run the API (hot-reload)
-uv run ./scripts/dev.sh
-
-# 4. Run the admin console (separate terminal)
-cd web && npm run dev
+cd web && npm run dev                  # the console, in another terminal
 ```
 
-The API is then at `http://localhost:8000` (docs at `/docs`) and the console at
+The API lands on `http://localhost:8000` (docs at `/docs`), the console on
 `http://localhost:3000`.
 
-> **Never run `next build` locally.** The dev server is expected to be running,
-> and a parallel production build corrupts `.next`. To verify the web app
-> type-checks, use `tsc --noEmit` (below).
+One warning that trips people up: **don't run `next build` locally.** The dev
+server is meant to be running, and a production build alongside it corrupts
+`.next`. When you want to check the web app compiles, use `tsc --noEmit` — see
+below.
 
-## The quality bar
+## What has to pass
 
-Every change must pass all of the following **before** you request review. CI runs
-the same checks; running them locally first keeps the loop fast.
+Run these before you ask for review. CI runs the exact same set, so getting them
+green locally first just saves you the round-trip:
 
 ```bash
-# Backend
 ruff check .            # lint (E, F, I, N, UP, B, C4, SIM, ASYNC, RUF)
-ruff format --check .   # formatting (line length 100)
-mypy app                # static type checking
-uv run pytest           # test suite
+ruff format --check .   # formatting — line length is 100
+mypy app                # types
+uv run pytest           # the backend suite
 
-# Web (only if web/ changed)
-cd web && ./node_modules/.bin/tsc --noEmit
+cd web && ./node_modules/.bin/tsc --noEmit   # web types, if you touched web/
 ```
 
-If a check is failing for a reason unrelated to your change, say so in the PR
-rather than disabling it.
+If one of these is red for a reason that has nothing to do with your change, don't
+paper over it — call it out in the PR instead.
 
-## Coding standards
+## Writing code that fits
 
-- **Match the surrounding code.** New code should read like the code next to it —
-  same naming, comment density, and idioms. Consistency beats personal preference.
-- **Line length is 100.** Ruff enforces it and also handles import sorting
-  (first-party = `app`), so let the tools format rather than hand-aligning.
-- **Type everything.** `mypy app` runs in the standard configuration; annotate new
-  functions and avoid `Any` where a concrete type is known.
-- **Async all the way down** in the backend — use the async SQLAlchemy session and
-  `await` I/O; don't block the event loop.
-- **Comment the "why", not the "what".** Explain non-obvious decisions, edge
-  cases, and invariants; skip comments that merely restate the code.
-- **No secrets in code, tests, fixtures, or logs.** Never commit real tokens,
-  passwords, keys, or server IPs.
-- **Web**: TypeScript, reuse the existing component and design system (`.warp-*`
-  classes); do not introduce new styling patterns for something already solved.
+The single most useful habit is to make new code read like the code already
+around it — same names, same comment density, same idioms. Consistency is worth
+more here than any individual preference.
 
-## Database migrations
+A few specifics that come up in review:
 
-Any change to a model under `app/domain/` needs a matching Alembic migration in
-the same PR:
+- Ruff owns formatting and import order (first-party is `app`), so let it format
+  rather than aligning things by hand. Line length is 100.
+- Type your code. `mypy app` runs in its normal config; annotate new functions and
+  don't reach for `Any` when the real type is known.
+- The backend is async top to bottom — use the async SQLAlchemy session and
+  `await` your I/O, don't block the event loop.
+- Comment the *why*, not the *what*. A comment that explains a non-obvious
+  decision or an edge case earns its place; one that restates the line above it
+  doesn't.
+- No secrets anywhere — not in code, tests, fixtures, or logs. That includes real
+  tokens, passwords, keys, and server IPs.
+- On the web side, reuse the existing components and the `.warp-*` design system
+  rather than inventing a new pattern for something already solved.
+
+## Database changes
+
+If you change a model under `app/domain/`, the migration goes in the same PR:
 
 ```bash
 uv run alembic revision -m "short, imperative description"
-# edit the generated file: implement upgrade() AND downgrade()
-uv run alembic upgrade head    # verify it applies
-uv run alembic downgrade -1    # verify it reverses, then upgrade again
+# then edit the generated file — write both upgrade() and downgrade()
+uv run alembic upgrade head     # check it applies
+uv run alembic downgrade -1     # check it reverses, then upgrade again
 ```
 
-Keep the chain to a **single head** — if `main` advanced while you worked, rebase
-your migration onto the current head rather than creating a branch. Include a
-sensible `server_default` when adding a non-nullable column to a populated table.
+Keep the chain to a single head; if `main` moved while you were working, rebase
+your migration onto the new head instead of branching it. And when you add a
+non-nullable column to a table that already has rows, give it a sensible
+`server_default` so the migration doesn't fail on real data.
 
 ## Tests
 
-- Tests live next to the code they cover (e.g. `app/subscription/tests/`,
-  `app/agent/tests/`) as well as in the top-level `app/tests/`.
-- Add tests for **new behavior** and a **regression test** for every bug fix — a
-  bug fix without a test that would have caught it is incomplete.
-- Run the whole suite with `uv run pytest`; scope while iterating with
-  `uv run pytest app/subscription -q` or `-k <expr>`.
-- The PostgreSQL-only concurrency tests are skipped unless
-  `XLINK_TEST_DATABASE_URL` points at a real Postgres DSN — the default SQLite run
-  covers everything else.
+Tests sit next to the code they cover — `app/subscription/tests/`,
+`app/agent/tests/`, and so on — plus the broader ones in `app/tests/`. New
+behavior needs tests, and every bug fix needs a regression test; a fix without a
+test that would have caught the bug isn't really finished. Run the whole suite
+with `uv run pytest`, or narrow it while you iterate with `uv run pytest
+app/subscription -q` or `-k <expr>`. The PostgreSQL-only concurrency tests skip
+themselves unless `XLINK_TEST_DATABASE_URL` points at a real Postgres — the
+default SQLite run covers everything else.
 
-## Commit messages
+## Commits and pull requests
 
-Use short, imperative, [Conventional Commits](https://www.conventionalcommits.org/)
-style prefixes so history stays scannable:
+Keep commit subjects short and imperative, with a
+[Conventional Commits](https://www.conventionalcommits.org/) prefix so the history
+stays easy to scan:
 
 ```
 fix(subscriptions): render shadowtls in sing-box feeds
 feat(nodes): per-core restart from the console
-docs: expand deployment guide
-chore: drop redundant deploy wrapper
+docs: expand the deployment guide
+chore: drop the redundant deploy wrapper
 ```
 
-Explain the *why* in the body when it isn't obvious from the subject. Keep each
-commit focused; don't mix unrelated changes.
+Put the *why* in the body when the subject doesn't make it obvious, and keep each
+commit to one thing.
 
-## Pull requests
+For the PR itself: branch off `main`, one logical change per PR, and fill in the
+template (what changed, why, the linked issue). Make sure everything under
+[what has to pass](#what-has-to-pass) is green, bring the tests and any migration
+along with the code, and update the docs and the `Unreleased` section of
+[CHANGELOG.md](CHANGELOG.md) if behavior changed. Try not to reformat untouched
+code in the same diff — it makes the real change harder to see. A maintainer will
+review, maybe ask for changes, and merge once it's green and approved.
 
-- Branch off `main`, one logical change per PR.
-- Fill in the PR template: what changed, why, and the linked issue.
-- Ensure every check in [The quality bar](#the-quality-bar) passes locally.
-- Include tests, and a migration if a model changed.
-- Update user-facing docs and `CHANGELOG.md` (`Unreleased` section) when behavior
-  changes.
-- Keep the diff reviewable — avoid drive-by reformatting of untouched code.
+## Security
 
-A maintainer will review, possibly request changes, and merge once it's green and
-approved.
-
-## Reporting bugs
-
-Open an issue with the bug-report form. A good report has: what you expected vs.
-what happened, exact steps to reproduce, the affected component, the version or
-commit, and relevant logs (with secrets and IPs redacted).
-
-## Security issues
-
-**Do not open a public issue or pull request for a security vulnerability.**
-Report it privately through GitHub's
-[private advisory](https://github.com/Theok09/Xlink/security/advisories/new) form.
-See [SECURITY.md](SECURITY.md) for the full policy.
+Don't use a public issue or PR for a security problem. Report it privately through
+GitHub's
+[advisory form](https://github.com/Theok09/Xlink/security/advisories/new);
+[SECURITY.md](SECURITY.md) has the full policy.

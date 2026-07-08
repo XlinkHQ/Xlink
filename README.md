@@ -4,73 +4,76 @@
 
 ### Multi-node VPN management panel for xray, sing-box, hysteria, and WireGuard
 
-FastAPI + PostgreSQL + Redis backend · Next.js admin console · pull-based node agent
-
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](pyproject.toml)
 [![Next.js 15](https://img.shields.io/badge/Next.js-15-black.svg)](web/package.json)
-[![Cores](https://img.shields.io/badge/cores-xray%20·%20sing--box%20·%20hysteria%20·%20wireguard-2645d3.svg)](#features)
-[![Deploy](https://img.shields.io/badge/deploy-one--command-success.svg)](#quick-start)
 
 </div>
 
 ---
 
-XLink is a self-hosted control plane for running a fleet of VPN nodes from a
-single console. You define **users** (with data, expiry, on-hold and device
-limits), attach them to **profiles** (an inbound on a node), and each user gets
-one subscription link that stays valid across every core and client. The panel
-tracks real per-user traffic — including for WireGuard — enforces quotas, and
-balances load across nodes with automatic failover.
+XLink is a panel for running your own VPN service across more than one server. You
+add your nodes, create users, and hand each user a single subscription link — the
+panel takes care of pushing the right config to every node, keeping traffic
+counted per user, and moving people off a node when it goes down.
 
-The panel never reaches into a node. Each node runs a lightweight agent that
-**pulls** its desired configuration, applies it to the local cores, and reports
-traffic and health back. A node only needs outbound access to the panel's API.
+It grew out of the usual frustration with single-server panels: once you have two
+or three locations, you end up copying configs by hand, and you never really know
+how much each user has actually used — especially on WireGuard, where most panels
+just give up on per-user accounting. XLink treats a user as a real account with a
+data cap, an expiry, and a device limit, and it measures traffic on every core,
+WireGuard included.
+
+The important design choice is that **the panel never connects into a node**. Each
+node runs a small agent that reaches out to the panel, pulls the config it's
+supposed to have, applies it locally, and reports back. So a node only needs to be
+able to talk *out* to the panel's API — you don't have to open it up or trust the
+panel with SSH keys.
 
 ## Table of contents
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Quick start](#quick-start)
-- [Managing the panel](#managing-the-panel)
+- [What you get](#what-you-get)
+- [How it fits together](#how-it-fits-together)
+- [Getting started](#getting-started)
+- [Running the panel day to day](#running-the-panel-day-to-day)
 - [Adding a node](#adding-a-node)
 - [Configuration](#configuration)
-- [Development](#development)
-- [Project layout](#project-layout)
+- [Working on XLink](#working-on-xlink)
+- [Where things live](#where-things-live)
 - [Documentation](#documentation)
 - [Security](#security)
 - [License](#license)
 
-## Features
+## What you get
 
-**Cores & protocols**
-- xray, sing-box, hysteria, and WireGuard, selected per profile.
-- vless, vmess, trojan, shadowsocks, shadowtls, hysteria2, tuic, naive, socks,
-  and wireguard — with the transport/security options each core supports.
+**The cores you'd expect.** xray, sing-box, hysteria, and WireGuard, chosen per
+profile. Between them that covers vless, vmess, trojan, shadowsocks, shadowtls,
+hysteria2, tuic, naive, socks, and wireguard, each with the transport and TLS
+options its core actually supports.
 
-**Users & subscriptions**
-- Per-user data cap, fixed-date or on-hold (start-on-first-use) expiry, device
-  limits (HWID-aware), and usage reset strategies.
-- One HMAC-signed subscription token per user, scoped and revocable, that renders
-  to every client format (plain, base64, sing-box JSON, Clash/Mihomo YAML, xray
-  JSON, and per-protocol URIs) with automatic client detection.
-- Real per-user traffic accounting across all cores, quota enforcement, and
-  per-user online/last-seen status.
+**Users that behave like accounts.** Every user has a data cap, an expiry (a fixed
+date, or "start counting on first use"), and an optional device limit that can key
+off HWID. Usage can reset on a schedule. Each user gets one subscription token —
+signed, scoped to that user, and revocable — and the panel renders it into
+whatever the client asks for: plain list, base64, sing-box JSON, Clash/Mihomo
+YAML, xray JSON, or a single protocol URI, picking the format from the client's
+user-agent.
 
-**Fleet & reliability**
-- Multiple nodes with load-balancing and automatic failover.
-- Pull-based agent with idempotent traffic delivery (write-ahead log), health
-  reporting, and per-core install/update/restart control.
-- Certificate management with ACME (automatic HTTPS via the bundled edge proxy).
+**A fleet, not one box.** Run as many nodes as you like, with load-balancing and
+automatic failover between them. The agent delivers traffic through a write-ahead
+log so a dropped connection never double-counts or loses usage, reports health
+every cycle, and can install, update, or restart individual cores on command.
+Certificates are handled with ACME through the bundled edge proxy, so HTTPS is
+automatic once you point a domain at the panel.
 
-**Operations & access control**
-- Role-based access control: sudo admins and scoped reseller-admins (users,
-  groups, and profiles limited to their own scope).
-- Audit log, GitOps config sync, a scheduler for recurring jobs, notifications,
-  configurable retention, database backups, and Prometheus-style metrics.
-- API keys for automation, and a full CLI for headless administration.
+**Room for resellers and automation.** Access control has real roles: sudo admins
+who see everything, and scoped reseller-admins who only see the users, groups, and
+profiles that belong to them. There's an audit log, GitOps config sync, a
+scheduler for recurring jobs, notifications, retention settings, database backups,
+and Prometheus-style metrics. Everything the console does is also available through
+API keys and a CLI, so you can script it.
 
-## Architecture
+## How it fits together
 
 ```
                     ┌─────────────────────── Panel server ───────────────────────┐
@@ -86,11 +89,14 @@ traffic and health back. A node only needs outbound access to the panel's API.
                     └────────────────────────────────────────────────────────────┘
 ```
 
-The backend follows a clean layering — `api → services → repositories → db` —
-with `domain` and `schemas` kept dependency-free. Interactive API docs are served
-at `http://<panel>:8000/docs`.
+The panel is a FastAPI backend with a Next.js console in front of it, backed by
+PostgreSQL and Redis. The backend is layered on purpose — `api → services →
+repositories → db`, with the domain models and schemas kept free of any dependency
+on the layers above — so it stays testable and the boundaries don't blur over
+time. If you'd rather read the API than the code, Swagger UI is at
+`http://<panel>:8000/docs` outside production.
 
-## Quick start
+## Getting started
 
 On a fresh Linux server, as root:
 
@@ -98,24 +104,19 @@ On a fresh Linux server, as root:
 bash <(curl -fsSL https://raw.githubusercontent.com/Theok09/Xlink/main/scripts/install.sh)
 ```
 
-The installer:
+That one command installs Docker if it isn't already there, clones the repo to
+`/opt/xlink`, generates a fresh set of secrets, pulls (or builds) the images, runs
+the database migrations, brings the whole stack up, and prints the panel URL along
+with a one-time admin password. Run it again whenever you want to update — it
+updates in place and leaves your `.env` alone. Add `--build` if you'd rather build
+the images on the box than pull them.
 
-1. installs Docker if it is missing,
-2. clones the repo to `/opt/xlink`,
-3. generates fresh secrets into `.env`,
-4. pulls (or builds) the images and runs database migrations,
-5. starts the full stack, and
-6. prints the panel URL and a **one-time admin password**.
+If you want to see each step yourself instead of trusting a one-liner,
+[DEPLOY.md](DEPLOY.md) walks through it manually.
 
-Re-run it at any time to update in place — your `.env` is preserved. To build the
-images locally instead of pulling a registry, append `--build`.
+## Running the panel day to day
 
-Prefer to drive it manually? See [DEPLOY.md](DEPLOY.md).
-
-## Managing the panel
-
-From the install directory (`/opt/xlink`), the `xlink` command wraps common
-operations:
+From the install directory, `xlink` wraps the things you'll do most:
 
 ```bash
 xlink up | down | restart | status | logs
@@ -124,127 +125,110 @@ xlink backup                 # snapshot the database
 xlink edit                   # edit .env, then restart
 ```
 
-Administration runs through the same CLI (inside the api container):
+Anything an admin can do is also on the CLI (it runs inside the api container):
 
 ```bash
-xlink admin reset-password -u admin -p NEWPASS   # lockout recovery
-xlink admin create -u reseller --no-sudo         # scoped reseller-admin
+xlink admin reset-password -u admin -p NEWPASS   # get back in if you're locked out
+xlink admin create -u reseller --no-sudo         # a scoped reseller-admin
 xlink user list [--status S] [--owner ADMIN]
 xlink user create -u alice --limit 50 --expire 2026-12-31
-xlink user show -u alice                          # detail + subscription link
+xlink user show -u alice                          # details + subscription link
 xlink node create -n edge-1 --host 203.0.113.10 --port 443
-xlink node token edge-1                            # issue an agent token (shown once)
+xlink node token edge-1                            # agent token, shown once
 ```
 
-Run `xlink help` for the full command list.
+`xlink help` lists everything.
 
 ## Adding a node
 
-1. In the console: **Nodes → add a node** (its public host and core port), then
-   provision its **agent token**. Copy the node id and token.
+Adding a location is two steps. First, in the console under **Nodes**, add the
+node with its public host and core port and provision an agent token — you'll get
+a node id and a token. Then, on the node server, run the agent installer with
+those values:
 
-2. On the node server, run the agent installer with those values:
+```bash
+curl -fsSL https://<panel-host>:8000/agent/install.sh \
+  | sudo -E bash -s https://<panel-host> <node-id> <agent-token>
+```
 
-   ```bash
-   curl -fsSL https://<panel-host>:8000/agent/install.sh \
-     | sudo -E bash -s https://<panel-host> <node-id> <agent-token>
-   ```
-
-   Limit the cores it installs with `--cores=xray,wireguard` (default: all).
-
-3. Confirm it is reporting:
-
-   ```bash
-   journalctl -u xlink-agent -f      # expect "pulled config" each cycle
-   ```
-
-   The node turns **active** in the panel within ~30 seconds.
+By default it installs every core; narrow it with `--cores=xray,wireguard` if the
+node only needs some. Watch it come up with `journalctl -u xlink-agent -f` — once
+you see `pulled config` the agent is talking to the panel, and the node flips to
+**active** in the console within about half a minute.
 
 ## Configuration
 
-All runtime configuration is environment-driven; the installer writes a complete
-`.env` with generated secrets. See [.env.example](.env.example) for every key.
-The most commonly changed ones:
+Everything is configured through environment variables, and the installer writes a
+complete `.env` with secrets already generated, so you normally don't touch it. The
+full list is in [.env.example](.env.example); these are the ones people actually
+change:
 
-| Variable | Purpose | Default |
-| -------- | ------- | ------- |
-| `XLINK_DOMAIN` | Public domain; enables the ACME/HTTPS edge proxy when set | _(unset — plain ports)_ |
-| `XLINK_ACME_EMAIL` | Contact email for Let's Encrypt | — |
-| `XLINK_PORT` | API port (nodes connect here) | `8000` |
-| `XLINK_POSTGRES_PASSWORD` | Database password | _generated_ |
-| `XLINK_JWT_SECRET_KEY` | Signs auth and subscription tokens | _generated_ |
-| `XLINK_RATE_LIMIT_PER_MINUTE` | Per-client request rate limit | see `.env.example` |
-| `XLINK_LOG_JSON` | Structured JSON logs (recommended in production) | `false` |
+| Variable | What it does | Default |
+| -------- | ------------ | ------- |
+| `XLINK_DOMAIN` | Set a domain to turn on the ACME/HTTPS edge proxy | unset — plain ports |
+| `XLINK_ACME_EMAIL` | Contact address for Let's Encrypt | — |
+| `XLINK_PORT` | API port — this is what nodes connect to | `8000` |
+| `XLINK_PUBLIC_IP` | Override the server IP shown on the dashboard (auto-detected otherwise) | auto |
+| `XLINK_JWT_SECRET_KEY` | Signs auth and subscription tokens | generated |
+| `XLINK_LOG_JSON` | Structured JSON logs — worth turning on in production | `false` |
 
-Secrets live only in `.env` on the panel server. It is git-ignored — never commit
-it.
+The secrets only ever live in `.env` on the panel server, and that file is
+git-ignored. Don't commit it.
 
-## Development
+## Working on XLink
 
-Requirements: **Python 3.13+**, [uv](https://docs.astral.sh/uv/), Node.js, Docker.
-
-```bash
-# Backend dependencies
-uv sync --extra dev
-
-# Datastores
-docker compose up -d postgres redis
-
-# Migrate and run the API
-uv run alembic upgrade head
-uv run ./scripts/dev.sh
-
-# Admin console (separate terminal)
-cd web && npm install && npm run dev
-```
-
-Before opening a pull request, all of these must pass:
+You'll need Python 3.13+, [uv](https://docs.astral.sh/uv/), Node.js, and Docker.
 
 ```bash
-ruff check .          # lint
-ruff format --check . # formatting
-mypy app              # backend type check
-uv run pytest         # backend tests
+uv sync --extra dev                    # backend deps
+docker compose up -d postgres redis    # datastores
+uv run alembic upgrade head            # migrate
+uv run ./scripts/dev.sh                # run the API
 
-cd web && ./node_modules/.bin/tsc --noEmit   # web type check
+cd web && npm install && npm run dev   # the console, in another terminal
 ```
 
-> **Do not run `next build` during development** — the dev server is always
-> running and a parallel build corrupts `.next`. Type-check the web app with
-> `tsc --noEmit`.
+Before you send a pull request, make sure the checks pass — the same ones CI runs:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow.
+```bash
+ruff check . && ruff format --check .   # lint + formatting
+mypy app                                # backend types
+uv run pytest                           # backend tests
+cd web && ./node_modules/.bin/tsc --noEmit   # web types
+```
 
-## Project layout
+One thing to know: **don't run `next build` while developing.** The dev server is
+always up, and a build running next to it corrupts `.next`. Use `tsc --noEmit` to
+check the web app instead. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
 
-| Path | Description |
-| ---- | ----------- |
-| `app/` | FastAPI backend (`api` → `services` → `repositories` → `db`) |
-| `app/api/v1/routers/` | HTTP endpoints per domain (users, nodes, profiles, traffic, …) |
-| `app/subscription/` | Subscription feed generator, per-format renderers, token layer |
-| `app/agent/` | Node-facing plane: config sync, commands, traffic ingest, IP limits |
-| `web/` | Next.js 15 admin console |
-| `node-agent/` | Pull-based Python agent that runs on each node |
-| `alembic/` | Database migrations (single head) |
-| `scripts/` | Installer and developer helper scripts |
-| `xlink`, `xlink.sh` | Runtime CLI wrapper and the install/update manager |
+## Where things live
+
+| Path | What's there |
+| ---- | ------------ |
+| `app/` | The FastAPI backend (`api → services → repositories → db`) |
+| `app/api/v1/routers/` | HTTP endpoints, one file per area — users, nodes, profiles, traffic, and so on |
+| `app/subscription/` | Subscription feed generator, the per-format renderers, and the token layer |
+| `app/agent/` | Everything node-facing: config sync, commands, traffic ingest, IP limits |
+| `web/` | The Next.js console |
+| `node-agent/` | The agent that runs on each node |
+| `alembic/` | Database migrations (kept to a single head) |
+| `scripts/` | The installer and dev helpers |
+| `xlink`, `xlink.sh` | The runtime CLI wrapper and the install/update manager |
 
 ## Documentation
 
-- [docs/API.md](docs/API.md) — complete HTTP API reference
-- [DEPLOY.md](DEPLOY.md) — panel and node deployment in detail
-- [CONTRIBUTING.md](CONTRIBUTING.md) — local setup and how to contribute
-- [SECURITY.md](SECURITY.md) — reporting a vulnerability
-- [CHANGELOG.md](CHANGELOG.md) — release history
-
-Interactive API docs (Swagger UI) are served at `http://<panel>:8000/docs` in
-non-production environments.
+- [docs/API.md](docs/API.md) — the full HTTP API reference
+- [DEPLOY.md](DEPLOY.md) — deploying the panel and nodes step by step
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setting up locally and sending changes
+- [SECURITY.md](SECURITY.md) — how to report a vulnerability
+- [CHANGELOG.md](CHANGELOG.md) — what changed, release by release
 
 ## Security
 
-Found a vulnerability? **Do not open a public issue.** Report it privately through
-GitHub's [private advisory](https://github.com/Theok09/Xlink/security/advisories/new)
-form. Details are in [SECURITY.md](SECURITY.md).
+If you find a security problem, please don't open a public issue. Report it
+privately through GitHub's
+[advisory form](https://github.com/Theok09/Xlink/security/advisories/new) —
+[SECURITY.md](SECURITY.md) explains what to include and what happens next.
 
 ## License
 
