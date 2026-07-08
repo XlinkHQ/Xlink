@@ -15,10 +15,15 @@ from app.core.exceptions import ValidationError
 from app.dependencies.auth import AdminUser, CurrentUser, SudoAdminUser, WriteAdminUser
 from app.dependencies.core import DatabaseDep
 from app.dependencies.pagination import ListPaginationDep
-from app.dependencies.services import UserServiceDep
+from app.dependencies.services import (
+    AssignmentServiceDep,
+    ProfileServiceDep,
+    UserServiceDep,
+)
 from app.domain.user import User, UserRole
 from app.repositories.user import UserRepository
 from app.schemas.pagination import CursorPage, CursorParams, Page, PaginationParams
+from app.schemas.client_assignment import AssignmentCreate
 from app.schemas.user import AdminUpdate, UserCreate, UserRead, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -168,9 +173,23 @@ async def create_user(
     payload: UserCreate,
     admin: WriteAdminUser,
     users: UserServiceDep,
+    profiles: ProfileServiceDep,
+    assignments: AssignmentServiceDep,
 ) -> UserRead:
     owner_id = None if admin.is_sudo else admin.id
     user = await users.create(payload, owner_id=owner_id)
+    # Optional one-call provisioning: assign the new user to the given profiles so
+    # a raw API client (bot) gets user + working config without a second request.
+    for profile_id in payload.profile_ids or []:
+        profile = await profiles.get(profile_id)
+        await assignments.create(
+            AssignmentCreate(
+                user_id=user.id,
+                profile_id=profile.id,
+                node_id=profile.node_id,
+                provider_kind=profile.provider_kind,
+            )
+        )
     return UserRead.model_validate(user)
 
 
