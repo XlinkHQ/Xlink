@@ -370,9 +370,13 @@ class UserService:
     async def update_quota(self, user_id: uuid.UUID, data: UserUpdate) -> User:
         user = await self.get(user_id)
         serviceability_changed = False
+        # Distinguish "field omitted" from "field set to null": an admin clearing a
+        # data-limit/expiry/device-limit sends an explicit null, which must apply.
+        # Using model_fields_set lets null through where `is not None` would drop it.
+        provided = data.model_fields_set
         if data.full_name is not None:
             user.full_name = data.full_name
-        if data.data_limit_bytes is not None:
+        if "data_limit_bytes" in provided:
             new_limit = data.data_limit_bytes or None
             old_limit = user.data_limit_bytes
             if (
@@ -384,7 +388,7 @@ class UserService:
                 )
             user.data_limit_bytes = new_limit
             serviceability_changed = True
-        if data.expire_at is not None:
+        if "expire_at" in provided:
             user.expire_at = data.expire_at
             serviceability_changed = True
         if data.data_reset_strategy is not None:
@@ -405,7 +409,7 @@ class UserService:
                 )
             user.expire_strategy = strategy
             user.on_hold = on_hold
-        if data.device_limit is not None:
+        if "device_limit" in provided:
             user.device_limit = data.device_limit
         pinned_changed = False
         if data.pinned_node_ids is not None:

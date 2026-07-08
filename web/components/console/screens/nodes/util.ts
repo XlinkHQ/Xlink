@@ -1,4 +1,4 @@
-export const STATUSES = ["active", "maintenance", "offline", "disabled"];
+export const STATUSES = ["active", "offline", "disabled"];
 
 export function isNodeOnline(status: string): boolean {
   return ["active", "online", "healthy"].includes(status.toLowerCase());

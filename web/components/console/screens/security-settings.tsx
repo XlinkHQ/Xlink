@@ -5,7 +5,7 @@ import { Copy, LogOut, ShieldCheck } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { toast } from "@/components/ui/toast";
-import { ApiError, currentUser, logoutAll, totpConfirm, totpDisable, totpEnroll } from "@/lib/api";
+import { ApiError, clearTokens, currentUser, logoutAll, totpConfirm, totpDisable, totpEnroll } from "@/lib/api";
 import { confirmDialog, promptDialog } from "@/components/ui/dialog";
 import { copyText } from "@/lib/clipboard";
 import { Modal } from "@/components/ui/modal";
@@ -147,7 +147,12 @@ export function SecuritySettingsScreen() {
               setSigningOut(true);
               try {
                 await logoutAll();
+                // logoutAll revokes THIS session's refresh token too, so clear
+                // local tokens and bounce to login — otherwise this tab keeps
+                // working until the access token silently expires.
+                clearTokens();
                 toast("success", "Signed out of all sessions.");
+                window.location.href = "/";
               } catch (e) {
                 toast("error", e instanceof ApiError ? e.message : "Request failed.");
               } finally {

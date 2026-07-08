@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
@@ -34,7 +34,12 @@ def _audit_query(
     if date_from:
         stmt = stmt.where(AuditLog.created_at >= date_from)
     if date_to:
-        stmt = stmt.where(AuditLog.created_at <= date_to)
+        # A date-only "to" parses to that day's midnight; make it inclusive of the
+        # whole day so From=8th/To=8th isn't an empty range missing the latest day.
+        end = date_to
+        if end.hour == 0 and end.minute == 0 and end.second == 0:
+            end = end + timedelta(days=1)
+        stmt = stmt.where(AuditLog.created_at < end)
     return stmt
 
 

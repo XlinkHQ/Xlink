@@ -85,7 +85,11 @@ class FailoverExecutor:
         node_ids = {plan.source_node_id}
         node_ids.update(i.target_node_id for i in plan.items if i.target_node_id is not None)
         try:
-            await self._cache.delete_by_pattern("subscription:*")
+            # Invalidate only the migrated users' feeds, not the entire
+            # subscription keyspace (a single-user failover shouldn't cold-wipe
+            # every user's cache → thundering herd).
+            for uid in {i.user_id for i in plan.items}:
+                await self._cache.delete_by_pattern(f"subscription:{uid}:*")
             for nid in node_ids:
                 await self._cache.publish_node_event(nid, "config_changed")
         except Exception as exc:
