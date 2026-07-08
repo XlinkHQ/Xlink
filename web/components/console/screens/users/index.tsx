@@ -89,7 +89,11 @@ function initialsOf(name: string): string {
 function UserNameCell({ name, online }: { name: string; online: boolean }) {
   return (
     <span className="warp-user-namecell">
-      {online ? <span className="warp-user-online-dot" aria-hidden /> : null}
+      <span
+        className={`warp-user-online-dot ${online ? "is-on" : "is-off"}`}
+        aria-label={online ? "online" : "offline"}
+        title={online ? "Online" : "Offline"}
+      />
       <span className="warp-user-name">{name}</span>
     </span>
   );
@@ -164,7 +168,8 @@ export function UsersScreen() {
   const onlineQuery = useQuery({
     queryKey: ["users-online"],
     queryFn: () => onlineUsers(),
-    refetchInterval: 30000,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
   });
   const onlineSet = useMemo(
     () => new Set(onlineQuery.data?.user_ids ?? []),
@@ -433,9 +438,24 @@ export function UsersScreen() {
       <WarpTableCard className="warp-users-table">
         <WarpHead
           cols={[
-            "",
+            <input
+              key="selall"
+              type="checkbox"
+              className="warp-tb-check"
+              aria-label="Select all"
+              checked={filtered.length > 0 && filtered.every((u) => selected.has(u.id))}
+              ref={(el) => {
+                if (el)
+                  el.indeterminate =
+                    selected.size > 0 && !filtered.every((u) => selected.has(u.id));
+              }}
+              onChange={(e) =>
+                setSelected(
+                  e.target.checked ? new Set(filtered.map((u) => u.id)) : new Set(),
+                )
+              }
+            />,
             <SortTh key="username" col="username" label="Username" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
-            <SortTh key="online" col="online" label="Online" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
             <SortTh key="status" col="status" label="Status" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
             "Last seen",
             <SortTh key="traffic" col="traffic" label="Used Traffic" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
@@ -482,13 +502,6 @@ export function UsersScreen() {
                 </span>
                 <span className="warp-tb-cell warp-tb-cell-name">
                   <UserNameCell name={u.username} online={onlineSet.has(u.id)} />
-                </span>
-                <span className="warp-tb-cell">
-                  {onlineSet.has(u.id) ? (
-                    <Badge variant="success">Online</Badge>
-                  ) : (
-                    <Badge variant="neutral">Offline</Badge>
-                  )}
                 </span>
                 <span className="warp-tb-cell">
                   {!u.is_active ? (

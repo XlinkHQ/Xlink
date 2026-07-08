@@ -4650,7 +4650,10 @@ input.switch:focus-visible {
 
 /* Name cell = avatar (initials + online dot) + username */
 .warp-user-namecell { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.warp-user-online-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-full); background: #12A56A; }
+.warp-user-online-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-full); background: #12A56A; transition: background 0.2s ease; }
+.warp-user-online-dot.is-on { background: #12A56A; box-shadow: 0 0 0 3px rgba(18,165,106,.15); }
+.warp-user-online-dot.is-off { background: #c2c6cc; box-shadow: none; }
+.xlink-dark .warp-user-online-dot.is-off { background: #4a4d52; }
 .warp-user-name {
   min-width: 0; overflow: hidden; text-overflow: ellipsis;
   font-size: 14px; color: var(--fg-default);
