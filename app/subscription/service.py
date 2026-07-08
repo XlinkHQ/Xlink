@@ -187,20 +187,15 @@ class SubscriptionService:
         return await self._repository.get_user_quota(user_id)
 
     async def invalidate_cache(self, pattern: str = "subscription:*") -> None:
-        keys: list[bytes] = [key async for key in self._cache.client.scan_iter(match=pattern)]
-        if keys:
-            await self._cache.client.delete(*keys)
-        logger.info("subscription_cache_invalidated", pattern=pattern, deleted=len(keys))
+        # Chunked scan+delete — never materialize the whole keyspace into one list
+        # + one giant DEL (memory spike + Redis block on a hot mutation path).
+        deleted = await self._cache.delete_by_pattern(pattern)
+        logger.info("subscription_cache_invalidated", pattern=pattern, deleted=deleted)
 
     async def invalidate_subjects(self, subject_ids: Sequence[uuid.UUID]) -> None:
         deleted = 0
         for sid in subject_ids:
-            keys: list[bytes] = [
-                key async for key in self._cache.client.scan_iter(match=f"subscription:{sid}:*")
-            ]
-            if keys:
-                await self._cache.client.delete(*keys)
-                deleted += len(keys)
+            deleted += await self._cache.delete_by_pattern(f"subscription:{sid}:*")
         if deleted:
             logger.info("subscription_cache_invalidated_subjects", subjects=len(subject_ids), deleted=deleted)
 

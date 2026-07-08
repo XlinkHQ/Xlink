@@ -280,10 +280,11 @@ GRPC_TLS_KEY = os.environ.get("XLINK_GRPC_TLS_KEY", "")
 _grpc = None
 _grpc_stub = None
 _grpc_pb = None
+_grpc_channel = None
 
 
 def _grpc_ready() -> bool:
-    global _grpc, _grpc_stub, _grpc_pb
+    global _grpc, _grpc_stub, _grpc_pb, _grpc_channel
     if not GRPC_ENABLED:
         return False
     if _grpc_stub is not None:
@@ -316,6 +317,7 @@ def _grpc_ready() -> bool:
             channel = grpc.insecure_channel(addr)
         _grpc = grpc
         _grpc_pb = pb
+        _grpc_channel = channel
         _grpc_stub = pbg.NodeAgentStub(channel)
         _log(f"grpc transport → {addr} tls={GRPC_TLS}")
         return True
@@ -336,7 +338,7 @@ def _grpc_ms(iso: str) -> int:
 
 
 def _grpc_call(path: str, body: dict | None):
-    global _grpc_stub
+    global _grpc_stub, _grpc_channel
     pb = _grpc_pb
     stub = _grpc_stub
     md = _grpc_meta()
@@ -418,6 +420,13 @@ def _grpc_call(path: str, body: dict | None):
         return None
     except Exception as exc:
         _log(f"grpc call {path} failed, falling back to HTTP: {exc}")
+        # Close the channel before dropping the stub — gRPC channels hold HTTP/2
+        # sockets + completion-queue threads that aren't released on GC, so a
+        # flapping endpoint would leak fds/threads on every rebuild.
+        with contextlib.suppress(Exception):
+            if _grpc_channel is not None:
+                _grpc_channel.close()
+        _grpc_channel = None
         _grpc_stub = None
         return None
 
@@ -1479,6 +1488,11 @@ def _local_enforce(clients: list[dict], samples: list[dict]) -> list[dict]:
             continue
         used = int(s.get("upload_bytes", 0) or 0) + int(s.get("download_bytes", 0) or 0)
         _usage_acc[uid] = _usage_acc.get(uid, 0) + used
+    # Prune to the current user set so a long panel outage (where the full-cycle
+    # reset at cycle() is skipped) can't grow _usage_acc unbounded with churn.
+    live_users = {c.get("user_id") for c in clients}
+    for dead in [u for u in _usage_acc if u not in live_users]:
+        del _usage_acc[dead]
     over = {
         uid
         for uid, lim in user_limit.items()

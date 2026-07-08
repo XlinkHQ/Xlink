@@ -270,8 +270,14 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
         await pubsub.subscribe(channel)
         try:
             while True:
+                if context.cancelled():
+                    break
                 msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=20.0)
                 if msg is None:
+                    # Heartbeat on idle so a half-dead peer surfaces as a write
+                    # error → the stream exits and the pubsub is released, instead
+                    # of churning a subscription forever.
+                    yield pb.NodeEvent(type="keepalive", data_json="")
                     continue
                 data = msg["data"]
                 text = data.decode() if isinstance(data, bytes) else data
