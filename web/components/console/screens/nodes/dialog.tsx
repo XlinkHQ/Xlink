@@ -67,7 +67,10 @@ export function NodeDialog({
         if (status !== node.status) await setNodeStatus(node.id, status);
       } else {
         body.max_users = 1_000_000;
-        body.slug = slug.trim() || name.trim().toLowerCase().replace(/\s+/g, "-");
+        body.slug =
+          slug.trim() ||
+          name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
+          "node";
         await createNode(body);
       }
       toast("success", node ? "Node updated." : "Node created.");

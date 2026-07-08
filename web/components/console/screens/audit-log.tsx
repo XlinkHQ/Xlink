@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, X } from "lucide-react";
 import { useState } from "react";
-import { type AuditEntry, downloadAuditCsv, listAudit } from "@/lib/api";
+import { ApiError, type AuditEntry, downloadAuditCsv, listAudit } from "@/lib/api";
+import { toast } from "@/components/ui/toast";
 import { DatePicker } from "@/components/ui/calendar";
 import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "./warp-table";
 import { DgSearch } from "../dg-icons";
@@ -84,13 +85,17 @@ export function AuditLogScreen() {
           <button
             type="button"
             className="warp-tb-button"
-            onClick={() =>
-              downloadAuditCsv({
-                actor: actor.trim() || undefined,
-                dateFrom: dateFrom || undefined,
-                dateTo: dateTo || undefined,
-              })
-            }
+            onClick={async () => {
+              try {
+                await downloadAuditCsv({
+                  actor: actor.trim() || undefined,
+                  dateFrom: dateFrom || undefined,
+                  dateTo: dateTo || undefined,
+                });
+              } catch (e) {
+                toast("error", e instanceof ApiError ? e.message : "Export failed.");
+              }
+            }}
           >
             Export CSV
           </button>

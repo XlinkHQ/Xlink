@@ -181,7 +181,12 @@ function XrayBackendCard({ node, running }: { node: NodeRead; running: boolean }
   const [sub, setSub] = useState<"logs" | "config">("logs");
   const [core, setCore] = useState<string>("xray");
   const [upgrading, setUpgrading] = useState(false);
-  const coresQ = useQuery({ queryKey: ["node-cores", node.id], queryFn: () => nodeCores(node.id) });
+  const coresQ = useQuery({
+    queryKey: ["node-cores", node.id],
+    queryFn: () => nodeCores(node.id),
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
+  });
   const installed = (coresQ.data ?? []).map((c) => c.provider_name);
   const cores = installed.length ? installed : ["xray"];
   const activeCore = cores.includes(core) ? core : cores[0];

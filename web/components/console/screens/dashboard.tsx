@@ -124,9 +124,9 @@ function ResourceCard({
         <span className="warp-res-status">{status}</span>
       </div>
       <div className="warp-overview-divider" />
-      <div className="warp-res-pct">{pct}%</div>
+      <div className="warp-res-pct">{Math.min(100, Math.max(0, pct))}%</div>
       <div className="warp-res-bar">
-        <div className="warp-res-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+        <div className="warp-res-fill" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
       </div>
       <div className="warp-card-footer">
         {rows.map(([k, v]) => (
@@ -138,9 +138,9 @@ function ResourceCard({
 }
 
 export function DashboardScreen() {
-  const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 8000 });
-  const nodesQ = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes(), refetchInterval: 10000 });
-  const trafficQ = useQuery({ queryKey: ["traffic"], queryFn: () => trafficSummary(), refetchInterval: 5000 });
+  const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 8000, refetchIntervalInBackground: false });
+  const nodesQ = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes(), refetchInterval: 10000, refetchIntervalInBackground: false });
+  const trafficQ = useQuery({ queryKey: ["traffic"], queryFn: () => trafficSummary(), refetchInterval: 10000, refetchIntervalInBackground: false });
 
   const s = q.data;
   const nodes = (nodesQ.data?.items ?? []) as NodeRead[];
@@ -261,14 +261,14 @@ export function DashboardScreen() {
                   <ArrowDown size={20} strokeWidth={ICON_STROKE} />
                   <p>In</p>
                 </div>
-                <div className="right">{gb(t?.download_bytes ?? 0)} GB</div>
+                <div className="right">{gb(t?.download_bytes ?? 0)} GiB</div>
               </div>
               <div className="warp-transfer-bar upload">
                 <div className="left">
                   <ArrowUp size={20} strokeWidth={ICON_STROKE} />
                   <p>Out</p>
                 </div>
-                <div className="right">{gb(t?.upload_bytes ?? 0)} GB</div>
+                <div className="right">{gb(t?.upload_bytes ?? 0)} GiB</div>
               </div>
             </Stat>
           </div>
@@ -301,14 +301,14 @@ export function DashboardScreen() {
           title="RAM"
           status={s ? "Running" : "…"}
           pct={ramPct}
-          rows={[["Used", `${gb(s?.ram_used_bytes ?? 0)} GB`], ["Total", `${gb(s?.ram_total_bytes ?? 0)} GB`], ["Free", `${gb((s?.ram_total_bytes ?? 0) - (s?.ram_used_bytes ?? 0))} GB`]]}
+          rows={[["Used", `${gb(s?.ram_used_bytes ?? 0)} GiB`], ["Total", `${gb(s?.ram_total_bytes ?? 0)} GiB`], ["Free", `${gb(Math.max(0, (s?.ram_total_bytes ?? 0) - (s?.ram_used_bytes ?? 0)))} GiB`]]}
         />
         <ResourceCard
           icon={<HardDrive size={16} strokeWidth={ICON_STROKE} />}
           title="Disk"
           status={s ? "Running" : "…"}
           pct={diskPct}
-          rows={[["Used", `${gb(s?.disk_used_bytes ?? 0)} GB`], ["Total", `${gb(s?.disk_total_bytes ?? 0)} GB`], ["Swap", `${gb(s?.swap_used_bytes ?? 0)} GB`]]}
+          rows={[["Used", `${gb(s?.disk_used_bytes ?? 0)} GiB`], ["Total", `${gb(s?.disk_total_bytes ?? 0)} GiB`], ["Swap", `${gb(s?.swap_used_bytes ?? 0)} GiB`]]}
         />
       </div>
 

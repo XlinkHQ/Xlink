@@ -38,7 +38,12 @@ export function AdminsScreen() {
   const [search, setSearch] = useState("");
   const [dialog, setDialog] = useState<UserRead | "new" | null>(null);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["admins"] });
+  const refresh = () => {
+    // enable/disable/demote change the admin's USERS' active state + usage view.
+    qc.invalidateQueries({ queryKey: ["admins"] });
+    qc.invalidateQueries({ queryKey: ["users"] });
+    qc.invalidateQueries({ queryKey: ["admin-usage"] });
+  };
   const act = async (fn: () => Promise<unknown>, ok: string) => {
     try {
       await fn();

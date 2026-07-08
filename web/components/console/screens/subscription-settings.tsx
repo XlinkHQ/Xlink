@@ -133,7 +133,7 @@ export function SubscriptionSettingsScreen() {
   const save = async () => {
     setBusy(true);
     try {
-      await updateSubscriptionSettings({
+      const saved = await updateSubscriptionSettings({
         profile_title: title.trim() || "XLink",
         support_link: support.trim(),
         update_interval_hours: Math.max(1, Math.min(168, Number(interval) || 12)),
@@ -150,8 +150,9 @@ export function SubscriptionSettingsScreen() {
         rules: rules.filter((r) => r.pattern.trim() !== ""),
       });
       toast("success", "Subscription settings saved.");
-      setLoaded(false);
-      qc.invalidateQueries({ queryKey: ["sub-settings"] });
+      // Seed the cache with the server's normalized response instead of re-arming
+      // the one-time latch (which would re-seed from stale cache and revert edits).
+      qc.setQueryData(["sub-settings"], saved);
     } catch (e) {
       toast("error", e instanceof ApiError ? e.message : "Save failed.");
     } finally {

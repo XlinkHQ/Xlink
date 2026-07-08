@@ -81,7 +81,7 @@ export function UsageAreaChart({
 
   const mb = (b: number) => +((b ?? 0) / 1024 ** 2).toFixed(2);
   const at = (p: { ts?: string; date?: string }) => new Date((p.ts ?? p.date) as string).getTime();
-  const download = valid.map((p) => ({ x: at(p), y: mb(p.download_bytes ?? p.total_bytes) }));
+  const download = valid.map((p) => ({ x: at(p), y: mb(p.download_bytes ?? 0) }));
   const upload = valid.map((p) => ({ x: at(p), y: mb(p.upload_bytes ?? 0) }));
 
   const options: ApexOptions = {
@@ -104,7 +104,7 @@ export function UsageAreaChart({
     tooltip: {
       theme: "light",
       x: { format: "MMM dd, HH:mm" },
-      y: { formatter: (v) => `${v >= 1024 ? (v / 1024).toFixed(2) + " GB" : v.toFixed(1) + " MB"}` },
+      y: { formatter: (v) => `${v >= 1024 ? (v / 1024).toFixed(2) + " GiB" : v.toFixed(1) + " MiB"}` },
     },
   };
 
@@ -113,8 +113,8 @@ export function UsageAreaChart({
       <ReactApexChart
         options={options}
         series={[
-          { name: "Download (MB)", data: download },
-          { name: "Upload (MB)", data: upload },
+          { name: "Download (MiB)", data: download },
+          { name: "Upload (MiB)", data: upload },
         ]}
         type="area"
         height={height}

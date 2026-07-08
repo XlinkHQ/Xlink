@@ -175,7 +175,10 @@ export function ProfileDialog({
       } else {
         const created = (await createProfile({
           name: name.trim(),
-          slug: slug.trim() || name.trim().toLowerCase().replace(/\s+/g, "-"),
+          slug:
+            slug.trim() ||
+            name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
+            "profile",
           provider_kind: provider,
           node_id: nodeId,
           protocol,

@@ -101,9 +101,12 @@ export function AdminDialog({
         modify_users_access: sudo ? true : canModify,
         all_groups_access: allServices,
         subscription_url_prefix: subPrefix.trim() || null,
-        admin_user_limit: sudo || !userLimit ? null : Number(userLimit),
+        admin_user_limit:
+          sudo || !userLimit || Number.isNaN(Number(userLimit)) ? null : Number(userLimit),
         admin_traffic_limit_bytes:
-          sudo || !trafficLimitGib ? null : Math.round(Number(trafficLimitGib) * 1024 ** 3),
+          sudo || !trafficLimitGib || Number.isNaN(Number(trafficLimitGib))
+            ? null
+            : Math.round(Number(trafficLimitGib) * 1024 ** 3),
       };
       if (editing && admin) {
         await updateAdmin(admin.id, { ...(password ? { password } : {}), ...shared });

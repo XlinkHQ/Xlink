@@ -858,7 +858,7 @@ function BulkEditModal({
     >
       {kind === "limit" ? (
         <label className="warp-field-row">
-          <span className="warp-field-label">Data limit (GB)</span>
+          <span className="warp-field-label">Data limit (GiB)</span>
           <Input
             type="number"
             min="0"
