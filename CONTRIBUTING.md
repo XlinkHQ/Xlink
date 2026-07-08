@@ -164,5 +164,5 @@ review, maybe ask for changes, and merge once it's green and approved.
 
 Don't use a public issue or PR for a security problem. Report it privately through
 GitHub's
-[advisory form](https://github.com/Theok09/Xlink/security/advisories/new);
+[advisory form](https://github.com/XlinkHQ/Xlink/security/advisories/new);
 [SECURITY.md](SECURITY.md) has the full policy.

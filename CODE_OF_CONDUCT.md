@@ -35,7 +35,7 @@ and, where necessary, temporarily or permanently banning a contributor.
 
 To report abusive, harassing, or otherwise unacceptable behavior, contact the
 maintainers privately through the repository's
-[Security advisory form](https://github.com/Theok09/Xlink/security/advisories/new)
+[Security advisory form](https://github.com/XlinkHQ/Xlink/security/advisories/new)
 or a direct message. All reports are reviewed and handled confidentially.
 
 ## Attribution

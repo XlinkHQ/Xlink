@@ -11,7 +11,7 @@ The one-command installer does everything (Docker, clone, secret generation,
 build/pull, migrations, start):
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Theok09/Xlink/main/scripts/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/XlinkHQ/Xlink/main/scripts/install.sh)
 ```
 
 When it finishes it prints the panel URL and a one-time admin password. Re-run it
@@ -21,7 +21,7 @@ the images locally instead of pulling.
 Prefer to drive it yourself? Clone the repo and use the manager script:
 
 ```bash
-git clone https://github.com/Theok09/Xlink.git /opt/xlink
+git clone https://github.com/XlinkHQ/Xlink.git /opt/xlink
 cd /opt/xlink
 ./xlink.sh install          # generate .env + secrets, pull, migrate, start
 ```

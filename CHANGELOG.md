@@ -65,6 +65,6 @@ Initial release.
 - Role-based access control with sudo admins and scoped reseller-admins.
 - One-command installer and containerized deployment.
 
-[Unreleased]: https://github.com/Theok09/Xlink/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/Theok09/Xlink/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/Theok09/Xlink/releases/tag/v1.0.0
+[Unreleased]: https://github.com/XlinkHQ/Xlink/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/XlinkHQ/Xlink/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/XlinkHQ/Xlink/releases/tag/v1.0.0

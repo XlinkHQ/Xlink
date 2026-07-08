@@ -101,7 +101,7 @@ time. If you'd rather read the API than the code, Swagger UI is at
 On a fresh Linux server, as root:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Theok09/Xlink/main/scripts/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/XlinkHQ/Xlink/main/scripts/install.sh)
 ```
 
 That one command installs Docker if it isn't already there, clones the repo to
@@ -228,7 +228,7 @@ check the web app instead. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
 
 If you find a security problem, please don't open a public issue. Report it
 privately through GitHub's
-[advisory form](https://github.com/Theok09/Xlink/security/advisories/new) —
+[advisory form](https://github.com/XlinkHQ/Xlink/security/advisories/new) —
 [SECURITY.md](SECURITY.md) explains what to include and what happens next.
 
 ## License

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # XLink bootstrap installer — one command, fully automated:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/Theok09/Xlink/main/scripts/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/XlinkHQ/Xlink/main/scripts/install.sh)
 #
 # It: installs Docker if missing, clones the repo, generates fresh secrets,
 # builds/pulls the images, runs migrations, starts the panel, and prints the
@@ -14,7 +14,7 @@
 #   --build                     force a local image build (default: pull, build on fail)
 set -euo pipefail
 
-REPO="${XLINK_REPO:-https://github.com/Theok09/Xlink.git}"
+REPO="${XLINK_REPO:-https://github.com/XlinkHQ/Xlink.git}"
 REF="${XLINK_REF:-main}"
 DIR="${XLINK_DIR:-/opt/xlink}"
 MODE="pull"
@@ -52,7 +52,7 @@ else
   log "cloning $REPO"
   git clone --depth 1 --branch "$REF" "$REPO" "$DIR" >/dev/null 2>&1 \
     || git clone "$REPO" "$DIR" >/dev/null 2>&1 \
-    || die "clone failed (private repo? set XLINK_REPO=https://<token>@github.com/Theok09/Xlink.git)"
+    || die "clone failed (private repo? set XLINK_REPO=https://<token>@github.com/XlinkHQ/Xlink.git)"
   ok "cloned to $DIR"
 fi
 

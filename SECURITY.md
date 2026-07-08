@@ -20,7 +20,7 @@ upgrade if you're behind.
 
 Please **don't open a public issue for a security problem** — that tells everyone
 about the hole before there's a fix. Instead, use GitHub's
-[private vulnerability reporting](https://github.com/Theok09/Xlink/security/advisories/new)
+[private vulnerability reporting](https://github.com/XlinkHQ/Xlink/security/advisories/new)
 ("Report a vulnerability" on the repo's **Security** tab). It stays private
 between us until a fix is out.
 
