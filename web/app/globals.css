@@ -5081,21 +5081,32 @@ input.switch:focus-visible {
 .warp-bulkbar {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
   z-index: 50;
-  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
-  padding: 8px 12px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+  padding: 8px 10px;
+  max-width: calc(100vw - 32px);
   border: 1px solid var(--border-default); border-radius: 14px;
   background: #fff;
   box-shadow: 0 10px 30px -8px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.08);
   font-family: var(--warp-font);
   animation: warp-bulk-in 0.16s ease;
 }
+/* Compact the toolbar buttons inside the bar so all actions fit on one row;
+   each keeps its icon + label, no wrapping, no clipping. */
+.warp-bulkbar .warp-tb-button {
+  padding: 0 10px; white-space: nowrap; flex: none;
+}
 @keyframes warp-bulk-in {
   from { opacity: 0; transform: translate(-50%, 8px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
-.warp-bulk-count { font-size: 14px; font-weight: 600; color: #111; padding-left: 4px; }
-.warp-bulk-sep { width: 1px; height: 20px; background: var(--border-default); }
-.warp-bulk-clear { margin-left: 4px; }
+.warp-bulk-count { font-size: 14px; font-weight: var(--fw-medium); color: var(--fg-default); padding-left: 4px; white-space: nowrap; flex: none; }
+.warp-bulk-sep { width: 1px; height: 20px; background: var(--border-default); flex: none; }
+.warp-bulk-clear { margin-left: 2px; }
+/* Narrow screens: let the bar wrap to a tidy grid instead of overflowing the
+   viewport, and span nearly full width so it stays centered and readable. */
+@media (max-width: 720px) {
+  .warp-bulkbar { flex-wrap: wrap; justify-content: center; width: calc(100vw - 24px); }
+}
 .warp-tb-check {
   width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; margin-right: 6px; vertical-align: middle;
   opacity: 0; transition: opacity 0.14s ease;
