@@ -508,7 +508,7 @@ function NodeInfo({ node }: { node: NodeRead }) {
 
       <SettingsSection divider icon={Activity} title="Node Traffic Usage" description="Total traffic served through this node.">
         <div className="flex items-end justify-between gap-3 pb-3">
-          <span className="text-sm text-fg-muted">Last 24 hours</span>
+          <span className="text-sm text-fg-muted">All-time total</span>
           <div className="flex flex-col items-end">
             <span className="text-2xl font-medium leading-none text-fg">{bytes(measured)}</span>
             <span className="text-sm text-fg-muted">Total</span>

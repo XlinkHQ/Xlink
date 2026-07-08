@@ -10,6 +10,7 @@ import {
   deleteInboundHost,
   deleteProfile,
   disableProfile,
+  updateProfile,
   type InboundHostRead,
   listInboundHosts,
   listNodes,
@@ -75,6 +76,16 @@ export function ProfilesScreen() {
     try {
       await disableProfile(p.id);
       toast("success", "Inbound disabled.");
+      refreshInbounds();
+    } catch (e) {
+      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+    }
+  };
+
+  const enableInbound = async (p: ProfileRead) => {
+    try {
+      await updateProfile(p.id, { is_active: true });
+      toast("success", "Inbound enabled.");
       refreshInbounds();
     } catch (e) {
       toast("error", e instanceof ApiError ? e.message : "Request failed.");
@@ -163,7 +174,9 @@ export function ProfilesScreen() {
               onClick={() => setDetail(p)}
               menu={[
                 { label: "Edit", icon: "edit", onClick: () => setEditingInbound(p) },
-                { label: "Disable", icon: "disable", disabled: !p.is_active, onClick: () => disableInbound(p) },
+                p.is_active
+                  ? { label: "Disable", icon: "disable", onClick: () => disableInbound(p) }
+                  : { label: "Enable", icon: "check", onClick: () => enableInbound(p) },
                 { label: "Delete", icon: "trash", danger: true, onClick: () => removeInbound(p) },
               ]}
               cells={[

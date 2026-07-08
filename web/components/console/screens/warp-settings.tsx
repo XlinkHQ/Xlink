@@ -27,10 +27,15 @@ export function WarpSettingsScreen() {
   const q = useQuery({ queryKey: ["warp-settings"], queryFn: () => getWarpSettings() });
   const [form, setForm] = useState<WarpSettingsRead>(EMPTY);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (q.data) setForm(q.data);
-  }, [q.data]);
+    // One-time latch so a background refetch can't clobber in-progress edits.
+    if (q.data && !loaded) {
+      setForm(q.data);
+      setLoaded(true);
+    }
+  }, [q.data, loaded]);
 
   const set = <K extends keyof WarpSettingsRead>(k: K, v: WarpSettingsRead[K]) =>
     setForm((f) => ({ ...f, [k]: v }));

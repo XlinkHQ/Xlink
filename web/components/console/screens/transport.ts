@@ -44,9 +44,11 @@ export const TRANSPORT_KEYS = [
   "noise",
   "mux",
   "randomUserAgent",
+  "shadowtls_version",
+  "shadowtls_password",
 ];
 
-export const NUMERIC_KEYS = new Set(["port", "alterId", "mtu", "persistentKeepalive"]);
+export const NUMERIC_KEYS = new Set(["port", "alterId", "mtu", "persistentKeepalive", "shadowtls_version"]);
 export const BOOL_KEYS = new Set(["allowInsecure", "mux", "randomUserAgent"]);
 
 const HOST: TField = { key: "host", label: "Host / address", placeholder: "example.com" };

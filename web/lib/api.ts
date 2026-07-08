@@ -78,8 +78,12 @@ async function performRefresh(): Promise<string | null> {
     const tokens = (await response.json()) as TokenPair;
     setTokens(tokens);
     return tokens.access_token;
-  } catch {
-    return null;
+  } catch (err) {
+    // A network failure (offline blip) is NOT an auth rejection — rethrow so the
+    // caller surfaces a retryable error instead of clearing a still-valid
+    // refresh token and force-logging the admin out. Only a non-ok response
+    // above (handled) means the refresh token is actually dead.
+    throw err;
   }
 }
 
@@ -117,7 +121,9 @@ const REQUEST_TIMEOUT_MS = 45000;
 async function rawFetch(path: string, init: RequestInit, token: string | null): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  if (init.body && !headers.has("Content-Type")) {
+  // Don't force a JSON Content-Type on FormData uploads — the browser must set
+  // the multipart boundary itself.
+  if (init.body && !headers.has("Content-Type") && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
   if (token) {
@@ -159,6 +165,13 @@ async function ensureAuthed(path: string, init: RequestInit): Promise<Response> 
   }
 
   return response;
+}
+
+// Like apiFetch but returns the raw Response (for blob/CSV downloads and file
+// uploads). Routes through ensureAuthed so a 401 after an idle tab triggers the
+// same token refresh every other request gets, instead of failing outright.
+export async function apiFetchRaw(path: string, init: RequestInit = {}): Promise<Response> {
+  return ensureAuthed(path, init);
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -843,9 +856,7 @@ export async function downloadAuditCsv(
   opts: { actor?: string; dateFrom?: string; dateTo?: string } = {},
 ): Promise<void> {
   const qs = query({ actor: opts.actor, date_from: opts.dateFrom, date_to: opts.dateTo });
-  const res = await fetch(`/api/v1/audit/export.csv${qs}`, {
-    headers: { Authorization: `Bearer ${getToken() ?? ""}` },
-  });
+  const res = await apiFetchRaw(`/audit/export.csv${qs}`);
   if (!res.ok) throw new ApiError("Export failed.", res.status);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -908,18 +919,12 @@ export function exportBackup(body: Record<string, unknown> = {}) {
 export async function importBackupDb(file: File): Promise<void> {
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch("/api/v1/backup/import-db", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getToken() ?? ""}` },
-    body: form,
-  });
+  const res = await apiFetchRaw("/backup/import-db", { method: "POST", body: form });
   if (!res.ok) throw new ApiError(await res.text().catch(() => "Import failed"), res.status);
 }
 
 export async function downloadBackupDb(): Promise<void> {
-  const res = await fetch("/api/v1/backup/export-db", {
-    headers: { Authorization: `Bearer ${getToken() ?? ""}` },
-  });
+  const res = await apiFetchRaw("/backup/export-db");
   if (!res.ok) throw new ApiError(await res.text().catch(() => "Export failed"), res.status);
   const blob = await res.blob();
   const cd = res.headers.get("content-disposition") ?? "";
@@ -1128,9 +1133,7 @@ export type UserUsage = {
 };
 
 export async function downloadUsersCsv(): Promise<void> {
-  const res = await fetch(`/api/v1/users/export.csv`, {
-    headers: { Authorization: `Bearer ${getToken() ?? ""}` },
-  });
+  const res = await apiFetchRaw(`/users/export.csv`);
   if (!res.ok) throw new ApiError("Export failed.", res.status);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -1261,7 +1264,9 @@ export function deleteUser(id: string) {
 }
 
 export function monitoringMetrics() {
-  return apiFetch<MetricsSnapshotRead>("/monitoring/metrics");
+  // /monitoring/metrics returns a bare MetricRead[]; the snapshot shape
+  // ({metrics, collected_at}) the screen reads lives at /monitoring/summary.
+  return apiFetch<MetricsSnapshotRead>("/monitoring/summary");
 }
 
 export type CertificateEntryRead = {

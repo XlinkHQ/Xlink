@@ -3,6 +3,7 @@
 import { Menu } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DialogHost } from "@/components/ui/dialog";
 import { Toaster } from "@/components/ui/toast";
 import { clearTokens, currentUser, getToken, logout, setAuthLostHandler } from "@/lib/api";
@@ -61,9 +62,16 @@ export function ConsoleV2() {
   const [navOpen, setNavOpen] = useState(false);
   const [navCollapsed, setNavCollapsed] = useState(false);
   const theme = useTheme();
+  const qc = useQueryClient();
 
   useEffect(() => {
-    setAuthLostHandler(() => setAuthed(false));
+    // Clear ALL cached queries when auth is lost, so the next admin to log in on
+    // this tab never sees the previous (possibly differently-scoped) admin's
+    // users/nodes/traffic served instantly from a stale cache.
+    setAuthLostHandler(() => {
+      qc.clear();
+      setAuthed(false);
+    });
     if (!getToken()) {
       setAuthed(false);
       return;
@@ -156,6 +164,7 @@ export function ConsoleV2() {
             onLogout={async () => {
               await logout();
               clearTokens();
+              qc.clear();
               setAuthed(false);
             }}
           />

@@ -26,10 +26,15 @@ export function RetentionSettingsScreen() {
 
   const [days, setDays] = useState(30);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (q.data) setDays(q.data.retention_days);
-  }, [q.data]);
+    // One-time latch so a background refetch can't clobber an in-progress edit.
+    if (q.data && !loaded) {
+      setDays(q.data.retention_days);
+      setLoaded(true);
+    }
+  }, [q.data, loaded]);
 
   const status = q.data
     ? q.data.enabled

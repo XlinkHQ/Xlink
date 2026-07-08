@@ -31,6 +31,7 @@ export function NotificationsSettingsScreen() {
   const [form, setForm] = useState<NotificationSettingsRead>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const sendTest = async () => {
     setTesting(true);
@@ -45,8 +46,13 @@ export function NotificationsSettingsScreen() {
   };
 
   useEffect(() => {
-    if (q.data) setForm(q.data);
-  }, [q.data]);
+    // One-time latch: only seed the form from the first fetch, so a background
+    // refetch (refetchOnReconnect) can't clobber in-progress edits.
+    if (q.data && !loaded) {
+      setForm(q.data);
+      setLoaded(true);
+    }
+  }, [q.data, loaded]);
 
   const set = <K extends keyof NotificationSettingsRead>(k: K, v: NotificationSettingsRead[K]) =>
     setForm((f) => ({ ...f, [k]: v }));

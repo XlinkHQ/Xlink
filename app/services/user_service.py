@@ -374,7 +374,7 @@ class UserService:
         # data-limit/expiry/device-limit sends an explicit null, which must apply.
         # Using model_fields_set lets null through where `is not None` would drop it.
         provided = data.model_fields_set
-        if data.full_name is not None:
+        if "full_name" in provided:
             user.full_name = data.full_name
         if "data_limit_bytes" in provided:
             new_limit = data.data_limit_bytes or None
@@ -393,9 +393,9 @@ class UserService:
             serviceability_changed = True
         if data.data_reset_strategy is not None:
             user.data_reset_strategy = data.data_reset_strategy
-        if data.on_hold_duration_seconds is not None:
+        if "on_hold_duration_seconds" in provided:
             user.on_hold_duration_seconds = data.on_hold_duration_seconds
-        if data.activation_deadline is not None:
+        if "activation_deadline" in provided:
             user.activation_deadline = data.activation_deadline
 
         if data.expire_strategy is not None or data.on_hold is not None:

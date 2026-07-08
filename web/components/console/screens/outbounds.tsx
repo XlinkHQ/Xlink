@@ -228,8 +228,10 @@ function OutboundModal({
       setAddress(s.address ?? "");
       setId(s.id ?? "");
       setPassword(s.password ?? "");
+      setUsername(s.username ?? "");
       setMethod(s.method ?? "aes-256-gcm");
       setFlow(s.flow ?? "");
+      setEncryption(s.encryption ?? "none");
       setNetwork(s.network ?? "tcp");
       setSecurity(s.security ?? "none");
       setSni(s.sni ?? "");
@@ -238,6 +240,11 @@ function OutboundModal({
       setFingerprint(s.fingerprint ?? "");
       setPublicKey(s.publicKey ?? "");
       setShortId(s.shortId ?? "");
+      setServiceName(s.serviceName ?? "");
+      setSecretKey(s.secretKey ?? "");
+      setWgAddress(s.address ?? "172.16.0.2/32");
+      setEndpoint(s.endpoint ?? "");
+      setReserved(s.reserved ?? "");
       setImportText("");
       toast("success", `Detected ${r.type} — fields filled.`);
     } catch (e) {

@@ -142,7 +142,9 @@ export function AccessManager({ userId }: { userId: string }) {
         profile_id: prof.id,
         node_id: prof.node_id,
         provider_kind: prof.provider_kind,
-        expires_at: expiry ? new Date(expiry).toISOString() : null,
+        // End-of-day, matching the user Edit/bulk dialogs — new Date(expiry) alone
+        // is start-of-day UTC and would expire the access ~24h early.
+        expires_at: expiry ? new Date(`${expiry}T23:59:59Z`).toISOString() : null,
         traffic_limit_bytes: limitGiB && gib > 0 ? Math.round(gib * 1024 ** 3) : null,
       });
       toast("success", "Access granted.");
