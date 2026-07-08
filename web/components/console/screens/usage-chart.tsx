@@ -2,8 +2,22 @@
 
 import type { ApexOptions } from "apexcharts";
 import dynamic from "next/dynamic";
+import { useTheme } from "@/lib/theme";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
+
+// Theme-aware chart chrome: apex defaults to dark axis text + near-black grid
+// lines, which vanish on our dark surface (and its light-themed tooltip renders
+// as a white box on dark). Drive all of it from the active theme instead.
+function chartTheme(dark: boolean) {
+  return {
+    mode: (dark ? "dark" : "light") as "dark" | "light",
+    axisText: dark ? "#9aa0aa" : "#6b7280",
+    grid: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+    markerStroke: dark ? "#1a1a1c" : "#ffffff",
+    tooltip: (dark ? "dark" : "light") as "dark" | "light",
+  };
+}
 
 export function MetricsAreaChart({
   cpu,
@@ -16,6 +30,8 @@ export function MetricsAreaChart({
   loading?: boolean;
   height?: number;
 }) {
+  const dark = useTheme() === "dark";
+  const t = chartTheme(dark);
   if (loading) return <div className="animate-pulse rounded-md bg-muted" style={{ height }} />;
   if (cpu.length === 0 && mem.length === 0) {
     return (
@@ -25,16 +41,28 @@ export function MetricsAreaChart({
     );
   }
   const options: ApexOptions = {
-    chart: { type: "area", height, toolbar: { show: false }, fontFamily: "var(--warp-font)" },
+    chart: {
+      type: "area",
+      height,
+      toolbar: { show: false },
+      fontFamily: "var(--warp-font)",
+      foreColor: t.axisText,
+    },
+    theme: { mode: t.mode },
     dataLabels: { enabled: false },
     stroke: { curve: "smooth", width: 2.5 },
     colors: ["#3961DB", "#33b074"],
     fill: { type: "gradient", gradient: { opacityFrom: 0.3, opacityTo: 0.05, stops: [0, 100] } },
-    yaxis: { min: 0, max: 100, tickAmount: 4, labels: { formatter: (v) => `${Math.round(v)}%` } },
-    xaxis: { type: "datetime" },
-    legend: { position: "top", horizontalAlign: "right" },
-    grid: { borderColor: "rgba(0,0,0,0.06)" },
-    tooltip: { theme: "light", x: { format: "HH:mm" }, y: { formatter: (v) => `${v.toFixed(1)}%` } },
+    yaxis: {
+      min: 0,
+      max: 100,
+      tickAmount: 4,
+      labels: { style: { colors: t.axisText }, formatter: (v) => `${Math.round(v)}%` },
+    },
+    xaxis: { type: "datetime", labels: { style: { colors: t.axisText } } },
+    legend: { position: "top", horizontalAlign: "right", labels: { colors: t.axisText } },
+    grid: { borderColor: t.grid },
+    tooltip: { theme: t.tooltip, x: { format: "HH:mm" }, y: { formatter: (v) => `${v.toFixed(1)}%` } },
   };
   return (
     <div style={{ height }}>
@@ -68,6 +96,8 @@ export function UsageAreaChart({
   height?: number;
   empty?: string;
 }) {
+  const dark = useTheme() === "dark";
+  const t = chartTheme(dark);
   if (loading) return <div className="animate-pulse rounded-md bg-muted" style={{ height }} />;
 
   const valid = series.filter((p) => p?.ts || p?.date);
@@ -90,19 +120,27 @@ export function UsageAreaChart({
       height,
       sparkline: { enabled: true },
       fontFamily: "var(--warp-font)",
+      foreColor: t.axisText,
     },
+    theme: { mode: t.mode },
     dataLabels: { enabled: false },
     stroke: { curve: "smooth", width: 4 },
     colors: ["#008ffb", "#5564be"],
-    markers: { size: valid.length === 1 ? 5 : 0, strokeColors: "#ffffff", strokeWidth: 2, hover: { size: 6 } },
+    markers: {
+      size: valid.length === 1 ? 5 : 0,
+      strokeColors: t.markerStroke,
+      strokeWidth: 2,
+      hover: { size: 6 },
+    },
     fill: {
       type: "gradient",
       gradient: { shadeIntensity: 1, opacityFrom: 0.65, opacityTo: 0.5, stops: [0, 100] },
     },
     yaxis: { min: 0 },
     xaxis: { type: "datetime" },
+    grid: { borderColor: t.grid },
     tooltip: {
-      theme: "light",
+      theme: t.tooltip,
       x: { format: "MMM dd, HH:mm" },
       y: { formatter: (v) => `${v >= 1024 ? (v / 1024).toFixed(2) + " GiB" : v.toFixed(1) + " MiB"}` },
     },

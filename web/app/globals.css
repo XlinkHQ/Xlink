@@ -6837,7 +6837,7 @@ input.switch:focus-visible {
 .warp-signin-animation-logo { animation: warp-a2 0.6s ease; }
 .warp-login-title {
   font-size: 20px;
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-medium);
   line-height: 28px;
   letter-spacing: var(--tracking-title);
   color: var(--fg-default);
