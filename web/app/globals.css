@@ -4829,6 +4829,26 @@ input.switch:focus-visible {
   display: inline-flex; gap: 2px; padding: 3px;
   background: var(--soft, #f1f3f5); border-radius: 9px;
 }
+.warp-json-area {
+  display: flex; width: 100%;
+  border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 8px;
+  background: var(--bg-surface); overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55;
+}
+.warp-json-area.is-invalid { border-color: var(--danger-solid, #e5484d); }
+.warp-json-gutter {
+  display: flex; flex-direction: column; text-align: right;
+  padding: 10px 8px; background: var(--bg-emphasis, #f6f7f9); color: var(--fg-muted);
+  user-select: none; border-right: 1px solid var(--border-subtle, #e2e8f0);
+  font-variant-numeric: tabular-nums; min-width: 34px;
+}
+.warp-json-input {
+  flex: 1; padding: 10px 12px; border: 0; outline: none; resize: vertical;
+  background: transparent; color: var(--fg-default); white-space: pre;
+  font: inherit; tab-size: 2; overflow: auto;
+}
+.xlink-dark .warp-json-gutter { background: #242629; border-color: #303236; }
+
 .warp-cpe-tab {
   display: inline-flex; align-items: center;
   height: 28px; padding: 0 14px; border: none; background: transparent; cursor: pointer;

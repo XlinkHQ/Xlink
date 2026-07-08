@@ -80,6 +80,16 @@ export function ProfileDialog({
   });
   const [busy, setBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
+  const [jsonEdit, setJsonEdit] = useState(false);
+  const advancedValid = (() => {
+    if (!advanced.trim()) return true;
+    try {
+      const p = JSON.parse(advanced);
+      return Boolean(p && typeof p === "object" && !Array.isArray(p));
+    } catch {
+      return false;
+    }
+  })();
   const existingHosts = Array.isArray((initialSettings as { hosts?: unknown }).hosts)
     ? (initialSettings as { hosts: unknown[] }).hosts
     : null;
@@ -361,22 +371,60 @@ export function ProfileDialog({
       ) : null}
 
       <div className="warp-dlg-divider" />
-      <p className="warp-dlg-section-title">Advanced (JSON)</p>
-      <Field label="Extra settings" hint="merged into the generated settings">
-        <textarea
-          value={advanced}
-          onChange={(e) => setAdvanced(e.target.value)}
-          placeholder='{ "extraKey": "value" }'
-          className="h-24 w-full resize-y rounded-lg border border-hairline bg-transparent p-2.5 font-mono text-[11px] text-fg outline-none focus:border-primary"
-        />
-      </Field>
-
-      <div className="warp-dlg-divider" />
-      <p className="warp-dlg-section-title">Settings preview</p>
-      <pre className="max-h-48 overflow-auto rounded-lg border border-hairline bg-muted p-2.5 font-mono text-[11px] leading-relaxed text-fg-muted">
-        {previewJson}
-      </pre>
+      <div className="flex items-center justify-between">
+        <p className="warp-dlg-section-title" style={{ margin: 0 }}>
+          Advanced (JSON)
+        </p>
+        <button
+          type="button"
+          className="warp-cpe-tab"
+          onClick={() => setJsonEdit((v) => !v)}
+        >
+          {jsonEdit ? "Preview" : "Edit"}
+        </button>
+      </div>
+      {jsonEdit ? (
+        <Field
+          label="Full settings JSON"
+          hint="edited here overrides the fields above; must be valid JSON"
+        >
+          <JsonArea value={advanced || previewJson} onChange={setAdvanced} invalid={!advancedValid} />
+        </Field>
+      ) : (
+        <JsonArea value={previewJson} readOnly />
+      )}
     </Modal>
+  );
+}
+
+function JsonArea({
+  value,
+  onChange,
+  readOnly,
+  invalid,
+}: {
+  value: string;
+  onChange?: (v: string) => void;
+  readOnly?: boolean;
+  invalid?: boolean;
+}) {
+  const lines = Math.max(1, value.split("\n").length);
+  return (
+    <div className={`warp-json-area${invalid ? " is-invalid" : ""}`}>
+      <div className="warp-json-gutter" aria-hidden>
+        {Array.from({ length: lines }, (_, i) => (
+          <span key={i}>{i + 1}</span>
+        ))}
+      </div>
+      <textarea
+        value={value}
+        onChange={onChange ? (e) => onChange(e.target.value) : undefined}
+        readOnly={readOnly}
+        spellCheck={false}
+        rows={Math.min(24, Math.max(8, lines))}
+        className="warp-json-input"
+      />
+    </div>
   );
 }
 
