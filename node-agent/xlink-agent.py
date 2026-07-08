@@ -536,7 +536,12 @@ def build_xray_config(clients: list[dict]) -> dict:
         protocol = cl.get("protocol", "vless")
         s = cl.get("settings") or {}
         port = int(s.get("port", 443) or 443)
-        key = (port, protocol, json.dumps(_stream_settings(s), sort_keys=True))
+        _stream_for_key = (
+            {"network": "tcp", "security": "none"}
+            if protocol == "socks"
+            else _stream_settings(s)
+        )
+        key = (port, protocol, json.dumps(_stream_for_key, sort_keys=True))
         cid = _client_id(cl)
         email = cl.get("assignment_id")
         if key not in inbounds:
@@ -553,13 +558,20 @@ def build_xray_config(clients: list[dict]) -> dict:
                 if isinstance(s.get("fallbacks"), list) and protocol in ("vless", "trojan"):
                     settings["fallbacks"] = s["fallbacks"]
             network = (s.get("network") or "tcp").lower()
+            # socks has no TLS/REALITY in xray — attaching stream security would make
+            # xray reject the whole config (freezing the node's updates). Force plain.
+            stream = (
+                {"network": "tcp", "security": "none"}
+                if protocol == "socks"
+                else _stream_settings(s)
+            )
             inbounds[key] = {
                 "tag": f"in-{port}-{protocol}-{network}-{len(inbounds)}",
                 "listen": "0.0.0.0",
                 "port": port,
                 "protocol": protocol,
                 "settings": settings,
-                "streamSettings": _stream_settings(s),
+                "streamSettings": stream,
                 "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
             }
         if protocol == "socks":
@@ -619,8 +631,10 @@ def _singbox_user(protocol: str, cid: str, email: str, s: dict) -> dict:
         # NaïveProxy authenticates with username:password; name tags it for stats.
         return {"username": str(email), "password": cid, "name": str(email)}
     if protocol == "socks":
+        # name= makes the user show up in sing-box v2ray_api stats so byte quota is
+        # actually counted (sing-box tags per-user traffic by the "name" field).
         user = str(s.get("username") or email or cid)
-        return {"username": user, "password": cid}
+        return {"username": user, "password": cid, "name": str(email)}
     if protocol == "shadowtls":
         # ShadowTLS v3 user (name+password); the real proxy runs in the ss detour.
         return {"name": str(email), "password": cid}

@@ -14,7 +14,7 @@ export const PROTOCOLS = [
 ];
 
 const PROVIDER_PROTOCOLS: Record<string, string[]> = {
-  xray: ["vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022", "socks"],
+  xray: ["vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022"],
   "sing-box": [
     "vless",
     "vmess",

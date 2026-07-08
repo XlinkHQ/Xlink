@@ -24,6 +24,8 @@ VALID_PROTOCOLS = frozenset(
         "hysteria2",
         "wireguard",
         "tuic",
+        "naive",
+        "socks",
     }
 )
 
