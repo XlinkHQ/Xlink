@@ -92,6 +92,18 @@ class NotificationSettingsUpdate(InputModel):
 class SubscriptionSettingsUpdate(InputModel):
     profile_title: str | None = Field(default=None, min_length=1, max_length=255)
     support_link: str | None = Field(default=None, max_length=512)
+
+    @field_validator("support_link")
+    @classmethod
+    def _safe_support_link(cls, v: str | None) -> str | None:
+        # Rendered into an href on the public sub page. html.escape doesn't stop a
+        # javascript:/data: scheme, so allowlist safe schemes.
+        if not v or not v.strip():
+            return v
+        low = v.strip().lower()
+        if not low.startswith(("http://", "https://", "mailto:", "tg://", "https://t.me/")):
+            raise ValueError("support_link must be http(s)/mailto/tg")
+        return v.strip()
     update_interval_hours: int | None = Field(default=None, ge=1, le=168)
     active_status_text: str | None = Field(default=None, min_length=1, max_length=64)
     expired_status_text: str | None = Field(default=None, min_length=1, max_length=64)

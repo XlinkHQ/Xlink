@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -802,15 +803,36 @@ def _wg_subnet(addr: str) -> str:
         return "10.8.0.0/24"
 
 
+_WG_KEY_RE = re.compile(r"^[A-Za-z0-9+/]{42,44}=?$")
+
+
+def _wg_safe_key(value: str) -> str:
+    # wg0.conf is interpreted by wg-quick, which runs PostUp/PostDown as ROOT. A
+    # key/address carrying an embedded newline could smuggle a `PostUp = <cmd>`
+    # line → root RCE. Reject anything that isn't a real WG base64 key.
+    v = (value or "").strip()
+    if not _WG_KEY_RE.match(v):
+        raise ValueError(f"invalid wireguard key: {v[:16]!r}")
+    return v
+
+
+def _wg_safe_addr(value: str) -> str:
+    v = (value or "").strip()
+    # host or host/cidr, digits+dots+colon(ipv6)+slash only — no shell/newline.
+    if not re.match(r"^[0-9a-fA-F:.]+(/[0-9]{1,3})?$", v):
+        raise ValueError(f"invalid wireguard address: {v[:32]!r}")
+    return v
+
+
 def build_wireguard_config(clients: list[dict]) -> str:
     s0 = (clients[0].get("settings") or {}) if clients else {}
     port = int(s0.get("port", 51820) or 51820)
     if not (1 <= port <= 65535):
         port = 51820
-    priv = str(s0.get("privateKey") or s0.get("private_key") or WG_PRIVATE_KEY or "").strip()
+    priv = _wg_safe_key(str(s0.get("privateKey") or s0.get("private_key") or WG_PRIVATE_KEY or ""))
     if not priv:
         raise RuntimeError("wireguard: no private key in settings or XLINK_WG_PRIVATE_KEY")
-    addr = str(s0.get("address") or "10.8.0.1/24").strip()
+    addr = _wg_safe_addr(str(s0.get("address") or "10.8.0.1/24"))
     subnet = _wg_subnet(addr)
     post_up = (
         "WAN=$(ip route list default | awk '{print $5; exit}'); "
@@ -841,12 +863,19 @@ def build_wireguard_config(clients: list[dict]) -> str:
     seen_ips: set[str] = set()
     for cl in clients:
         creds = cl.get("credentials") or {}
-        pub = creds.get("public_key")
+        try:
+            pub = _wg_safe_key(str(creds.get("public_key") or ""))
+        except ValueError:
+            continue  # skip a peer with a malformed/injection-y key, don't poison the file
         if not pub:
             continue
         peer_addr = str(creds.get("address") or "").strip()
         ip = peer_addr.split("/")[0].strip()
         if not ip or ip == server_ip or ip in seen_ips:
+            continue
+        try:
+            _wg_safe_addr(ip)
+        except ValueError:
             continue
         seen_ips.add(ip)
         lines += ["", "[Peer]", f"PublicKey = {pub}", f"AllowedIPs = {ip}/32"]
@@ -1444,9 +1473,13 @@ def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
         if core not in CORES:
             return False, {"error": f"unknown or missing core {core!r}"}
         alias = {"sing-box": "singbox", "wireguard": "wg"}.get(core, core)
+        target = str(payload.get("target_version") or "").strip()
+        # Defense-in-depth: only a version token reaches the CLI (which re-splits
+        # it in a shell). Reject anything else so a crafted command can't inject.
+        if target and not re.match(r"^[A-Za-z0-9._-]+$", target):
+            return False, {"error": f"invalid target_version: {target[:32]!r}"}
         if not os.path.exists(_XLINK_CLI):
             return False, {"error": "xlink CLI not found"}
-        target = str(payload.get("target_version") or "").strip()
         cmd = [_XLINK_CLI, "core-update", alias]
         if target:
             cmd.append(target)

