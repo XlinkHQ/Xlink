@@ -19,8 +19,10 @@ services:
       XLINK_POSTGRES_DB: ${XLINK_POSTGRES_DB:-xlink}
       XLINK_REDIS_HOST: redis
       XLINK_REDIS_PORT: 6379
-      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
-      XLINK_WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+      # Empty by default → entrypoint auto-sizes workers to CPUs (DB-capped).
+      # Set WEB_CONCURRENCY in .env to pin it.
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-}
+      XLINK_WEB_CONCURRENCY: ${WEB_CONCURRENCY:-}
     ports:
       - "${XLINK_PORT:-8000}:8000"
       - "${XLINK_GRPC_PORT:-50051}:50051"

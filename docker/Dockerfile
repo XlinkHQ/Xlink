@@ -90,10 +90,10 @@ USER xlink
 EXPOSE 8000
 
 ENTRYPOINT ["entrypoint.sh"]
-# Gunicorn with uvicorn workers. Worker count comes from the WEB_CONCURRENCY env
-# (gunicorn reads it natively when --workers is omitted), the SAME value the
-# pool-safety check in config.py uses, so DB connection fan-out stays bounded.
-ENV WEB_CONCURRENCY=4
+# Gunicorn with uvicorn workers. Worker count is auto-sized to CPUs (capped by
+# the DB connection budget) by entrypoint.sh when WEB_CONCURRENCY is unset;
+# gunicorn reads WEB_CONCURRENCY natively once the entrypoint exports it. Pin it
+# explicitly (env / compose) to override the auto value.
 CMD ["gunicorn", "app.main:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--bind", "0.0.0.0:8000", \
