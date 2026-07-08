@@ -82,7 +82,8 @@ export function AdminDialog({
   const [subPrefix, setSubPrefix] = useState(admin?.subscription_url_prefix ?? "");
   const [enabled, setEnabled] = useState(admin?.is_active ?? true);
   const [canModify, setCanModify] = useState(admin?.modify_users_access ?? true);
-  const [sudo, setSudo] = useState(admin?.is_sudo ?? true);
+  // New admins default to NON-sudo (safe default); editing keeps the real value.
+  const [sudo, setSudo] = useState(admin?.is_sudo ?? false);
   const [allServices, setAllServices] = useState(admin?.all_groups_access ?? true);
   const [userLimit, setUserLimit] = useState(admin?.admin_user_limit?.toString() ?? "");
   const [trafficLimitGib, setTrafficLimitGib] = useState(

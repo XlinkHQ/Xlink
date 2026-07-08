@@ -211,7 +211,7 @@ class WebhookDispatcher:
         for url in self._urls:
             try:
                 await asyncio.to_thread(_post, url, payload, headers, self._secret)
-            except (urllib.error.URLError, OSError) as exc:
+            except (urllib.error.URLError, OSError, ValueError) as exc:
                 logger.warning("webhook_failed", url=url, error=str(exc))
         if self._discord:
             try:
@@ -221,7 +221,7 @@ class WebhookDispatcher:
                     {"content": self._text(payload)},
                     {},
                 )
-            except (urllib.error.URLError, OSError) as exc:
+            except (urllib.error.URLError, OSError, ValueError) as exc:
                 logger.warning("discord_webhook_failed", error=str(exc))
         if self.telegram_enabled:
             try:
@@ -235,5 +235,5 @@ class WebhookDispatcher:
             body = {"chat_id": chat_id, "text": text, "disable_web_page_preview": True}
             try:
                 await asyncio.to_thread(_post, url, body, {})
-            except (urllib.error.URLError, OSError) as exc:
+            except (urllib.error.URLError, OSError, ValueError) as exc:
                 logger.warning("telegram_notify_failed", chat_id=chat_id, error=str(exc))
