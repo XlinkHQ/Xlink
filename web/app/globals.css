@@ -5675,9 +5675,13 @@ input.switch:focus-visible {
 .warp-core-chip:hover { border-color: var(--border-emphasis, #939CA9); }
 .warp-core-chip.is-active { border-color: var(--accent); color: var(--accent); }
 .xlink-dark .warp-core-chip.is-active { border-color:#fff; color:#fff; }
-.warp-core-select { padding-right:26px; appearance:none; -webkit-appearance:none;
+.warp-core-select { padding-right:26px; min-width:104px; flex:none; appearance:none; -webkit-appearance:none;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
   background-repeat:no-repeat; background-position:right 8px center; }
+/* Keep every item in the core header on its own footprint so the Healthy badge
+   sits AFTER the selector, never overlapping it. */
+.warp-xray-head > * { flex: none; }
+.warp-xray-head .warp-badge { margin-left: 2px; }
 
 /* Routing rules — clean boxed rows (no dividers, soft surface like user rows) */
 .warp-rt-head { display:flex; align-items:center; gap:16px; margin-bottom:18px; }
