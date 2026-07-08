@@ -32,9 +32,22 @@ export function BrandingSettingsScreen() {
           <input className="warp-set-input" value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="https://…/logo.svg" />
         </SettingsRow>
         <SettingsRow label="Preview" hint="Current logo + name.">
-          <span className="flex items-center gap-2">
+          {/* Logos are often dark-on-transparent wordmarks that vanish on the
+              dark theme, so preview them on a fixed light chip that keeps them
+              legible in both themes. */}
+          <span
+            className="inline-flex items-center gap-2"
+            style={{
+              padding: "8px 12px",
+              borderRadius: "var(--radius-md)",
+              background: "#ffffff",
+              border: "1px solid var(--border-subtle)",
+            }}
+          >
             <img src={logo || "/xlink-logo.png"} alt="" style={{ height: 22 }} />
-            <span className="text-sm text-fg">{name || "XLink"}</span>
+            <span className="text-sm" style={{ color: "#303031" }}>
+              {name || "XLink"}
+            </span>
           </span>
         </SettingsRow>
       </SettingsSection>
