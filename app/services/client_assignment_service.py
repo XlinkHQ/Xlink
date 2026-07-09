@@ -393,13 +393,24 @@ class ClientAssignmentService:
         for (creds,) in rows.all():
             addr = (creds or {}).get("address") if isinstance(creds, dict) else None
             if isinstance(addr, str) and "." in addr:
-                tail = addr.split("/")[0].strip().rsplit(".", 1)[-1]
-                if tail.isdigit():
+                host = addr.split("/")[0].strip()
+                # Only exclude octets that belong to THIS /24; addresses from a
+                # different WG prefix on the same node (e.g. after a server
+                # address change) must not shrink this subnet's free pool.
+                other_head, _, tail = host.rpartition(".")
+                if other_head == prefix and tail.isdigit():
                     used.add(int(tail))
-        octet = 2
-        while octet in used and octet < 255:
-            octet += 1
-        return f"{prefix}.{octet}/32"
+        # .255 is the /24 broadcast address and must never be handed out. Fail
+        # loudly on exhaustion instead of returning a colliding/broadcast /32 —
+        # a returned .255 would be reused for every subsequent client.
+        for octet in range(2, 255):
+            if octet not in used:
+                return f"{prefix}.{octet}/32"
+        raise ValidationError(
+            "WireGuard address pool for this node is exhausted "
+            f"({prefix}.0/24 has no free host address).",
+            code="wireguard_pool_exhausted",
+        )
 
     async def _reserve_node_slot(self, node_id: uuid.UUID) -> bool:
         result = await self._repo.session.execute(

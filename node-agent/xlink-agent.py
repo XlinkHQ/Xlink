@@ -1096,9 +1096,14 @@ _WG_RELOAD_DEFAULT = (
     # always matches build_wireguard_config (no hardcoded 10.8.0.0/24).
     "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
     f"{WG_CONFIG_PATH} 2>/dev/null | "
-    "python3 -c 'import sys,ipaddress;\\n"
-    "a=sys.stdin.read().strip() or \"10.8.0.1/24\";\\n"
-    "a=a if \"/\" in a else a+\"/24\";\\n"
+    # Statements are ';'-separated on ONE line — no embedded newlines. A prior
+    # version used literal '\\n' sequences here, which python3 -c received as a
+    # backslash-n and rejected with SyntaxError, so WG_SUBNET was always empty
+    # and every node silently NAT'd the hardcoded 10.8.0.0/24 fallback instead
+    # of its real subnet.
+    "python3 -c 'import sys,ipaddress; "
+    "a=sys.stdin.read().strip() or \"10.8.0.1/24\"; "
+    "a=a if \"/\" in a else a+\"/24\"; "
     "print(ipaddress.ip_network(a,strict=False))' 2>/dev/null); "
     "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
     "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
