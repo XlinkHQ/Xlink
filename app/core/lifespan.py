@@ -31,9 +31,10 @@ from app.gitops.service import GitOpsService
 from app.middleware.audit_writer import AuditWriter
 from app.monitoring.summary import MetricsRefreshJob
 from app.notifications.job import NotificationJob
+from app.observability.collector import DomainMetricsCollector
 from app.providers.base.registry import ProviderRegistry
 from app.providers.discovery import build_registry
-from app.traffic.scheduler import TrafficRetentionJob
+from app.traffic.scheduler import TrafficRetentionJob, TrafficRollupJob
 from app.webhooks.dispatcher import WebhookDispatcher
 
 logger = get_logger("xlink.lifespan")
@@ -50,12 +51,14 @@ class AppState:
     cleanup_job: TokenCleanupJob | None = None
     metrics_job: MetricsRefreshJob | None = None
     traffic_retention_job: TrafficRetentionJob | None = None
+    traffic_rollup_job: TrafficRollupJob | None = None
     agent_reconcile_job: AgentReconcileJob | None = None
     assignment_expiration_job: AssignmentExpirationJob | None = None
     notification_job: NotificationJob | None = None
     node_agent_scheduler: NodeAgentScheduler | None = None
     backup_job: BackupJob | None = None
     audit_writer: AuditWriter | None = None
+    domain_metrics_collector: DomainMetricsCollector | None = None
 
 
 @asynccontextmanager
@@ -112,15 +115,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         metrics_job.start()
 
+    # Prometheus domain-gauge collector: only runs when the scrape endpoint is
+    # opted in (a token is configured). Leader-gated; reads the private metrics
+    # registry created for this app in create_app().
+    domain_metrics_collector: DomainMetricsCollector | None = None
+    prometheus = getattr(app.state, "prometheus", None)
+    if settings.metrics_token is not None and prometheus is not None:
+        domain_metrics_collector = DomainMetricsCollector(
+            db,
+            prometheus,
+            interval_seconds=settings.metrics_summary_refresh_seconds,
+            leader=leader,
+        )
+        domain_metrics_collector.start()
+
     traffic_retention_job: TrafficRetentionJob | None = None
     if settings.traffic_retention_enabled:
         traffic_retention_job = TrafficRetentionJob(
             db,
             interval_seconds=settings.traffic_retention_interval_seconds,
             retention_days=settings.traffic_retention_days,
+            raw_retention_days=settings.traffic_raw_retention_days,
             leader=leader,
         )
         traffic_retention_job.start()
+
+    traffic_rollup_job: TrafficRollupJob | None = None
+    if settings.traffic_rollup_enabled:
+        traffic_rollup_job = TrafficRollupJob(
+            db,
+            interval_seconds=settings.traffic_rollup_interval_seconds,
+            leader=leader,
+        )
+        traffic_rollup_job.start()
 
     dispatcher = WebhookDispatcher(settings)
 
@@ -243,12 +270,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         cleanup_job=cleanup_job,
         metrics_job=metrics_job,
         traffic_retention_job=traffic_retention_job,
+        traffic_rollup_job=traffic_rollup_job,
         agent_reconcile_job=agent_reconcile_job,
         assignment_expiration_job=assignment_expiration_job,
         notification_job=notification_job,
         node_agent_scheduler=node_agent_scheduler,
         backup_job=backup_job,
         audit_writer=audit_writer,
+        domain_metrics_collector=domain_metrics_collector,
     )
     logger.info("startup_complete")
 
@@ -264,6 +293,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await metrics_job.stop()
         if traffic_retention_job is not None:
             await traffic_retention_job.stop()
+        if traffic_rollup_job is not None:
+            await traffic_rollup_job.stop()
         if agent_reconcile_job is not None:
             await agent_reconcile_job.stop()
         if assignment_expiration_job is not None:
@@ -274,6 +305,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await node_agent_scheduler.stop()
         if backup_job is not None:
             await backup_job.stop()
+        if domain_metrics_collector is not None:
+            await domain_metrics_collector.stop()
         if audit_writer is not None:
             await audit_writer.stop()
         await events.drain()

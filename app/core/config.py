@@ -120,6 +120,19 @@ class Settings(BaseSettings):
 
     database_url_override: str | None = None
 
+    # OPTIONAL read-replica. Empty/None by default → NO second engine is created
+    # and every read uses the primary exactly as before. When set, pure read-only
+    # analytics/subscription reads are routed to the replica while all writes and
+    # read-after-write flows stay on the primary. database_url_replica_override
+    # wins over postgres_replica_host, mirroring database_url_override.
+    database_url_replica_override: str | None = None
+    postgres_replica_host: str = ""
+    postgres_replica_port: int | None = None
+    # Replica pool sizing. Falls back to the primary pool settings when unset so
+    # a replica can be enabled with a single host env and no extra tuning.
+    db_replica_pool_size: int | None = None
+    db_replica_max_overflow: int | None = None
+
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
@@ -164,6 +177,14 @@ class Settings(BaseSettings):
     metrics_summary_enabled: bool = True
     metrics_summary_ttl_seconds: int = 60
     metrics_summary_refresh_seconds: int = 30
+
+    # Prometheus scrape endpoint (GET /metrics), env var XLINK_METRICS_TOKEN.
+    # Opt-in and OFF by default: unset -> the endpoint is disabled (404). Set to
+    # a shared secret and the scraper must send `Authorization: Bearer <token>`.
+    # Kept separate from the admin API auth so a Prometheus server can scrape
+    # without an admin session, and separate from the internal agent /metrics
+    # INGEST and the admin /monitoring summary (different purpose/path).
+    metrics_token: SecretStr | None = None
 
     traffic_retention_enabled: bool = True
     # Rollup horizon: how long hourly aggregates are kept for analytics.
@@ -318,6 +339,32 @@ class Settings(BaseSettings):
                 path=self.postgres_db,
             )
         )
+
+    @property
+    def database_url_replica(self) -> str | None:
+        """URL of the OPTIONAL read replica, or None when no replica is configured
+        (the default). When None the app runs on a single engine, identical to
+        pre-replica behaviour. An explicit override wins; otherwise a replica is
+        built from postgres_replica_host reusing the primary's credentials/db and
+        (unless overridden) its port — only the host differs for a standby."""
+        if self.database_url_replica_override:
+            return self.database_url_replica_override
+        if not self.postgres_replica_host.strip():
+            return None
+        return str(
+            PostgresDsn.build(
+                scheme="postgresql+asyncpg",
+                username=self.postgres_user,
+                password=self.postgres_password.get_secret_value(),
+                host=self.postgres_replica_host,
+                port=self.postgres_replica_port or self.postgres_port,
+                path=self.postgres_db,
+            )
+        )
+
+    @property
+    def has_read_replica(self) -> bool:
+        return self.database_url_replica is not None
 
     @property
     def redis_url(self) -> str:

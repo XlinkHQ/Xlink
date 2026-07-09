@@ -37,8 +37,15 @@ def _as_hour_datetime(value) -> datetime:
 
 
 class TrafficRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self, session: AsyncSession, *, reader_session: AsyncSession | None = None
+    ) -> None:
         self.session = session
+        # OPTIONAL replica session for pure, lag-tolerant analytics reads (the
+        # SUM/series/by-node aggregations). None when no replica is configured →
+        # these reads use the primary session, identical to before. NEVER used
+        # for writes, ingest, rollup, or read-after-write-sensitive reads.
+        self.reader = reader_session or session
 
     async def apply_usage_deltas(self, deltas: dict[uuid.UUID, int]) -> None:
         if not deltas:
@@ -124,7 +131,7 @@ class TrafficRepository:
         # here counts SOURCE rows (rolled hour-buckets + raw samples), not raw
         # samples — a full raw sample count is no longer meaningful once rolled
         # buckets replace the samples that produced them.
-        boundary = await self._read_boundary()
+        boundary = await self._read_boundary(reader=True)
         src = self._unified_usage_ts_cte(boundary)
         coeff = func.coalesce(Node.usage_coefficient, 1.0)
         stmt = (
@@ -166,7 +173,7 @@ class TrafficRepository:
 
     async def totals(self) -> TrafficTotals:
         stmt = await self._weighted_totals_stmt()
-        total, up, down, count = (await self.session.execute(stmt)).one()
+        total, up, down, count = (await self.reader.execute(stmt)).one()
         return TrafficTotals(
             total_bytes=int(total),
             upload_bytes=int(up),
@@ -176,7 +183,7 @@ class TrafficRepository:
 
     async def totals_since(self, since: datetime) -> TrafficTotals:
         stmt = await self._weighted_totals_stmt(since=since)
-        total, up, down, count = (await self.session.execute(stmt)).one()
+        total, up, down, count = (await self.reader.execute(stmt)).one()
         return TrafficTotals(
             total_bytes=int(total),
             upload_bytes=int(up),
@@ -470,8 +477,12 @@ class TrafficRepository:
     # ------------------------------------------------------------------
     _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
-    async def _read_boundary(self) -> datetime:
-        wm = await self.get_rollup_watermark()
+    async def _read_boundary(self, *, reader: bool = False) -> datetime:
+        session = self.reader if reader else self.session
+        state = await session.get(TrafficRollupState, 1)
+        wm = state.hourly_watermark if state is not None else None
+        if wm is not None and wm.tzinfo is None:
+            wm = wm.replace(tzinfo=UTC)
         return wm if wm is not None else self._EPOCH
 
     def _unified_usage_cte(self, boundary: datetime):
@@ -502,12 +513,12 @@ class TrafficRepository:
         # Weight by the node's usage_coefficient so reported usage matches the
         # enforced counters (ClientAssignment.used_bytes is coefficient-adjusted
         # at ingest, while stored bytes are raw). Reads from the rollup+raw union.
-        src = self._unified_usage_cte(await self._read_boundary())
+        src = self._unified_usage_cte(await self._read_boundary(reader=True))
         weighted = func.coalesce(
             func.sum(src.c.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
         )
         rows = (
-            await self.session.execute(
+            await self.reader.execute(
                 select(Node.id, weighted)
                 .select_from(src)
                 .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
@@ -521,12 +532,12 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
-        src = self._unified_usage_cte(await self._read_boundary())
+        src = self._unified_usage_cte(await self._read_boundary(reader=True))
         weighted = func.coalesce(
             func.sum(src.c.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
         )
         rows = (
-            await self.session.execute(
+            await self.reader.execute(
                 select(ClientAssignment.user_id, weighted)
                 .select_from(src)
                 .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
@@ -542,12 +553,12 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
-        src = self._unified_usage_cte(await self._read_boundary())
+        src = self._unified_usage_cte(await self._read_boundary(reader=True))
         weighted = func.coalesce(
             func.sum(src.c.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
         )
         rows = (
-            await self.session.execute(
+            await self.reader.execute(
                 select(Node.id, Node.name, weighted)
                 .select_from(src)
                 .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
@@ -567,11 +578,11 @@ class TrafficRepository:
         # Hourly series: closed hours come pre-bucketed from traffic_hourly, the
         # current/not-yet-rolled window from raw records bucketed in Python. The
         # boundary keeps the two disjoint so no hour is counted from both.
-        boundary = await self._read_boundary()
+        boundary = await self._read_boundary(reader=True)
         buckets: dict[datetime, list[int]] = {}
 
         hourly_rows = (
-            await self.session.execute(
+            await self.reader.execute(
                 select(
                     TrafficHourly.hour_bucket,
                     TrafficHourly.upload_bytes,
@@ -593,7 +604,7 @@ class TrafficRepository:
             slot[1] += int(down or 0)
 
         raw_rows = (
-            await self.session.execute(
+            await self.reader.execute(
                 select(
                     TrafficRecord.collected_at,
                     TrafficRecord.upload_bytes,
@@ -629,10 +640,10 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
-        src = self._unified_usage_cte(await self._read_boundary())
+        src = self._unified_usage_cte(await self._read_boundary(reader=True))
         coeff = func.coalesce(Node.usage_coefficient, 1.0)
         total = (
-            await self.session.execute(
+            await self.reader.execute(
                 select(func.coalesce(func.sum(src.c.total_bytes * coeff), 0))
                 .select_from(src)
                 .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
@@ -651,7 +662,7 @@ class TrafficRepository:
         # the raw open window by calendar day. The boundary keeps the two
         # disjoint. Day grouping is done in Python so the two source shapes
         # (hour_bucket vs collected_at) fold into the same day key uniformly.
-        boundary = await self._read_boundary()
+        boundary = await self._read_boundary(reader=True)
         days: dict[str, list[int]] = {}
 
         def _add(ts: datetime, up: int, dn: int) -> None:
@@ -662,7 +673,7 @@ class TrafficRepository:
             slot[1] += int(dn or 0)
 
         hourly_rows = (
-            await self.session.execute(
+            await self.reader.execute(
                 select(
                     TrafficHourly.hour_bucket,
                     TrafficHourly.upload_bytes,
@@ -680,7 +691,7 @@ class TrafficRepository:
             _add(ts, up, dn)
 
         raw_rows = (
-            await self.session.execute(
+            await self.reader.execute(
                 select(
                     TrafficRecord.collected_at,
                     TrafficRecord.upload_bytes,

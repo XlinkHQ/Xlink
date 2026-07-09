@@ -24,8 +24,16 @@ class UserTrafficStats:
 
 
 class SubscriptionRepository:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self, session: AsyncSession, *, reader_session: AsyncSession | None = None
+    ) -> None:
         self._session = session
+        # OPTIONAL replica session for pure, lag-tolerant reads (subscription
+        # SOURCE listings). None when no replica is configured → reads use the
+        # primary session, identical to before. Never used for writes or for
+        # read-after-write-sensitive paths (quota/traffic-stats/on-hold), which
+        # stay on the primary session.
+        self._reader = reader_session or session
 
     async def get_status_texts(self) -> dict[str, str] | None:
         from app.domain.app_settings import SINGLETON_ID, AppSettings
@@ -150,7 +158,10 @@ class SubscriptionRepository:
             .where(*conditions)
             .order_by(ClientAssignment.created_at.desc(), ClientAssignment.id.desc())
         )
-        result = await self._session.execute(stmt)
+        # Pure read: safe to serve from the replica. selectinload issues its
+        # follow-up SELECT on the SAME (reader) session, so the eager load stays
+        # consistent within one snapshot.
+        result = await self._reader.execute(stmt)
         return tuple(
             SubscriptionSource(assignment=assignment, profile=profile, node=node)
             for assignment, profile, node in result.all()

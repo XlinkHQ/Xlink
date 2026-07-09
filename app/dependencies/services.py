@@ -14,6 +14,7 @@ from app.dependencies.core import (
     DispatcherDep,
     EventsDep,
     ProvidersDep,
+    ReaderSessionDep,
     SessionDep,
     SettingsDep,
 )
@@ -71,8 +72,13 @@ def get_assignment_repo(session: SessionDep) -> ClientAssignmentRepository:
     return ClientAssignmentRepository(session)
 
 
-def get_subscription_repo(session: SessionDep) -> SubscriptionRepository:
-    return SubscriptionRepository(session)
+def get_subscription_repo(
+    session: SessionDep, reader_session: ReaderSessionDep
+) -> SubscriptionRepository:
+    # reader_session routes only the pure source-listing reads to the replica
+    # (falls back to the primary when no replica is configured). Writes and
+    # read-after-write reads (quota/on-hold) stay on `session`.
+    return SubscriptionRepository(session, reader_session=reader_session)
 
 
 def get_node_agent_service(
@@ -163,8 +169,15 @@ def get_subscription_service(
     )
 
 
-def get_traffic_service(session: SessionDep, events: EventsDep, cache: CacheDep) -> TrafficService:
-    return TrafficService(session, events=events, cache=cache)
+def get_traffic_service(
+    session: SessionDep,
+    events: EventsDep,
+    cache: CacheDep,
+    reader_session: ReaderSessionDep,
+) -> TrafficService:
+    # reader_session carries the analytics SUM/series reads to the replica when
+    # configured; ingest/reset/rollup writes always use `session`.
+    return TrafficService(session, events=events, cache=cache, reader_session=reader_session)
 
 
 def get_monitoring_service(

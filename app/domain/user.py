@@ -72,8 +72,12 @@ class UserExpireStrategy(StrEnum):
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    email: Mapped[str | None] = mapped_column(String(320), nullable=True, unique=True)
-    username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    # Uniqueness is enforced by PARTIAL unique indexes (WHERE removed = false),
+    # declared in __table_args__ — NOT plain column uniqueness. A soft-deleted
+    # user (removed = true) frees its username/email for reuse by a live user,
+    # while two LIVE users still cannot collide.
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    username: Mapped[str] = mapped_column(String(64), nullable=False)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -173,6 +177,24 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user", lazy="noload")
 
     __table_args__ = (
+        # Partial unique indexes: uniqueness applies only to live (non-removed)
+        # rows so a soft-deleted user's username/email can be reused. Named to
+        # match the old constraints so IntegrityError-detail conflict mapping
+        # (repositories/user.py::_conflict_from_integrity) still resolves.
+        Index(
+            "uq_users_username",
+            "username",
+            unique=True,
+            postgresql_where=text("removed = false"),
+            sqlite_where=text("removed = 0"),
+        ),
+        Index(
+            "uq_users_email",
+            "email",
+            unique=True,
+            postgresql_where=text("removed = false"),
+            sqlite_where=text("removed = 0"),
+        ),
         Index("ix_users_email_active", "email", "is_active"),
         Index("ix_users_role", "role"),
         Index("ix_users_removed", "removed"),
