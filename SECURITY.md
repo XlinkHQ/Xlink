@@ -1,32 +1,26 @@
 # Security Policy
 
+XLink manages VPN infrastructure, user credentials, and subscription tokens.
+Security reports are treated as a priority and handled with care.
+
 ## Reporting a Vulnerability
 
-XLink manages VPN infrastructure, user credentials, and subscription tokens, so
-security reports are handled with priority. If you believe you have found a
-security issue, please disclose it responsibly by opening a private
+Please disclose security issues responsibly by opening a private
 [GitHub Security Advisory](https://github.com/XlinkHQ/Xlink/security/advisories/new).
 
-Please do not report vulnerabilities through public GitHub issues, discussions,
-or pull requests, and do not include live secrets, tokens, or personal data in
-your report.
+Do not report vulnerabilities through public issues, discussions, or pull
+requests, and never include live secrets, tokens, or personal data in a report.
 
-A good report identifies the affected component (panel API, web console, node
-agent, subscription/token layer, or deploy scripts), the version or commit, the
-impact, and steps to reproduce.
+A useful report describes:
 
-## Supported Versions
-
-Fixes are applied to the latest release on `main`. Older tags are not
-backported — upgrade to the current version.
-
-| Version | Supported |
-| ------- | --------- |
-| `1.x` (latest `main`) | ✅ |
-| `< 1.0` | ❌ |
+- the affected component — panel API, web console, node agent, subscription and
+  token layer, or the deploy scripts;
+- the version or commit it was found on;
+- the impact, and clear steps to reproduce it.
 
 ## What to Expect
 
 You will receive an acknowledgement within a few days. Confirmed issues are
-assessed and fixed on `main` as soon as practical, and you will be credited in
-the release notes if you wish.
+assessed and fixed on the `main` branch as soon as is practical, and you will be
+credited in the release notes if you would like to be. Fixes always land on the
+latest version, so the safest posture is to stay current.
