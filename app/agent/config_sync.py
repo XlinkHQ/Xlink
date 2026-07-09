@@ -485,15 +485,19 @@ class ConfigSyncService:
                     "used_bytes": int(user.users_data_usage or 0),
                 }
             )
-        core_templates = await self._core_templates()
         certs = await self._cert_map()
         for clients in result.values():
             self._attach_certs(clients, certs)
+        # Render core_templates PER NODE, not once for the whole batch: the
+        # per-node socks-out outbound (and its route.final) is injected only when
+        # the node is known. A batch-wide template omitted it, so a SOCKS-enabled
+        # node's reconcile config_version diverged from the one its poll path
+        # ships — permanent false drift and an endless self-heal storm.
         return {
             nid: {
                 "clients": clients,
                 "client_count": len(clients),
-                "core_templates": core_templates,
+                "core_templates": await self._core_templates(nid),
             }
             for nid, clients in result.items()
         }
