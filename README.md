@@ -100,14 +100,20 @@ secret admin path, generates fresh secrets into `.env`, pulls (or builds) the
 images, runs the database migrations, starts the full stack, and prints the panel
 URL together with a one-time admin password.
 
-Re-running the command updates an existing installation in place; your `.env` is
-preserved. Append `--build` to build the images locally instead of pulling them
-from the registry. To follow the steps manually instead of the one-liner, see
-[DEPLOY.md](DEPLOY.md).
+> [!TIP]
+> Re-running the same command updates an existing installation in place; your
+> `.env` is preserved. Append `--build` to build the images locally instead of
+> pulling them from the registry.
+
+To follow the steps manually instead of the one-liner, see [DEPLOY.md](DEPLOY.md).
 
 **Requirements:** a Linux host with Docker; roughly 2 GB RAM and 2 CPUs for a
 comfortable single-box install (the installer adds swap guidance for smaller
-hosts). Point a domain at the server first if you want automatic HTTPS.
+hosts).
+
+> [!NOTE]
+> Point a domain at the server first if you want automatic HTTPS — the bundled
+> edge proxy issues certificates through ACME once `XLINK_DOMAIN` is set.
 
 ## Operating the panel
 
@@ -172,8 +178,9 @@ adjusted are:
 | `XLINK_METRICS_TOKEN` | Enables the bearer-guarded Prometheus `/metrics` endpoint | disabled |
 | `XLINK_LOG_JSON` | Structured JSON logs (recommended in production) | `false` |
 
-Secrets live only in `.env` on the panel server. It is git-ignored and must never
-be committed.
+> [!IMPORTANT]
+> Secrets live only in `.env` on the panel server. It is git-ignored and must
+> never be committed.
 
 ## Development
 
@@ -199,9 +206,10 @@ uv run pytest                                  # backend test suite
 cd web && ./node_modules/.bin/tsc --noEmit     # web type checking
 ```
 
-Do not run `next build` during development: the dev server is expected to be
-running, and a parallel production build corrupts `.next`. Use `tsc --noEmit` to
-type-check the web app.
+> [!WARNING]
+> Do not run `next build` during development. The dev server is expected to be
+> running, and a parallel production build corrupts `.next`. Use `tsc --noEmit`
+> to type-check the web app.
 
 ## Repository layout
 

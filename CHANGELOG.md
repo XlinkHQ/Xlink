@@ -8,6 +8,22 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Optional PostgreSQL **read replica**: when a replica host is configured, heavy
+  lag-tolerant reads (traffic analytics and subscription source listings) are
+  routed to it, while writes, enforcement, and auth stay on the primary; a
+  replica outage transparently falls back to the primary.
+- Opt-in **Prometheus `/metrics`** endpoint (off unless `XLINK_METRICS_TOKEN` is
+  set; bearer-authenticated, constant-time compare). Exposes process, HTTP
+  request-count/latency, and domain gauges refreshed by a background collector so
+  scrapes never trigger database queries.
+- Hourly **traffic rollups** (`traffic_hourly` with a watermark): analytics read
+  closed-hour rollups unioned with the current raw hour, keeping queries fast as
+  data grows; raw records drop after 7 days, rollups keep the 90-day horizon.
+- Per-node agent **ingest quota** (Redis fixed-window, fail-open on a Redis
+  outage) that authenticates the node token before counting.
+- Installer prompts for a **choosable web UI port** (default `3000`) and an
+  optional **secret panel path** (`XLINK_WEB_PATH`) that serves the whole panel
+  under an unguessable prefix.
 - `docs/ARCHITECTURE.md` — system, auth, layering, agent-cycle, subscription and
   data-model diagrams (GitHub-native Mermaid).
 - Official Python SDK under `sdk/python/` (`xlink-sdk`): an API-key client for the
@@ -20,9 +36,24 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Gunicorn workers auto-size to the host CPUs, capped by the database connection
   budget (was a fixed 4).
+- Protocol definitions and the protocol×format capability matrix now come from a
+  single source of truth instead of allow-sets duplicated across renderers;
+  format-incompatible protocols are logged once per feed rather than dropped
+  silently.
 
 ### Fixed
 
+- **Security (subscription feed)** — a single malformed numeric profile setting
+  no longer 500s the entire feed, including the public `/sub/{token}` endpoint;
+  the bad config is skipped per-item instead of failing the whole render (fixes a
+  persistent denial-of-service vector).
+- **Failover** — a user with a historical assignment on the only viable target
+  node is no longer stranded (the stale row is cleared before re-insert), and
+  both nodes' user counts are recomputed from the live count; the auto-failover
+  cooldown map now prunes expired entries.
+- **Security (webhooks)** — the dispatcher no longer sends the raw secret as a
+  header (which defeated the HMAC signature); GitOps audit redaction covers more
+  secret key names.
 - Database backup downloads are gzipped (SQL compresses ~5–10×), so the download
   is fast; import transparently accepts both `.sql.gz` and older plain `.sql`.
 

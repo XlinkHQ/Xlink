@@ -1,6 +1,6 @@
 # xlink-sdk
 
-Official Python SDK for the [XLink](https://github.com/theok09/xlink) panel HTTP API.
+Official Python SDK for the [XLink](https://github.com/XlinkHQ/Xlink) panel HTTP API.
 Minimal, typed, and dependency-light (only `httpx`).
 
 ## Install

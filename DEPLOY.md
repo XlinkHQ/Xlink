@@ -26,10 +26,14 @@ cd /opt/xlink
 ./xlink.sh install          # generate .env + secrets, pull, migrate, start
 ```
 
-Open the firewall for the web port (default `3000`) and the API port
-(default `8000` — nodes connect here). For a domain + automatic HTTPS, set the
-domain in `.env` and the stack brings up the bundled Caddy edge proxy (the `tls`
-compose profile); otherwise it serves plain ports for local/IP use.
+The installer prompts for the web UI port (default `3000`), an optional secret
+panel path, and a domain for HTTPS; you can accept the defaults throughout.
+
+> [!NOTE]
+> Open the firewall for the web port (default `3000`) and the API port
+> (default `8000` — nodes connect here). For a domain and automatic HTTPS, set
+> the domain in `.env` and the stack brings up the bundled edge proxy (the `tls`
+> compose profile); otherwise it serves plain ports for local/IP use.
 
 ## Node server
 
@@ -55,8 +59,13 @@ compose profile); otherwise it serves plain ports for local/IP use.
 
 ## Notes
 
-- The API port must be reachable from every node server.
-- Secrets live in `.env` on the panel server — it is git-ignored; never commit it.
+> [!NOTE]
+> The API port must be reachable from every node server — nodes dial the panel,
+> not the other way around.
+
+> [!IMPORTANT]
+> Secrets live in `.env` on the panel server. It is git-ignored; never commit it.
+
 - Back up the database regularly: `xlink backup`.
 - `./xlink.sh` is the single install/update entrypoint on the panel; the curl
   one-liner above is just a bootstrap that hands off to it.

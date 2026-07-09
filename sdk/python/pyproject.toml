@@ -14,7 +14,7 @@ keywords = ["xlink", "vpn", "sdk", "api"]
 dependencies = ["httpx>=0.24"]
 
 [project.urls]
-Homepage = "https://github.com/theok09/xlink"
+Homepage = "https://github.com/XlinkHQ/Xlink"
 
 [tool.hatch.build.targets.wheel]
 packages = ["xlink_sdk"]
