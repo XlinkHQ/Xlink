@@ -107,19 +107,26 @@ class SubscriptionService:
         # recomputes once, not N times. The DB read + render is the expensive part;
         # the winner writes the cache and the rest re-read it.
         lock = self._inflight.setdefault(cache_key, asyncio.Lock())
-        async with lock:
-            try:
+        try:
+            async with lock:
                 cached = await self._read_cache(cache_key)
                 if cached is not None:
                     return cached
                 response = await self._render_feed(request)
                 await self._cache.set_json(cache_key, response.model_dump(mode="json"))
                 return response
-            finally:
-                # Drop the lock only if we're the last waiter, so the map doesn't
-                # grow unbounded with distinct keys over the process lifetime.
-                if not lock.locked() and self._inflight.get(cache_key) is lock:
-                    self._inflight.pop(cache_key, None)
+        finally:
+            # Evict the lock once we've released it AND no other coroutine is
+            # queued on it — otherwise the map grows by one Lock per distinct
+            # cache key (each epoch/revision bump mints new keys) and never
+            # shrinks. Checked OUTSIDE the `async with` so the lock is already
+            # released; `_waiters` being falsy means we were the last user.
+            if (
+                self._inflight.get(cache_key) is lock
+                and not lock.locked()
+                and not getattr(lock, "_waiters", None)
+            ):
+                self._inflight.pop(cache_key, None)
 
     async def _render_feed(self, request: FeedRequest) -> FeedRead:
         configs = await self._generate_feed_configs(request)

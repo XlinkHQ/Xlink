@@ -4,13 +4,12 @@ import asyncio
 import contextlib
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.core.leader import LeaderElector
 from app.core.logging import get_logger
 from app.db.redis import RedisCache
 from app.db.session import Database
-from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.user import User, UserRole
 from app.webhooks import events
 from app.webhooks.dispatcher import WebhookDispatcher
@@ -116,23 +115,14 @@ class NotificationJob:
         async with self._db.session() as session:
             if not await self._load_settings(session):
                 return 0
-            used_sub = (
-                select(
-                    ClientAssignment.user_id.label("uid"),
-                    func.coalesce(func.sum(ClientAssignment.used_bytes), 0).label("used"),
-                )
-                .where(ClientAssignment.status == AssignmentStatus.ACTIVE)
-                .group_by(ClientAssignment.user_id)
-                .subquery()
-            )
-            stmt = (
-                select(User, func.coalesce(used_sub.c.used, 0))
-                .outerjoin(used_sub, used_sub.c.uid == User.id)
-                .where(
-                    User.role == UserRole.USER,
-                    User.is_active.is_(True),
-                    User.removed.is_(False),
-                )
+            # Use the maintained account total (users_data_usage) — the SAME number
+            # enforcement and the UI use — NOT a sum over ACTIVE assignments: a user
+            # who crossed their limit flips to LIMITED, so an ACTIVE-only sum reads
+            # low and the "N% used" warning would fire late or never.
+            stmt = select(User, User.users_data_usage).where(
+                User.role == UserRole.USER,
+                User.is_active.is_(True),
+                User.removed.is_(False),
             )
             rows = (await session.execute(stmt)).all()
 

@@ -8,6 +8,8 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, listNodes, type NodeRead, restartPanel, systemStats, trafficSummary } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
 import { isNodeOnline, relativeTime } from "./nodes/util";
+import { chartTheme } from "./usage-chart";
+import { useTheme } from "@/lib/theme";
 
 const OS_LOGOS: Record<string, string> = {
   ubuntu: "/warp/os/ubuntu.png",
@@ -138,6 +140,7 @@ function ResourceCard({
 }
 
 export function DashboardScreen() {
+  const ct = chartTheme(useTheme() === "dark");
   const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 1000, refetchIntervalInBackground: false });
   const nodesQ = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes(), refetchInterval: 10000, refetchIntervalInBackground: false });
   const trafficQ = useQuery({ queryKey: ["traffic"], queryFn: () => trafficSummary(), refetchInterval: 10000, refetchIntervalInBackground: false });
@@ -208,7 +211,9 @@ export function DashboardScreen() {
       toolbar: { show: false },
       animations: { enabled: true, dynamicAnimation: { speed: 350 } },
       fontFamily: "var(--warp-font)",
+      foreColor: ct.axisText,
     },
+    theme: { mode: ct.mode },
     dataLabels: { enabled: false },
     stroke: { curve: "smooth", width: 2.5 },
     fill: {
@@ -217,19 +222,19 @@ export function DashboardScreen() {
     },
     colors: ["#3961DB", "#CC3C3C"],
     markers: { size: 0, hover: { size: 5 } },
-    grid: { borderColor: "rgba(128,128,128,0.15)", strokeDashArray: 4 },
-    legend: { show: true, position: "top", horizontalAlign: "right" },
+    grid: { borderColor: ct.grid, strokeDashArray: 4 },
+    legend: { show: true, position: "top", horizontalAlign: "right", labels: { colors: ct.axisText } },
     xaxis: {
       type: "datetime",
-      labels: { datetimeUTC: false, format: "HH:mm:ss", style: { fontSize: "11px" } },
+      labels: { datetimeUTC: false, format: "HH:mm:ss", style: { fontSize: "11px", colors: ct.axisText } },
     },
     yaxis: {
       min: 0,
       forceNiceScale: true,
-      labels: { formatter: (v) => fmtRate(v), style: { fontSize: "11px" } },
+      labels: { formatter: (v) => fmtRate(v), style: { fontSize: "11px", colors: ct.axisText } },
     },
     tooltip: {
-      theme: "light",
+      theme: ct.tooltip,
       x: { format: "HH:mm:ss" },
       y: { formatter: (v) => fmtRate(v) },
     },

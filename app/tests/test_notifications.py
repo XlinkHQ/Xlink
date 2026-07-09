@@ -77,6 +77,9 @@ async def _seed_user(
                     used_bytes=used,
                 )
             )
+            # The notification job reads the maintained account total, mirroring
+            # enforcement — keep it in sync with the seeded assignment usage.
+            user.users_data_usage = used
             await session.flush()
     return uid
 

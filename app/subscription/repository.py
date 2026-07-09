@@ -158,10 +158,12 @@ class SubscriptionRepository:
             .where(*conditions)
             .order_by(ClientAssignment.created_at.desc(), ClientAssignment.id.desc())
         )
-        # Pure read: safe to serve from the replica. selectinload issues its
-        # follow-up SELECT on the SAME (reader) session, so the eager load stays
-        # consistent within one snapshot.
-        result = await self._reader.execute(stmt)
+        # Use the PRIMARY, not the replica: a feed is cached under a revision that
+        # invalidation bumps immediately, but the replica may still lag behind the
+        # just-committed primary — reading it here would cache a stale config set
+        # under the new revision key and serve it until TTL. The replica is
+        # reserved for lag-tolerant analytics (SUM/series), not feed content.
+        result = await self._session.execute(stmt)
         return tuple(
             SubscriptionSource(assignment=assignment, profile=profile, node=node)
             for assignment, profile, node in result.all()

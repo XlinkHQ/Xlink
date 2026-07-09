@@ -145,12 +145,16 @@ function InboundsTab({
   const allOnPage = rows.length > 0 && rows.every((p) => selected.has(p.id));
 
   const persist = async (next: Set<string>) => {
+    const prev = selected;
     setSelected(next);
     setBusy(true);
     try {
       await updateGroup(group.id, { name: group.name, profile_ids: [...next] });
       onSaved();
     } catch (e) {
+      // Roll the checkbox back so the on-screen state matches the server after a
+      // failed save instead of showing the unsaved (optimistic) selection.
+      setSelected(prev);
       toast("error", e instanceof ApiError ? e.message : "Update failed.");
     } finally {
       setBusy(false);
