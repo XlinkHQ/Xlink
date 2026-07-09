@@ -46,7 +46,7 @@ class Group(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # Eager (selectin) so the collection is always populated when a Group is
     # loaded — keeps ``profile_ids`` serialization safe in the async router
     # context without a lazy-load round-trip.
-    profiles: Mapped[list["Profile"]] = relationship(
+    profiles: Mapped[list[Profile]] = relationship(
         "Profile", secondary=group_profiles, lazy="selectin"
     )
 

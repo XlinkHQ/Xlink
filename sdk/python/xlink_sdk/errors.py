@@ -32,7 +32,7 @@ class XLinkAPIError(XLinkError):
         super().__init__(f"[{status} {code}] {message}")
 
     @classmethod
-    def from_response(cls, status: int, body: Any) -> "XLinkAPIError":
+    def from_response(cls, status: int, body: Any) -> XLinkAPIError:
         code = "error"
         message = "Request failed."
         details: dict[str, Any] | None = None

@@ -47,7 +47,7 @@ class AppState:
     cache: RedisCache
     providers: ProviderRegistry
     events: EventBus
-    dispatcher: "WebhookDispatcher | None" = None
+    dispatcher: WebhookDispatcher | None = None
     cleanup_job: TokenCleanupJob | None = None
     metrics_job: MetricsRefreshJob | None = None
     traffic_retention_job: TrafficRetentionJob | None = None

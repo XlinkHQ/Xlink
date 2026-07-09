@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from xlink_sdk import XLinkClient, XLinkAPIError
+from xlink_sdk import XLinkAPIError, XLinkClient
 
 GIB = 2**30
 

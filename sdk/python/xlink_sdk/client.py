@@ -9,7 +9,7 @@ nodes/profiles/groups/assignments).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any, Union
 from uuid import UUID
 
 import httpx
@@ -36,7 +36,7 @@ def _uuid(value: _UUIDLike) -> str:
     return str(value)
 
 
-def _iso(value: Optional[datetime]) -> Optional[str]:
+def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
@@ -89,7 +89,7 @@ class XLinkClient:
     def close(self) -> None:
         self._http.close()
 
-    def __enter__(self) -> "XLinkClient":
+    def __enter__(self) -> XLinkClient:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -121,18 +121,18 @@ class XLinkClient:
         self,
         *,
         username: str,
-        email: Optional[str] = None,
-        password: Optional[str] = None,
-        full_name: Optional[str] = None,
-        data_limit_bytes: Optional[int] = None,
-        expire_at: Optional[datetime] = None,
-        data_reset_strategy: Optional[str] = None,
-        on_hold: Optional[bool] = None,
-        on_hold_duration_seconds: Optional[int] = None,
-        expire_strategy: Optional[str] = None,
-        activation_deadline: Optional[datetime] = None,
-        device_limit: Optional[int] = None,
-        profile_ids: Optional[list[_UUIDLike]] = None,
+        email: str | None = None,
+        password: str | None = None,
+        full_name: str | None = None,
+        data_limit_bytes: int | None = None,
+        expire_at: datetime | None = None,
+        data_reset_strategy: str | None = None,
+        on_hold: bool | None = None,
+        on_hold_duration_seconds: int | None = None,
+        expire_strategy: str | None = None,
+        activation_deadline: datetime | None = None,
+        device_limit: int | None = None,
+        profile_ids: list[_UUIDLike] | None = None,
     ) -> User:
         """`POST /users` — create an end user (201).
 
@@ -167,13 +167,13 @@ class XLinkClient:
     def list_users(
         self,
         *,
-        cursor: Optional[str] = None,
+        cursor: str | None = None,
         size: int = 50,
-        role: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        role: str | None = None,
+        is_active: bool | None = None,
         include_removed: bool = False,
-        search: Optional[str] = None,
-        sort: Optional[str] = None,
+        search: str | None = None,
+        sort: str | None = None,
     ) -> CursorPage:
         """`GET /users` — cursor-paginated list.
 
@@ -200,16 +200,16 @@ class XLinkClient:
         self,
         user_id: _UUIDLike,
         *,
-        full_name: Optional[str] = None,
-        data_limit_bytes: Optional[int] = None,
-        expire_at: Optional[datetime] = None,
-        data_reset_strategy: Optional[str] = None,
-        on_hold: Optional[bool] = None,
-        on_hold_duration_seconds: Optional[int] = None,
-        expire_strategy: Optional[str] = None,
-        activation_deadline: Optional[datetime] = None,
-        device_limit: Optional[int] = None,
-        pinned_node_ids: Optional[list[_UUIDLike]] = None,
+        full_name: str | None = None,
+        data_limit_bytes: int | None = None,
+        expire_at: datetime | None = None,
+        data_reset_strategy: str | None = None,
+        on_hold: bool | None = None,
+        on_hold_duration_seconds: int | None = None,
+        expire_strategy: str | None = None,
+        activation_deadline: datetime | None = None,
+        device_limit: int | None = None,
+        pinned_node_ids: list[_UUIDLike] | None = None,
     ) -> User:
         """`PATCH /users/{user_id}` — update quota / limits."""
 
@@ -336,7 +336,7 @@ class XLinkClient:
     # =====================================================================
 
     def list_nodes(
-        self, *, cursor: Optional[str] = None, size: int = 50, status: Optional[str] = None
+        self, *, cursor: str | None = None, size: int = 50, status: str | None = None
     ) -> CursorPage:
         """`GET /nodes` — cursor-paginated list of :class:`Node`. ``status`` is
         the ``status_filter`` query param (active/disabled/offline)."""
@@ -358,11 +358,11 @@ class XLinkClient:
     def list_profiles(
         self,
         *,
-        cursor: Optional[str] = None,
+        cursor: str | None = None,
         size: int = 50,
-        provider_kind: Optional[str] = None,
-        node_id: Optional[_UUIDLike] = None,
-        is_active: Optional[bool] = None,
+        provider_kind: str | None = None,
+        node_id: _UUIDLike | None = None,
+        is_active: bool | None = None,
     ) -> CursorPage:
         """`GET /profiles` — cursor-paginated list of :class:`Profile`."""
 
@@ -408,10 +408,10 @@ class XLinkClient:
         user_id: _UUIDLike,
         profile_id: _UUIDLike,
         provider_kind: str,
-        node_id: Optional[_UUIDLike] = None,
-        expires_at: Optional[datetime] = None,
-        traffic_limit_bytes: Optional[int] = None,
-        group_id: Optional[_UUIDLike] = None,
+        node_id: _UUIDLike | None = None,
+        expires_at: datetime | None = None,
+        traffic_limit_bytes: int | None = None,
+        group_id: _UUIDLike | None = None,
     ) -> Assignment:
         """`POST /assignments` — bind a user to a profile/inbound (201)."""
 
@@ -431,13 +431,13 @@ class XLinkClient:
     def list_assignments(
         self,
         *,
-        cursor: Optional[str] = None,
+        cursor: str | None = None,
         size: int = 50,
-        user_id: Optional[_UUIDLike] = None,
-        profile_id: Optional[_UUIDLike] = None,
-        node_id: Optional[_UUIDLike] = None,
-        provider_kind: Optional[str] = None,
-        status: Optional[str] = None,
+        user_id: _UUIDLike | None = None,
+        profile_id: _UUIDLike | None = None,
+        node_id: _UUIDLike | None = None,
+        provider_kind: str | None = None,
+        status: str | None = None,
     ) -> CursorPage:
         """`GET /assignments` — cursor-paginated list of :class:`Assignment`."""
 

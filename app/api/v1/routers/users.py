@@ -22,8 +22,8 @@ from app.dependencies.services import (
 )
 from app.domain.user import User, UserRole
 from app.repositories.user import UserRepository
-from app.schemas.pagination import CursorPage, CursorParams, Page, PaginationParams
 from app.schemas.client_assignment import AssignmentCreate
+from app.schemas.pagination import CursorPage, CursorParams, Page, PaginationParams
 from app.schemas.user import AdminUpdate, UserCreate, UserRead, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])

@@ -688,7 +688,7 @@ class UserService:
         *,
         admin: User,
         data_limit_bytes: int | None = None,
-        expire_at: "datetime | None" = None,
+        expire_at: datetime | None = None,
         extend_days: int | None = None,
         data_reset_strategy: str | None = None,
     ) -> dict[str, int]:

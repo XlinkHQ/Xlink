@@ -10,19 +10,19 @@ from __future__ import annotations
 
 import datetime as _dt
 from dataclasses import dataclass, field, fields
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 from uuid import UUID
 
 T = TypeVar("T", bound="_Model")
 
 
-def _parse_uuid(value: Any) -> Optional[UUID]:
+def _parse_uuid(value: Any) -> UUID | None:
     if value is None or isinstance(value, UUID):
         return value
     return UUID(str(value))
 
 
-def _parse_dt(value: Any) -> Optional[_dt.datetime]:
+def _parse_dt(value: Any) -> _dt.datetime | None:
     if value is None or isinstance(value, _dt.datetime):
         return value
     # Pydantic emits ISO-8601; accept a trailing "Z".
@@ -70,18 +70,18 @@ class User(_Model):
 
     id: UUID = _uuid_field()
     username: str = ""
-    email: Optional[str] = None
-    full_name: Optional[str] = None
+    email: str | None = None
+    full_name: str | None = None
     role: str = "user"
     is_active: bool = True
     is_verified: bool = False
-    data_limit_bytes: Optional[int] = None
-    expire_at: Optional[_dt.datetime] = _dt_field(default=None)
+    data_limit_bytes: int | None = None
+    expire_at: _dt.datetime | None = _dt_field(default=None)
     data_reset_strategy: str = "no_reset"
     on_hold: bool = False
     expire_strategy: str = "never"
-    activation_deadline: Optional[_dt.datetime] = _dt_field(default=None)
-    device_limit: Optional[int] = None
+    activation_deadline: _dt.datetime | None = _dt_field(default=None)
+    device_limit: int | None = None
     pinned_node_ids: list[UUID] = _uuid_list_field(default_factory=list)
     removed: bool = False
     is_sudo: bool = False
@@ -89,14 +89,14 @@ class User(_Model):
     modify_users_access: bool = False
     totp_enabled: bool = False
     users_data_usage: int = 0
-    owner_id: Optional[UUID] = _uuid_field(default=None)
-    subscription_url_prefix: Optional[str] = None
-    admin_user_limit: Optional[int] = None
-    admin_traffic_limit_bytes: Optional[int] = None
-    sub_updated_at: Optional[_dt.datetime] = _dt_field(default=None)
-    sub_last_user_agent: Optional[str] = None
-    created_at: Optional[_dt.datetime] = _dt_field(default=None)
-    updated_at: Optional[_dt.datetime] = _dt_field(default=None)
+    owner_id: UUID | None = _uuid_field(default=None)
+    subscription_url_prefix: str | None = None
+    admin_user_limit: int | None = None
+    admin_traffic_limit_bytes: int | None = None
+    sub_updated_at: _dt.datetime | None = _dt_field(default=None)
+    sub_last_user_agent: str | None = None
+    created_at: _dt.datetime | None = _dt_field(default=None)
+    updated_at: _dt.datetime | None = _dt_field(default=None)
 
 
 @dataclass
@@ -153,17 +153,17 @@ class Node(_Model):
     host: str = ""
     port: int = 0
     status: str = "active"
-    last_seen_at: Optional[_dt.datetime] = _dt_field(default=None)
+    last_seen_at: _dt.datetime | None = _dt_field(default=None)
     max_users: int = 0
     current_users: int = 0
     usage_coefficient: float = 1.0
     socks_enabled: bool = False
-    socks_address: Optional[str] = None
-    socks_username: Optional[str] = None
+    socks_address: str | None = None
+    socks_username: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     version: int = 1
-    created_at: Optional[_dt.datetime] = _dt_field(default=None)
-    updated_at: Optional[_dt.datetime] = _dt_field(default=None)
+    created_at: _dt.datetime | None = _dt_field(default=None)
+    updated_at: _dt.datetime | None = _dt_field(default=None)
 
 
 @dataclass
@@ -179,8 +179,8 @@ class Profile(_Model):
     settings: dict[str, Any] = field(default_factory=dict)
     is_active: bool = True
     version: int = 1
-    created_at: Optional[_dt.datetime] = _dt_field(default=None)
-    updated_at: Optional[_dt.datetime] = _dt_field(default=None)
+    created_at: _dt.datetime | None = _dt_field(default=None)
+    updated_at: _dt.datetime | None = _dt_field(default=None)
 
 
 @dataclass
@@ -192,8 +192,8 @@ class Group(_Model):
     slug: str = ""
     profile_ids: list[UUID] = _uuid_list_field(default_factory=list)
     version: int = 1
-    created_at: Optional[_dt.datetime] = _dt_field(default=None)
-    updated_at: Optional[_dt.datetime] = _dt_field(default=None)
+    created_at: _dt.datetime | None = _dt_field(default=None)
+    updated_at: _dt.datetime | None = _dt_field(default=None)
 
 
 @dataclass
@@ -205,14 +205,14 @@ class Assignment(_Model):
     profile_id: UUID = _uuid_field(default=None)  # type: ignore[assignment]
     node_id: UUID = _uuid_field(default=None)  # type: ignore[assignment]
     provider_kind: str = "xray"
-    provider_client_id: Optional[str] = None
+    provider_client_id: str | None = None
     status: str = "active"
-    expires_at: Optional[_dt.datetime] = _dt_field(default=None)
-    traffic_limit_bytes: Optional[int] = None
+    expires_at: _dt.datetime | None = _dt_field(default=None)
+    traffic_limit_bytes: int | None = None
     used_bytes: int = 0
     version: int = 1
-    created_at: Optional[_dt.datetime] = _dt_field(default=None)
-    updated_at: Optional[_dt.datetime] = _dt_field(default=None)
+    created_at: _dt.datetime | None = _dt_field(default=None)
+    updated_at: _dt.datetime | None = _dt_field(default=None)
 
 
 @dataclass
@@ -224,5 +224,5 @@ class CursorPage(_Model):
     """
 
     items: list[Any] = field(default_factory=list)
-    next_cursor: Optional[str] = None
+    next_cursor: str | None = None
     size: int = 0

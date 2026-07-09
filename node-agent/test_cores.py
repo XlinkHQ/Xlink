@@ -33,7 +33,7 @@ def validate_xray():
                         "settings": s,
                     }
                 )
-                combos.append("%s/%s/%s" % (proto, net, sec))
+                combos.append("{}/{}/{}".format(proto, net, sec))
     keys = subprocess.run(["xray", "x25519"], capture_output=True, text=True).stdout
     priv = ""
     for line in keys.splitlines():
@@ -58,7 +58,7 @@ def validate_xray():
                     "settings": s,
                 }
             )
-            combos.append("%s/%s/reality" % (proto, net))
+            combos.append("{}/{}/reality".format(proto, net))
     cfg = m.build_xray_config(clients)
     inbound_count = len(cfg["inbounds"]) - 1
     print("XRAY: built %d inbounds for %d combos" % (inbound_count, len(combos)))
@@ -99,7 +99,7 @@ def validate_singbox():
                     "settings": s,
                 }
             )
-            combos.append("%s/%s" % (proto, net))
+            combos.append("{}/{}".format(proto, net))
     cfg = m.build_singbox_config(clients)
     print("\nSING-BOX: built %d inbounds for %d combos" % (len(cfg["inbounds"]), len(combos)))
     f = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
@@ -161,8 +161,7 @@ def validate_others():
     os.unlink(f.name)
     started = "server up and running" in (r.stdout + r.stderr)
     print(
-        "  RESULT: %s (real hysteria server %s)"
-        % ("VALID" if started else "INVALID", "started + ran the config" if started else "rejected")
+        "  RESULT: {} (real hysteria server {})".format("VALID" if started else "INVALID", "started + ran the config" if started else "rejected")
     )
 
 

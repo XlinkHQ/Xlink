@@ -35,7 +35,7 @@ class ProviderKind(StrEnum):
 # asserts the two stay in sync.
 
 
-def protocols_for(kind: "ProviderKind") -> frozenset[str]:
+def protocols_for(kind: ProviderKind) -> frozenset[str]:
     from app.protocols import protocols_for as _protocols_for
 
     return _protocols_for(kind)

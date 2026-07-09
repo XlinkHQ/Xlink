@@ -159,7 +159,7 @@ class ProfileService:
 
     async def _restore_profile_disabled_assignments(self, profile_id: uuid.UUID) -> None:
         """Re-activate assignments this profile's disable() cut, on re-enable."""
-        from sqlalchemy import func, select, update
+        from sqlalchemy import select, update
 
         from app.domain.node import Node
 

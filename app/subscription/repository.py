@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.client_assignment import AssignmentStatus, ClientAssignment
+from app.domain.client_assignment import ClientAssignment
 from app.domain.node import Node
 from app.domain.profile import Profile
 from app.domain.user import User

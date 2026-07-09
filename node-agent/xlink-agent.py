@@ -12,9 +12,9 @@ import subprocess
 import sys
 import threading
 import time
-import uuid
 import urllib.error
 import urllib.request
+import uuid
 from datetime import UTC, datetime
 
 PANEL_URL = os.environ.get("XLINK_PANEL_URL", "http://localhost:8000").rstrip("/")

@@ -94,7 +94,7 @@ class _BlockedSubscriptionError(Exception):
 
 
 @lru_cache(maxsize=256)
-def _compiled_rule(pattern: str) -> "re.Pattern[str] | None":
+def _compiled_rule(pattern: str) -> re.Pattern[str] | None:
     # Compile once per distinct pattern instead of re.match() recompiling on every
     # public-subscription hit (highest-traffic endpoint; up to 64 rules/request).
     try:

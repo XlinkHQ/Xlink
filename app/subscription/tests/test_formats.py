@@ -212,6 +212,7 @@ def test_bad_int_setting_skips_config_not_feed():
     that config, never 500 the whole feed (public endpoint DoS guard)."""
     import uuid
     from types import MappingProxyType
+
     from app.subscription.models import ProviderConfig
     from app.subscription.renderer import SubscriptionRenderer
     from app.subscription.schemas import RenderVersion, SubscriptionFormat

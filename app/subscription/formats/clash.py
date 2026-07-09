@@ -4,7 +4,13 @@ from typing import Any
 
 import yaml
 
-from app.subscription.formats.base import FormatRenderError, label, setting, setting_int, validate_node
+from app.subscription.formats.base import (
+    FormatRenderError,
+    label,
+    setting,
+    setting_int,
+    validate_node,
+)
 from app.subscription.formats.capabilities import supported_protocols
 from app.subscription.models import ProviderConfig
 from app.subscription.schemas import SubscriptionFormat
