@@ -12,6 +12,11 @@ This module centralises the protocol x format matrix so the renderers derive
 their allow-sets from here, and so ``render_feed`` can compute *structural*
 drops up front and LOG them instead of swallowing them.
 
+The *set of protocols that exist at all* is defined once in ``app.protocols``;
+this matrix says which of those each FORMAT can carry. ``test_protocol_source``
+asserts every protocol named in this matrix is a known protocol there, and that
+every subscription protocol there is carried by at least one format here.
+
 The matrix must match what the renderers actually emit today (verified by
 ``test_capability_matrix.py``). It is NOT a place to change behaviour: adding a
 protocol here without teaching the renderer to emit it, or vice versa, is a bug
