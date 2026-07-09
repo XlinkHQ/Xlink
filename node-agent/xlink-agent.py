@@ -687,8 +687,16 @@ def build_xray_config(clients: list[dict]) -> dict:
     }
     api_rule = {"type": "field", "inboundTag": ["api"], "outboundTag": "api"}
     core = _xray_core if isinstance(_xray_core, dict) else {}
+    # Always force the error-log FILE path onto whatever log block the core
+    # template provides. A template that sets `log` without `error` (or with no
+    # log block at all) would otherwise leave xray writing to stderr/journald,
+    # so /var/log/xray/error.log stays empty and the panel shows "No logs
+    # reported by this node yet." Merge, don't replace.
+    log_block = dict(core.get("log") or {})
+    log_block.setdefault("loglevel", "warning")
+    log_block["error"] = XRAY_ERROR_LOG
     config: dict = {
-        "log": core.get("log", {"loglevel": "warning", "error": XRAY_ERROR_LOG}),
+        "log": log_block,
         "stats": {},
         "policy": core.get(
             "policy",
@@ -1394,6 +1402,13 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
     tmp = f"{root}.tmp{ext}"
     backup = f"{root}.bak{ext}"
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    # xray only writes its error log if the target directory already exists;
+    # without this it silently logs nowhere and the panel shows "No logs
+    # reported by this node yet". Best-effort — a read-only FS just means logs
+    # stay empty, not a failed apply.
+    if kind == "xray":
+        with contextlib.suppress(OSError):
+            os.makedirs(os.path.dirname(XRAY_ERROR_LOG) or ".", exist_ok=True)
     _write(tmp, core["builder"](core_clients), core["fmt"])
 
     validate = core.get("validate")
