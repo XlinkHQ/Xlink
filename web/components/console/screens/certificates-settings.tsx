@@ -64,14 +64,14 @@ export function CertificatesSettingsScreen() {
       >
         <div className="warp-cert-actions">
           <button type="button" className="warp-tb-button" onClick={() => setUploadOpen(true)}>
-            <Upload size={14} /> Upload certificate
+            <Upload size={14} aria-hidden /> Upload certificate
           </button>
           <button
             type="button"
             className="warp-tb-button warp-tb-button-primary"
             onClick={() => setAcmeOpen(true)}
           >
-            <Plus size={14} /> Get Let's Encrypt
+            <Plus size={14} aria-hidden /> Get Let's Encrypt
           </button>
         </div>
 

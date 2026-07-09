@@ -107,7 +107,7 @@ export function GroupDialog({
                 onClick={() => toggle(p.id)}
                 className={`warp-pin-chip ${selected.has(p.id) ? "is-on" : ""}`}
               >
-                {selected.has(p.id) ? <Check size={10} /> : null}
+                {selected.has(p.id) ? <Check size={10} aria-hidden /> : null}
                 {p.name} · {p.protocol} @ {nodeName(p.node_id)}
               </button>
             ))

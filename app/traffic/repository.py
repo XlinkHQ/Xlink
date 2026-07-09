@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, delete, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -37,6 +37,14 @@ def _as_hour_datetime(value) -> datetime:
 
 
 class TrafficRepository:
+    # Minimum lifetime for the idempotency ledger (ProcessedBatch), in days.
+    # Floors the ledger GC so a node offline up to this long cannot re-deliver a
+    # WAL batch whose ledger row was already purged (→ double-count). MUST stay
+    # comfortably ABOVE the agent's WAL age cap (XLINK_WAL_MAX_AGE_DAYS, default
+    # 30d): the WAL can never hold a batch older than its cap, and the ledger
+    # always remembers batches at least this long, so the windows never cross.
+    _LEDGER_MIN_RETENTION_DAYS = 90
+
     def __init__(
         self, session: AsyncSession, *, reader_session: AsyncSession | None = None
     ) -> None:
@@ -267,8 +275,20 @@ class TrafficRepository:
         # Keep the idempotency ledger LONGER than the records it guards. If a node
         # is offline past the record-retention window and still holds buffered WAL,
         # purging both the records AND its batch_ids at the same cutoff lets the
-        # re-delivered batch look brand-new → double-count. Retain ledger 2× longer.
-        ledger_cutoff = cutoff - (datetime.now(UTC) - cutoff)
+        # re-delivered batch look brand-new → double-count.
+        #
+        # `cutoff` here is the RAW cutoff (min(raw_retention, rollup watermark)),
+        # which collapses to a few hours once rollups run steadily — so a naive
+        # "2×(now-cutoff)" ledger window can shrink to hours and stop protecting
+        # against a long-offline node. Floor the ledger horizon at a fixed minimum
+        # (_LEDGER_MIN_RETENTION_DAYS) so a node offline up to that many days can
+        # never re-deliver a batch whose ledger row was already GC'd. The agent's
+        # WAL age cap (XLINK_WAL_MAX_AGE_DAYS, default 30d) is kept well under this
+        # floor, so the two windows can never cross.
+        now = datetime.now(UTC)
+        two_x_cutoff = cutoff - (now - cutoff)
+        floor_cutoff = now - timedelta(days=self._LEDGER_MIN_RETENTION_DAYS)
+        ledger_cutoff = min(two_x_cutoff, floor_cutoff)
         await self.session.execute(
             delete(ProcessedBatch).where(ProcessedBatch.created_at < ledger_cutoff)
         )

@@ -20,9 +20,9 @@ export function CopyValue({ value, label }: { value: string; label?: string }) {
     >
       <span className="truncate font-mono text-[11px] text-fg">{label ?? value}</span>
       {copied ? (
-        <Check className="h-3 w-3 flex-none text-success" />
+        <Check className="h-3 w-3 flex-none text-success" aria-hidden />
       ) : (
-        <Copy className="h-3 w-3 flex-none" />
+        <Copy className="h-3 w-3 flex-none" aria-hidden />
       )}
     </button>
   );

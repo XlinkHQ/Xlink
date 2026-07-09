@@ -70,7 +70,7 @@ export function AuditLogScreen() {
                 }}
                 aria-label="Clear dates"
               >
-                <X size={13} />
+                <X size={13} aria-hidden />
               </button>
             ) : null}
           </div>

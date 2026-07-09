@@ -64,13 +64,14 @@ export function WarpMenu({ items, label }: { items: WarpMenuItem[]; label?: stri
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
         >
-          <Menu size={14} /> {label}
+          <Menu size={14} aria-hidden /> {label}
         </button>
       ) : (
         <button
           ref={btnRef}
           type="button"
           title="More options"
+          aria-label="More options"
           className="warp-tb-rowicon"
           aria-haspopup="menu"
           aria-expanded={open}
@@ -264,7 +265,7 @@ export function WarpEmpty({
       <p className="warp-tb-empty-text">{children}</p>
       {cta ? (
         <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={cta.onClick}>
-          <Plus size={14} /> {cta.label}
+          <Plus size={14} aria-hidden /> {cta.label}
         </button>
       ) : null}
     </div>

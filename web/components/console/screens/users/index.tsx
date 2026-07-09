@@ -117,7 +117,7 @@ function SortTh({
     <button type="button" className={`warp-th-sort${active ? " is-active" : ""}`} onClick={() => onSort(col)}>
       <span>{label}</span>
       {active ? (
-        sortDir === "asc" ? <ChevronUp size={13} strokeWidth={2} /> : <ChevronDown size={13} strokeWidth={2} />
+        sortDir === "asc" ? <ChevronUp size={13} strokeWidth={2} aria-hidden /> : <ChevronDown size={13} strokeWidth={2} aria-hidden />
       ) : null}
     </button>
   );
@@ -383,22 +383,22 @@ export function UsersScreen() {
           <span className="warp-bulk-count">{selected.size} selected</span>
           <span className="warp-bulk-sep" />
           <button type="button" className="warp-tb-button" onClick={() => bulkServer("enable", "Enabled")}>
-            <Power size={14} /> Enable
+            <Power size={14} aria-hidden /> Enable
           </button>
           <button type="button" className="warp-tb-button" onClick={() => bulkServer("disable", "Disabled")}>
-            <Power size={14} /> Disable
+            <Power size={14} aria-hidden /> Disable
           </button>
           <button type="button" className="warp-tb-button" onClick={() => bulkServer("reset_usage", "Usage reset")}>
-            <RotateCcw size={14} /> Reset usage
+            <RotateCcw size={14} aria-hidden /> Reset usage
           </button>
           <button type="button" className="warp-tb-button" onClick={() => setBulkEdit("limit")}>
-            <Gauge size={14} /> Data limit
+            <Gauge size={14} aria-hidden /> Data limit
           </button>
           <button type="button" className="warp-tb-button" onClick={() => setBulkEdit("expiry")}>
-            <CalendarClock size={14} /> Expiry
+            <CalendarClock size={14} aria-hidden /> Expiry
           </button>
           <button type="button" className="warp-tb-button" onClick={() => setBulkEdit("reset")}>
-            <RefreshCw size={14} /> Auto-reset
+            <RefreshCw size={14} aria-hidden /> Auto-reset
           </button>
           <button
             type="button"
@@ -408,7 +408,7 @@ export function UsersScreen() {
                 bulkServer("delete", "Deleted");
             }}
           >
-            <Trash size={14} /> Delete
+            <Trash size={14} aria-hidden /> Delete
           </button>
           <button type="button" className="warp-tb-button warp-bulk-clear" onClick={clearSel}>Clear</button>
         </div>
@@ -440,7 +440,7 @@ export function UsersScreen() {
           </label>
           <SearchBox value={search} onChange={setSearch} placeholder="Find user" />
           <WarpButton primary onClick={() => setCreating(true)}>
-            <DgAddUser size={18} /> Add new user
+            <DgAddUser size={18} aria-hidden /> Add new user
           </WarpButton>
         </div>
       </div>
@@ -657,13 +657,13 @@ function UserProfileView({
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button type="button" className="warp-tb-button" onClick={() => setEditing(true)}>
-              <Pencil size={14} /> Edit
+              <Pencil size={14} aria-hidden /> Edit
             </button>
             <button type="button" className="warp-tb-button" onClick={onReset}>
-              <RotateCcw size={14} /> Reset usage
+              <RotateCcw size={14} aria-hidden /> Reset usage
             </button>
             <button type="button" className="warp-tb-button" onClick={onToggle}>
-              <Power size={14} /> {user.is_active ? "Disable" : "Enable"}
+              <Power size={14} aria-hidden /> {user.is_active ? "Disable" : "Enable"}
             </button>
           </div>
         </div>

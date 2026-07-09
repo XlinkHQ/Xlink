@@ -235,7 +235,7 @@ export function SubscriptionSettingsScreen() {
         <div className="flex items-center justify-end gap-1.5">
           {customHtml.trim() ? <WarpBadge tone="green">Custom</WarpBadge> : <WarpBadge tone="gray">Default</WarpBadge>}
           <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={() => setEditorOpen(true)}>
-            <Pencil size={14} /> Edit
+            <Pencil size={14} aria-hidden /> Edit
           </button>
         </div>
       </SettingsSection>
@@ -260,7 +260,7 @@ export function SubscriptionSettingsScreen() {
               className="warp-tb-button"
               onClick={() => setRules((r) => [...r, { pattern: "", result: "links" }])}
             >
-              <Plus size={14} /> Add rule
+              <Plus size={14} aria-hidden /> Add rule
             </button>
           </div>
           <div className="flex flex-col gap-2">
@@ -405,11 +405,11 @@ function CustomPageEditor({
         </div>
         {draft.trim() ? (
           <button type="button" className="warp-tb-button" onClick={() => setDraft("")}>
-            <RotateCcw size={14} /> Clear
+            <RotateCcw size={14} aria-hidden /> Clear
           </button>
         ) : (
           <button type="button" className="warp-tb-button" onClick={() => setDraft(CUSTOM_PAGE_STARTER)}>
-            <Sparkles size={14} /> Starter
+            <Sparkles size={14} aria-hidden /> Starter
           </button>
         )}
       </div>

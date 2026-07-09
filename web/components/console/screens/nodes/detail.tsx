@@ -174,7 +174,7 @@ export function NodeDetail({
               onClick={onEdit}
               aria-pressed={editing}
             >
-              <Pencil size={14} /> Edit
+              <Pencil size={14} aria-hidden /> Edit
             </button>
           </div>
         </div>
@@ -336,7 +336,7 @@ function XrayBackendCard({ node, running }: { node: NodeRead; running: boolean }
             >
               {upgrading ? <Spinner size={12} /> : null}
               {version ? `v${version}` : "Set version"}
-              <ChevronDown size={12} />
+              <ChevronDown size={12} aria-hidden />
             </button>
           ) : null}
           <button

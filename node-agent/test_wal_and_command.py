@@ -103,6 +103,53 @@ def test_wal_rotate_fifo_caps_at_wal_max(tmp_path):
         m._WAL_MAX = 20000
 
 
+# --- WAL age cap ----------------------------------------------------------
+
+
+def _dated_sample(i, age_days):
+    from datetime import UTC, datetime, timedelta
+
+    ts = (datetime.now(UTC) - timedelta(days=age_days)).isoformat()
+    return {
+        "assignment_id": f"a{i}",
+        "upload_bytes": i,
+        "download_bytes": i * 2,
+        "collected_at": ts,
+    }
+
+
+def test_wal_rotate_drops_entries_older_than_horizon(tmp_path):
+    """A batch older than the WAL age horizon must be dropped on rotate so it can
+    never be re-delivered past the panel's ledger retention (→ double-count).
+    Fresh entries survive; the dropped ones are purged from the inflight file."""
+    _point_wal_at(tmp_path)
+    fresh = _dated_sample(1, age_days=1)
+    stale = _dated_sample(2, age_days=m._WAL_MAX_AGE_DAYS + 5)
+    m._wal_append([fresh, stale])
+    rotated = m._wal_rotate()
+    assert [s["assignment_id"] for s in rotated] == ["a1"]
+    # The stale line is gone from the inflight file, not merely skipped in the return.
+    remaining = m._read_wal_file(m._WAL_INFLIGHT)
+    assert [s["assignment_id"] for s in remaining] == ["a1"]
+
+
+def test_wal_rotate_keeps_undated_samples(tmp_path):
+    """Fail-safe: samples with no/unparseable timestamp are KEPT — never discard
+    usage we can't date (older records + test fixtures lack collected_at)."""
+    _point_wal_at(tmp_path)
+    m._wal_append([_sample(1), _sample(2)])  # no collected_at
+    rotated = m._wal_rotate()
+    assert [s["assignment_id"] for s in rotated] == ["a1", "a2"]
+
+
+def test_wal_age_cap_below_ledger_floor():
+    """The agent WAL horizon MUST stay well under the panel ledger retention floor
+    so a re-delivered batch is always still in the ledger (never double-counted)."""
+    assert m._WAL_MAX_AGE_DAYS <= 60
+    # Mirror of TrafficRepository._LEDGER_MIN_RETENTION_DAYS (90); the cap is < it.
+    assert m._WAL_MAX_AGE_DAYS < 90
+
+
 # --- upgrade target_version sanitizer -------------------------------------
 
 

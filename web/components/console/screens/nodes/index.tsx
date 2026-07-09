@@ -139,7 +139,7 @@ export function NodesScreen() {
             ]}
           />
           <WarpButton primary onClick={() => setEditing("new")}>
-            <Plus size={16} strokeWidth={1.8} /> Add Node
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Node
           </WarpButton>
         </div>
       </div>

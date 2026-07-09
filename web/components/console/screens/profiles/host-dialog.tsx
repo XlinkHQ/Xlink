@@ -254,7 +254,7 @@ function Section({
         className="flex w-full items-center justify-between gap-2 py-3 text-sm font-medium text-fg"
       >
         <span>{title}</span>
-        <ChevronDown className={cn("h-4 w-4 text-fg-muted transition-transform", open && "rotate-180")} />
+        <ChevronDown className={cn("h-4 w-4 text-fg-muted transition-transform", open && "rotate-180")} aria-hidden />
       </button>
       {open ? <div className="pb-4">{children}</div> : null}
     </div>

@@ -95,7 +95,7 @@ export function ServiceSettings({
               onClick={onEdit}
               aria-pressed={editing}
             >
-              <Pencil size={14} /> Edit
+              <Pencil size={14} aria-hidden /> Edit
             </button>
           </div>
         </div>
@@ -207,20 +207,21 @@ function InboundsTab({
           <span className="mr-2">
             Page {page + 1} of {pageCount}
           </span>
-          <PageBtn onClick={() => setPage(0)} disabled={page === 0}>
-            <ChevronsLeft className="h-4 w-4" />
+          <PageBtn onClick={() => setPage(0)} disabled={page === 0} aria-label="First page">
+            <ChevronsLeft className="h-4 w-4" aria-hidden />
           </PageBtn>
-          <PageBtn onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
-            <ChevronLeft className="h-4 w-4" />
+          <PageBtn onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} aria-label="Previous page">
+            <ChevronLeft className="h-4 w-4" aria-hidden />
           </PageBtn>
           <PageBtn
             onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
             disabled={page >= pageCount - 1}
+            aria-label="Next page"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" aria-hidden />
           </PageBtn>
-          <PageBtn onClick={() => setPage(pageCount - 1)} disabled={page >= pageCount - 1}>
-            <ChevronsRight className="h-4 w-4" />
+          <PageBtn onClick={() => setPage(pageCount - 1)} disabled={page >= pageCount - 1} aria-label="Last page">
+            <ChevronsRight className="h-4 w-4" aria-hidden />
           </PageBtn>
         </div>
       </div>
@@ -302,16 +303,19 @@ function PageBtn({
   onClick,
   disabled,
   children,
+  "aria-label": ariaLabel,
 }: {
   onClick: () => void;
   disabled: boolean;
   children: React.ReactNode;
+  "aria-label"?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-label={ariaLabel}
       className="grid h-7 w-7 place-items-center rounded-md border border-hairline text-fg-muted transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
     >
       {children}

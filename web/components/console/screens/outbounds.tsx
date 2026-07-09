@@ -94,7 +94,7 @@ export function OutboundsScreen() {
         <span className="title">All outbounds</span>
         <div className="right">
           <WarpButton primary onClick={() => setDialog("new")}>
-            <Plus size={16} strokeWidth={1.8} /> Add Outbound
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Outbound
           </WarpButton>
         </div>
       </div>

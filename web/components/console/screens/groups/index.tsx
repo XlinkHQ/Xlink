@@ -118,7 +118,7 @@ export function GroupsScreen() {
             />
           </span>
           <WarpButton primary onClick={() => setEditing("new")}>
-            <Plus size={16} strokeWidth={1.8} /> Add Service
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Service
           </WarpButton>
         </div>
       </div>

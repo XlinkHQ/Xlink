@@ -159,7 +159,7 @@ export function ProfilesScreen() {
             />
           </span>
           <WarpButton primary onClick={() => setEditingInbound("new")}>
-            <Plus size={16} strokeWidth={1.8} /> Add Inbound
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Inbound
           </WarpButton>
         </div>
       </div>
@@ -286,7 +286,7 @@ function HostsDrawer({
               onClick={onEdit}
               aria-pressed={editing}
             >
-              <Pencil size={14} /> Edit
+              <Pencil size={14} aria-hidden /> Edit
             </button>
           </div>
         </div>
@@ -339,7 +339,7 @@ function HostsDrawer({
                 </span>
               ) : null}
               <WarpButton primary onClick={() => setHostDialog("new")}>
-                <Plus size={16} strokeWidth={1.8} /> Add address
+                <Plus size={16} strokeWidth={1.8} aria-hidden /> Add address
               </WarpButton>
             </div>
           </div>

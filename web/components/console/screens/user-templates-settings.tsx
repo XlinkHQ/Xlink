@@ -51,7 +51,7 @@ export function UserTemplatesSettingsScreen() {
       >
         <div className="warp-cert-actions">
           <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={() => setOpen(true)}>
-            <Plus size={14} /> New template
+            <Plus size={14} aria-hidden /> New template
           </button>
         </div>
         {q.isLoading ? <p className="warp-cert-empty">Loading…</p> : null}

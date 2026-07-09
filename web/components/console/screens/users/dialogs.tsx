@@ -169,7 +169,7 @@ export function EditUserDialog({
                 onClick={() => togglePin(n.id)}
                 className={`warp-pin-chip ${pinned.includes(n.id) ? "is-on" : ""}`}
               >
-                {pinned.includes(n.id) ? <Check size={10} /> : null}
+                {pinned.includes(n.id) ? <Check size={10} aria-hidden /> : null}
                 {n.name}
               </button>
             ))
@@ -394,7 +394,7 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                 onClick={() => toggleGroup(g.id)}
                 className={`warp-pin-chip ${groupIds.includes(g.id) ? "is-on" : ""}`}
               >
-                {groupIds.includes(g.id) ? <Check size={10} /> : null}
+                {groupIds.includes(g.id) ? <Check size={10} aria-hidden /> : null}
                 {g.name} · {g.profile_ids.length}
               </button>
             ))
@@ -413,7 +413,7 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                 onClick={() => toggleProfile(p.id)}
                 className={`warp-pin-chip ${profileIds.includes(p.id) ? "is-on" : ""}`}
               >
-                {profileIds.includes(p.id) ? <Check size={10} /> : null}
+                {profileIds.includes(p.id) ? <Check size={10} aria-hidden /> : null}
                 {p.name} · {p.protocol}
               </button>
             ))

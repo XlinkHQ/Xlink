@@ -89,7 +89,7 @@ export function RoutingScreen() {
             />
           </span>
           <WarpButton primary onClick={() => setDialog("new")}>
-            <Plus size={16} strokeWidth={1.8} /> Add Rule
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Rule
           </WarpButton>
         </div>
       </div>

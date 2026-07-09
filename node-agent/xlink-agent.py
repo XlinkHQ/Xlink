@@ -98,6 +98,62 @@ _WAL_MAX = 5000
 # the fast loop after the load, losing usage.
 _wal_lock = threading.Lock()
 
+# Maximum age (days) a WAL entry may reach before it is dropped instead of
+# delivered. Bounds re-delivery against the panel's idempotency ledger: the panel
+# retains each batch_id for at least TrafficRepository._LEDGER_MIN_RETENTION_DAYS
+# (90d). If a node were offline LONGER than the ledger keeps a batch, re-delivering
+# it would look brand-new and DOUBLE-COUNT. Capping the WAL well under that floor
+# makes that impossible — a batch this old can never be delivered. Stale-by-a-month
+# usage is already lost/irrelevant, so dropping it is the safe choice (but we log
+# it, never silently discard). Clamped to [1, 60] so a misconfig can't push the cap
+# up near/over the ledger floor and reopen the double-count window.
+_WAL_MAX_AGE_DAYS = max(1, min(60, int(os.environ.get("XLINK_WAL_MAX_AGE_DAYS", "30"))))
+_WAL_MAX_AGE_SECONDS = _WAL_MAX_AGE_DAYS * 86400
+
+
+def _sample_age_seconds(sample: dict, now: float) -> float | None:
+    """Age of a WAL sample in seconds, or None if it has no parseable timestamp
+    (older records / test fixtures may lack `collected_at`)."""
+    ts = sample.get("collected_at")
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts))
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return now - dt.timestamp()
+
+
+def _drop_stale_wal(samples: list[dict]) -> list[dict]:
+    """Drop WAL entries older than the age horizon so a long-offline node can never
+    re-deliver a batch past the panel's ledger retention. Samples with no/unparseable
+    timestamp are KEPT (fail-safe: never discard usage we can't date). Logs a summary
+    of what was dropped so stale-usage loss is visible, not silent."""
+    if not samples:
+        return samples
+    now = time.time()
+    kept: list[dict] = []
+    dropped = 0
+    dropped_bytes = 0
+    for s in samples:
+        age = _sample_age_seconds(s, now)
+        if age is not None and age > _WAL_MAX_AGE_SECONDS:
+            dropped += 1
+            dropped_bytes += int(s.get("upload_bytes", 0) or 0) + int(
+                s.get("download_bytes", 0) or 0
+            )
+            continue
+        kept.append(s)
+    if dropped:
+        _log(
+            f"wal: dropped {dropped} stale entr{'y' if dropped == 1 else 'ies'} "
+            f"older than {_WAL_MAX_AGE_DAYS}d ({dropped_bytes} bytes lost) — "
+            "would exceed panel ledger retention"
+        )
+    return kept
+
 
 def _wal_append(samples: list[dict]) -> None:
     if not samples:
@@ -156,7 +212,25 @@ def _wal_rotate() -> list[dict]:
             # failed) only risks a re-send next cycle, not data loss — but surface
             # it so a persistent disk/permission fault isn't silent.
             _log(f"wal rotate failed: {exc}")
-        return _read_wal_file(_WAL_INFLIGHT)[:_WAL_MAX]
+        # Age-cap the claimed batch: never deliver entries older than the horizon
+        # (they may outlive the panel ledger → double-count). If any were dropped,
+        # rewrite the inflight file so the stale lines are gone for good and the
+        # FIFO index used by _wal_commit stays aligned with what we deliver.
+        pending = _read_wal_file(_WAL_INFLIGHT)
+        fresh = _drop_stale_wal(pending)
+        if len(fresh) != len(pending):
+            with contextlib.suppress(OSError):
+                if fresh:
+                    tmp = _WAL_INFLIGHT + ".tmp"
+                    with open(tmp, "w") as fh:
+                        for s in fresh:
+                            fh.write(json.dumps(s) + "\n")
+                        fh.flush()
+                        os.fsync(fh.fileno())
+                    os.replace(tmp, _WAL_INFLIGHT)
+                elif os.path.exists(_WAL_INFLIGHT):
+                    os.remove(_WAL_INFLIGHT)
+        return fresh[:_WAL_MAX]
 
 
 def _wal_commit(delivered: int) -> None:
@@ -987,6 +1061,47 @@ def build_hysteria_config(clients: list[dict]) -> dict:
     return config
 
 
+# WireGuard interface name. Everything WG-related (config path default, reload
+# syncconf/up/down, ip link, iptables, rp_filter sysctls, the wg-quick@ systemd
+# unit) is parameterized on this so two node instances can co-locate on one host
+# with distinct interfaces (e.g. wg0 / wg1). Default stays wg0 → zero change for
+# existing single-node hosts.
+WG_INTERFACE = os.environ.get("XLINK_WG_INTERFACE", "wg0")
+WG_CONFIG_PATH = os.environ.get("XLINK_WG_CONFIG", f"/etc/wireguard/{WG_INTERFACE}.conf")
+
+# Reload command, built around WG_INTERFACE / WG_CONFIG_PATH. Note: rp_filter uses
+# the systemd %i token for the tunnel iface where the unit expands it, but here we
+# run outside the unit so the literal interface name is substituted directly.
+_WG_RELOAD_DEFAULT = (
+    f"if ip link show {WG_INTERFACE} >/dev/null 2>&1; then "
+    f"wg syncconf {WG_INTERFACE} <(wg-quick strip {WG_INTERFACE}) || "
+    f"{{ (wg-quick down {WG_INTERFACE} 2>/dev/null; ip link delete {WG_INTERFACE} 2>/dev/null); "
+    f"wg-quick up {WG_INTERFACE}; }}; "
+    f"else wg-quick up {WG_INTERFACE}; fi; "
+    "WAN=$(ip route list default | awk '{print $5; exit}'); "
+    "sysctl -w net.ipv4.ip_forward=1 >/dev/null; "
+    "sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null; "
+    "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
+    f"sysctl -w net.ipv4.conf.{WG_INTERFACE}.rp_filter=0 >/dev/null 2>&1; "
+    "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
+    # Derive the masquerade subnet from the live wg conf Address line so it
+    # always matches build_wireguard_config (no hardcoded 10.8.0.0/24).
+    "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
+    f"{WG_CONFIG_PATH} 2>/dev/null | "
+    "python3 -c 'import sys,ipaddress;\\n"
+    "a=sys.stdin.read().strip() or \"10.8.0.1/24\";\\n"
+    "a=a if \"/\" in a else a+\"/24\";\\n"
+    "print(ipaddress.ip_network(a,strict=False))' 2>/dev/null); "
+    "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
+    "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
+    "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
+    f"iptables -C FORWARD -i {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
+    f"iptables -A FORWARD -i {WG_INTERFACE} -j ACCEPT; "
+    f"iptables -C FORWARD -o {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
+    f"iptables -A FORWARD -o {WG_INTERFACE} -j ACCEPT"
+)
+
+
 CORES = {
     "xray": {
         "builder": build_xray_config,
@@ -1007,35 +1122,10 @@ CORES = {
     "wireguard": {
         "builder": build_wireguard_config,
         "fmt": "text",
-        "path": os.environ.get("XLINK_WG_CONFIG", "/etc/wireguard/wg0.conf"),
-        "reload": os.environ.get(
-            "XLINK_WG_RELOAD",
-            "if ip link show wg0 >/dev/null 2>&1; then "
-            "wg syncconf wg0 <(wg-quick strip wg0) || "
-            "{ (wg-quick down wg0 2>/dev/null; ip link delete wg0 2>/dev/null); wg-quick up wg0; }; "
-            "else wg-quick up wg0; fi; "
-            "WAN=$(ip route list default | awk '{print $5; exit}'); "
-            "sysctl -w net.ipv4.ip_forward=1 >/dev/null; "
-            "sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null; "
-            "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
-            "sysctl -w net.ipv4.conf.wg0.rp_filter=0 >/dev/null 2>&1; "
-            "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
-            # Derive the masquerade subnet from the live wg0.conf Address line so it
-            # always matches build_wireguard_config (no hardcoded 10.8.0.0/24).
-            "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
-            "/etc/wireguard/wg0.conf 2>/dev/null | "
-            "python3 -c 'import sys,ipaddress;\\n"
-            "a=sys.stdin.read().strip() or \"10.8.0.1/24\";\\n"
-            "a=a if \"/\" in a else a+\"/24\";\\n"
-            "print(ipaddress.ip_network(a,strict=False))' 2>/dev/null); "
-            "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
-            "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
-            "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
-            "iptables -C FORWARD -i wg0 -j ACCEPT 2>/dev/null || iptables -A FORWARD -i wg0 -j ACCEPT; "
-            "iptables -C FORWARD -o wg0 -j ACCEPT 2>/dev/null || iptables -A FORWARD -o wg0 -j ACCEPT",
-        ),
+        "path": WG_CONFIG_PATH,
+        "reload": os.environ.get("XLINK_WG_RELOAD", _WG_RELOAD_DEFAULT),
         "validate": None,
-        "service": os.environ.get("XLINK_WG_SERVICE", "wg-quick@wg0"),
+        "service": os.environ.get("XLINK_WG_SERVICE", f"wg-quick@{WG_INTERFACE}"),
     },
     "hysteria": {
         "builder": build_hysteria_config,
@@ -1046,8 +1136,6 @@ CORES = {
         "service": os.environ.get("XLINK_HYSTERIA_SERVICE", "hysteria-server"),
     },
 }
-
-WG_INTERFACE = os.environ.get("XLINK_WG_INTERFACE", "wg0")
 
 
 def _systemd_active(service: str) -> bool | None:
@@ -1108,8 +1196,7 @@ def check_provider_health(
                     if active:
                         healthy = True
             elif kind == "wireguard":
-                iface = os.environ.get("XLINK_WG_INTERFACE", "wg0")
-                rc, _ = _run(f"ip link show {iface}")
+                rc, _ = _run(f"ip link show {WG_INTERFACE}")
                 healthy = rc == 0
             else:
                 active = _systemd_active(core.get("service", ""))
@@ -1255,7 +1342,10 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
         # by their own builder (keeps api/stats/log/policy blocks so the traffic
         # gRPC keeps working — a hand-rolled {inbounds:[]} would drop those).
         if kind == "wireguard":
-            _run("wg-quick down wg0 2>/dev/null; ip link delete wg0 2>/dev/null")
+            _run(
+                f"wg-quick down {WG_INTERFACE} 2>/dev/null; "
+                f"ip link delete {WG_INTERFACE} 2>/dev/null"
+            )
             with contextlib.suppress(OSError):
                 os.remove(path)
             _log(f"{kind}: drained (no clients) — interface down")

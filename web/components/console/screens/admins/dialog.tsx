@@ -169,20 +169,22 @@ export function AdminDialog({
             type="button"
             onClick={() => setShow((s) => !s)}
             title={show ? "Hide" : "Show"}
+            aria-label={show ? "Hide password" : "Show password"}
             className="warp-dlg-pw-icon"
           >
-            {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {show ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
           </button>
           <button
             type="button"
             title="Generate password"
+            aria-label="Generate password"
             className="warp-dlg-pw-icon"
             onClick={() => {
               setPassword(randomPassword());
               setShow(true);
             }}
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4" aria-hidden />
           </button>
         </div>
       </Field>
