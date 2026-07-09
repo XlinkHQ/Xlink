@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Any
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import x25519
 
 from app.core.exceptions import ValidationError
 from app.providers.base.models import ProviderKind
@@ -55,9 +60,46 @@ def _validate_hysteria(protocol: str, settings: dict[str, Any]) -> None:
         return
 
 
+def _wg_key_bytes(settings: dict[str, Any], key: str, label: str) -> bytes:
+    _require(settings, key, label)
+    raw = str(settings[key]).strip()
+    try:
+        decoded = base64.standard_b64decode(raw)
+    except (binascii.Error, ValueError) as exc:
+        raise ValidationError(
+            f"{label} is not valid base64.", code="profile_settings_invalid"
+        ) from exc
+    if len(decoded) != 32:
+        raise ValidationError(
+            f"{label} must be a 32-byte WireGuard key.", code="profile_settings_invalid"
+        )
+    return decoded
+
+
 def _validate_wireguard(protocol: str, settings: dict[str, Any]) -> None:
     _port(settings)
     _require(settings, "address", "Interface address")
+    # The node terminates the WG tunnel, so profile.settings MUST carry the
+    # SERVER keypair: privateKey drives the node's [Interface] (no key → the
+    # tunnel never comes up), and publicKey becomes the client subscription's
+    # peer PublicKey (no key → the subscription render raises and the client
+    # gets nothing). Neither was previously required, so a WG profile could be
+    # saved broken in two silent ways. Require both, and verify they are a real
+    # matching pair — a mismatched paste is the classic silent WG failure.
+    priv = _wg_key_bytes(settings, "privateKey", "Server private key")
+    _wg_key_bytes(settings, "publicKey", "Server public key")
+
+    derived = base64.standard_b64encode(
+        x25519.X25519PrivateKey.from_private_bytes(priv)
+        .public_key()
+        .public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    ).decode("ascii")
+    if derived != str(settings["publicKey"]).strip():
+        raise ValidationError(
+            "Server publicKey does not match privateKey — they must be a "
+            "matching WireGuard key pair.",
+            code="profile_settings_invalid",
+        )
 
 
 _VALIDATORS = {
