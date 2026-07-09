@@ -5,7 +5,7 @@ Redis) and one or more **node servers** (run the VPN cores and the pull-based
 agent). Nodes connect out to the panel's API — the panel never needs to reach
 into a node.
 
-## Panel server
+## 🖥️ Panel server
 
 The one-command installer does everything (Docker, clone, secret generation,
 build/pull, migrations, start):
@@ -35,7 +35,7 @@ panel path, and a domain for HTTPS; you can accept the defaults throughout.
 > the domain in `.env` and the stack brings up the bundled edge proxy (the `tls`
 > compose profile); otherwise it serves plain ports for local/IP use.
 
-## Node server
+## 🌐 Node server
 
 1. In the panel: **Nodes → add a node** (its public host + core port), then
    provision its **agent token**. Copy the node id and token.
@@ -57,7 +57,7 @@ panel path, and a domain for HTTPS; you can accept the defaults throughout.
 
    The node flips to **active** in the panel within ~30s.
 
-## Notes
+## 📌 Notes
 
 > [!NOTE]
 > The API port must be reachable from every node server — nodes dial the panel,

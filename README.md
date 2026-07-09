@@ -12,7 +12,7 @@
 
 ---
 
-## Overview
+## 🧭 Overview
 
 XLink is a self-hosted control plane for operating a VPN service across many
 servers from a single console. You register your nodes, create users, and hand
@@ -32,7 +32,7 @@ applies it locally, and reports traffic and health back. A node therefore needs
 only outbound access to the panel's API — no inbound exposure, no shared SSH
 credentials, no push access from the panel.
 
-## Features
+## ✨ Features
 
 **Cores and protocols.** xray, sing-box, hysteria, and WireGuard, selected per
 profile. Together they cover vless, vmess, trojan, shadowsocks, shadowtls,
@@ -60,7 +60,7 @@ retention, database backups, and an optional Prometheus metrics endpoint.
 Everything the console does is available through API keys, an official Python SDK,
 and a full CLI.
 
-## Architecture
+## 🏗️ Architecture
 
 ```
                     ┌─────────────────────── Panel server ───────────────────────┐
@@ -86,7 +86,7 @@ analytics to an optional PostgreSQL read replica. A full walk-through with
 diagrams is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); interactive API docs
 are served at `http://<panel>:8000/docs` outside production.
 
-## Installation
+## 🚀 Installation
 
 On a fresh Linux server, as root:
 
@@ -115,7 +115,7 @@ hosts).
 > Point a domain at the server first if you want automatic HTTPS — the bundled
 > edge proxy issues certificates through ACME once `XLINK_DOMAIN` is set.
 
-## Operating the panel
+## ⚙️ Operating the panel
 
 From the install directory, the `xlink` command wraps day-to-day operations:
 
@@ -141,7 +141,7 @@ xlink node token edge-1                            # issue an agent token (shown
 
 Run `xlink help` for the complete command list.
 
-## Adding a node
+## 🖥️ Adding a node
 
 Registering a location takes two steps. In the console, under **Nodes**, add the
 node with its public host and core port and provision an agent token — the console
@@ -158,7 +158,7 @@ The installer sets up every core by default; restrict it with
 `journalctl -u xlink-agent -f` — once it logs `pulled config` it is talking to the
 panel, and the node turns **active** in the console within about thirty seconds.
 
-## Configuration
+## 🔧 Configuration
 
 All configuration is environment-driven, and the installer writes a complete
 `.env` with generated secrets, so most deployments never edit it by hand. The full
@@ -182,7 +182,7 @@ adjusted are:
 > Secrets live only in `.env` on the panel server. It is git-ignored and must
 > never be committed.
 
-## Development
+## 🧑‍💻 Development
 
 Requirements: Python 3.13+, [uv](https://docs.astral.sh/uv/), Node.js, and Docker.
 
@@ -211,7 +211,7 @@ cd web && ./node_modules/.bin/tsc --noEmit     # web type checking
 > running, and a parallel production build corrupts `.next`. Use `tsc --noEmit`
 > to type-check the web app.
 
-## Repository layout
+## 📁 Repository layout
 
 | Path | Contents |
 | ---- | -------- |
@@ -227,7 +227,7 @@ cd web && ./node_modules/.bin/tsc --noEmit     # web type checking
 | `alembic/` | Database migrations (single head) |
 | `scripts/`, `xlink`, `xlink.sh` | Installer, CLI wrapper, and install/update manager |
 
-## Documentation
+## 📚 Documentation
 
 | Document | Description |
 | -------- | ----------- |
@@ -239,13 +239,13 @@ cd web && ./node_modules/.bin/tsc --noEmit     # web type checking
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting policy |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 
-## Security
+## 🔒 Security
 
 Report vulnerabilities privately through GitHub's private advisory form rather
 than a public issue. The full policy and what to include are in
 [SECURITY.md](SECURITY.md).
 
-## License
+## ⚖️ License
 
 Licensed under the [Apache License 2.0](LICENSE). © 2026 ParsaGo92. See
 [NOTICE](NOTICE) for attribution.
