@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.node import Node
+from app.domain.user import User
 from app.failover.models import FailoverPlan, FailoverPlanItem
 from app.providers.base.registry import ProviderRegistry
 from app.scheduler.models import SchedulerPolicyName, SchedulerRequest
@@ -27,14 +28,15 @@ class FailoverPlanner:
     ) -> FailoverPlan:
         scheduler = SmartSchedulerService(self._session, self._providers)
         stmt = (
-            select(ClientAssignment)
+            select(ClientAssignment, User.pinned_node_ids)
+            .join(User, ClientAssignment.user_id == User.id)
             .where(
                 ClientAssignment.node_id == source_node_id,
                 ClientAssignment.status == AssignmentStatus.ACTIVE,
             )
             .order_by(ClientAssignment.created_at.asc(), ClientAssignment.id.asc())
         )
-        assignments = (await self._session.execute(stmt)).scalars().all()
+        rows = (await self._session.execute(stmt)).all()
 
         # Per-target running tally so capacity is consumed as items are planned,
         # spreading load across nodes instead of piling onto a single target.
@@ -54,7 +56,7 @@ class FailoverPlanner:
             return planned[node_id] < cap
 
         items: list[FailoverPlanItem] = []
-        for assignment in assignments:
+        for assignment, pinned_node_ids in rows:
             decision = await scheduler.choose_node(
                 SchedulerRequest(
                     profile_id=assignment.profile_id,
@@ -63,6 +65,18 @@ class FailoverPlanner:
                 )
             )
             ordered = [c.node_id for c in decision.candidates] or [decision.node_id]
+            # A pinned user's subscription only serves configs on their pinned
+            # nodes (subscription filters to pinned_node_ids). Migrating them to a
+            # non-pinned node would report success while handing them an empty
+            # feed — so restrict targets to their pins (minus the dead source).
+            # If no pinned target has headroom, skip rather than strand them on
+            # an invisible node.
+            # pinned_node_ids is a JSON list of stringified UUIDs; the scheduler's
+            # candidate node_ids are uuid.UUID — compare by str, like the
+            # subscription filter does.
+            pinned = {str(n) for n in (pinned_node_ids or [])}
+            if pinned:
+                ordered = [nid for nid in ordered if str(nid) in pinned]
             target_id = None
             for candidate_id in ordered:
                 if candidate_id == source_node_id:

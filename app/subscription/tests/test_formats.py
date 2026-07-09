@@ -133,9 +133,20 @@ def test_wireguard_conf_serialization():
     assert "PublicKey = PUB" in content
 
 
-def test_wireguard_missing_peer_key():
-    with pytest.raises(FormatRenderError):
-        default_registry().render(SubscriptionFormat.WIREGUARD_CONF, (_cfg("wireguard"),))
+def test_wireguard_missing_peer_key_is_skipped_not_fatal():
+    # A single config with bad stored data must be skipped, not 422 the whole
+    # feed — a good config alongside it still renders, and an all-bad feed
+    # yields empty rather than blowing up the public endpoint.
+    mixed = default_registry().render(
+        SubscriptionFormat.WIREGUARD_CONF,
+        (_cfg("wireguard", **WG), _cfg("wireguard")),
+    )
+    assert "[Interface]" in mixed and "PublicKey = PUB" in mixed
+
+    all_bad = default_registry().render(
+        SubscriptionFormat.WIREGUARD_CONF, (_cfg("wireguard"),)
+    )
+    assert all_bad == ""
 
 
 @pytest.mark.parametrize(

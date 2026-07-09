@@ -122,7 +122,9 @@ class FailoverExecutor:
                 logger.exception("failover_provider_failed", assignment_id=str(ctx.assignment_id))
                 return False
             try:
-                committed = await self._commit_migration(ctx, new_id, result.client_id)
+                committed = await self._commit_migration(
+                    ctx, new_id, result.client_id, result.raw
+                )
             except Exception:
                 logger.exception("failover_commit_failed", assignment_id=str(ctx.assignment_id))
                 committed = False
@@ -176,7 +178,11 @@ class FailoverExecutor:
             )
 
     async def _commit_migration(
-        self, ctx: _MigrationContext, new_id: uuid.UUID, provider_client_id: str
+        self,
+        ctx: _MigrationContext,
+        new_id: uuid.UUID,
+        provider_client_id: str,
+        credentials: object = None,
     ) -> bool:
         async with self._db.session() as session:
             assignment = await session.get(ClientAssignment, ctx.assignment_id)
@@ -225,6 +231,14 @@ class FailoverExecutor:
                 node_id=ctx.target_node_id,
                 provider_kind=ctx.provider_kind,
                 provider_client_id=provider_client_id,
+                # Carry the provider's freshly-minted per-client secrets
+                # (WireGuard keys, Shadowsocks/VMess password/uuid, …). Without
+                # this the new assignment's credentials defaulted to {}, so the
+                # migrated user's subscription and the node config both lost the
+                # key/password and the user could not connect on the new node —
+                # an outage on the very event meant to keep them online. Mirrors
+                # client_assignment_service (assignment.credentials = raw).
+                credentials=dict(credentials) if isinstance(credentials, dict) else {},
                 status=AssignmentStatus.ACTIVE,
                 expires_at=ctx.expires_at,
                 traffic_limit_bytes=ctx.traffic_limit_bytes,
