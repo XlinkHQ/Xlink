@@ -10,11 +10,15 @@ from fastapi import Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 
+from app.agent.ingest_limit import enforce_ingest_quota
 from app.core.authz import Permission, authorize
 from app.core.exceptions import AuthenticationError
 from app.core.security import TokenType, decode_token
-from app.dependencies.core import DatabaseDep, SettingsDep
-from app.dependencies.services import AuthServiceDep
+from app.dependencies.core import CacheDep, DatabaseDep, SettingsDep
+from app.dependencies.services import AuthServiceDep, NodeAgentServiceDep
+
+# Alias so the quota dependency can authenticate the node token before counting.
+AgentServiceForQuota = NodeAgentServiceDep
 from app.domain.api_key import ApiKey
 from app.domain.user import User
 
@@ -119,3 +123,23 @@ async def require_write_admin(user: AdminUser) -> User:
 
 
 WriteAdminUser = Annotated[User, Depends(require_write_admin)]
+
+
+async def enforce_agent_ingest_quota(
+    node_id: uuid.UUID,
+    agent: AgentServiceForQuota,
+    settings: SettingsDep,
+    cache: CacheDep,
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+) -> None:
+    # Authenticate the node token FIRST, then count against its per-node window.
+    # Counting only after a valid token means a caller who merely knows a node id
+    # (but has no token) can't burn that node's ingest quota — the request 401s
+    # before it's ever counted. The handler re-authenticates (idempotent).
+    await agent.authenticate(node_id, x_agent_token)
+    await enforce_ingest_quota(
+        cache, node_id, limit=settings.agent_ingest_rate_limit_per_minute
+    )
+
+
+AgentIngestQuota = Annotated[None, Depends(enforce_agent_ingest_quota)]

@@ -127,6 +127,29 @@ class TrafficService:
             skipped=skipped,
         )
 
+    async def rollup_hourly(self, *, now: datetime | None = None) -> int:
+        """Aggregate raw traffic_records into the hourly rollup for all CLOSED
+        hour buckets since the last watermark, then advance the watermark to the
+        current hour. Idempotent: buckets are upserted with the recomputed SUM,
+        so a re-run (or overlapping run) recomputes the same totals rather than
+        adding to them. Returns the number of (assignment, bucket) rows written.
+
+        The current (in-progress) hour is intentionally NOT rolled up — it is
+        still receiving samples and analytics reads serve it from raw. The
+        watermark it advances to is the raw/rollup read boundary."""
+        reference = now or datetime.now(UTC)
+        floor_hour = reference.replace(minute=0, second=0, microsecond=0)
+        watermark = await self._repo.get_rollup_watermark()
+        # Re-aggregate from one hour before the watermark to absorb any raw rows
+        # that landed late for the boundary hour; ON CONFLICT recompute makes the
+        # overlap safe (no double-count). On first run (no watermark) aggregate
+        # everything closed.
+        since = (watermark - timedelta(hours=1)) if watermark is not None else None
+        written = await self._repo.rollup_hourly(floor_hour=floor_hour, since=since)
+        await self._repo.set_rollup_watermark(floor_hour)
+        await self._session.commit()
+        return written
+
     async def usage_for_assignment(self, assignment_id: uuid.UUID) -> TrafficUsage:
         return await self._repo.usage_for_assignment(assignment_id)
 

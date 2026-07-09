@@ -94,6 +94,10 @@ class ClientAssignment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_client_assignments_node_id", "node_id"),
         Index("ix_client_assignments_provider_kind", "provider_kind"),
         Index("ix_client_assignments_status", "status"),
+        # Composite for the active-assignment / subscription lookup that filters
+        # user_id (+ status): repositories.client_assignment.list_keyset and
+        # subscription.repository.list_user_sources (see migration 0050).
+        Index("ix_client_assignments_user_status", "user_id", "status"),
         Index("ix_client_assignments_expires_at", "expires_at"),
         Index(
             "ix_client_assignments_created_at_id",

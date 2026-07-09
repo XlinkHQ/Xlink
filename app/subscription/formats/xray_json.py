@@ -4,7 +4,9 @@ import hashlib
 import json
 
 from app.subscription.formats.base import label, setting
+from app.subscription.formats.capabilities import supported_protocols
 from app.subscription.models import ProviderConfig
+from app.subscription.schemas import SubscriptionFormat
 
 PROTOCOL = "xray_json"
 
@@ -169,5 +171,6 @@ def render_one(config: ProviderConfig) -> dict:
 
 
 def render(configs: tuple[ProviderConfig, ...]) -> str:
-    supported = [c for c in configs if c.protocol in ("vless", "vmess", "trojan")]
+    allowed = supported_protocols(SubscriptionFormat.XRAY_JSON)
+    supported = [c for c in configs if c.protocol in allowed]
     return json.dumps([render_one(c) for c in supported], indent=2, ensure_ascii=False)

@@ -10,8 +10,30 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.traffic.models import TrafficRecord
+from app.traffic.models import TrafficHourly, TrafficRecord, TrafficRollupState
 from app.traffic.schemas import TrafficTotals, TrafficUsage
+
+
+def _hour_bucket_expr(dialect: str):
+    """SQL expression truncating TrafficRecord.collected_at to the hour, portable
+    across Postgres and SQLite. Postgres keeps a real timestamptz; SQLite has no
+    date_trunc so we format to 'YYYY-MM-DD HH:00:00' text — which SQLAlchemy's
+    DateTime type adapter reads back as a datetime on the way out."""
+    if dialect == "sqlite":
+        return func.strftime("%Y-%m-%d %H:00:00", TrafficRecord.collected_at)
+    return func.date_trunc("hour", TrafficRecord.collected_at)
+
+
+def _as_hour_datetime(value) -> datetime:
+    """Normalise a hour-bucket value from the aggregation SELECT into a tz-aware
+    UTC datetime truncated to the hour. Postgres date_trunc already yields a
+    datetime; SQLite's strftime yields a 'YYYY-MM-DD HH:MM:SS' string which the
+    DateTime column's bind would otherwise reject on re-insert."""
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.replace(minute=0, second=0, microsecond=0)
 
 
 class TrafficRepository:
@@ -92,24 +114,59 @@ class TrafficRepository:
             sample_count=int(count),
         )
 
-    def _weighted_totals_stmt(self):
+    async def _weighted_totals_stmt(self, since: datetime | None = None):
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
+        # Read from the rollup+raw union so all-time / since totals stay correct
+        # even after raw rows older than the rollup have been purged (otherwise a
+        # raw-only scan would silently undercount purged history). record_count
+        # here counts SOURCE rows (rolled hour-buckets + raw samples), not raw
+        # samples — a full raw sample count is no longer meaningful once rolled
+        # buckets replace the samples that produced them.
+        boundary = await self._read_boundary()
+        src = self._unified_usage_ts_cte(boundary)
         coeff = func.coalesce(Node.usage_coefficient, 1.0)
-        return (
+        stmt = (
             select(
-                func.coalesce(func.sum(TrafficRecord.total_bytes * coeff), 0),
-                func.coalesce(func.sum(TrafficRecord.upload_bytes * coeff), 0),
-                func.coalesce(func.sum(TrafficRecord.download_bytes * coeff), 0),
+                func.coalesce(func.sum(src.c.total_bytes * coeff), 0),
+                func.coalesce(func.sum(src.c.upload_bytes * coeff), 0),
+                func.coalesce(func.sum(src.c.download_bytes * coeff), 0),
                 func.count(),
             )
-            .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
+            .select_from(src)
+            .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
             .join(Node, Node.id == ClientAssignment.node_id)
         )
+        if since is not None:
+            stmt = stmt.where(src.c.bucket_start >= since)
+        return stmt
+
+    def _unified_usage_ts_cte(self, boundary: datetime):
+        """Like _unified_usage_cte but also carries a `bucket_start` time column
+        (hour_bucket for rollup rows, collected_at for raw rows) so callers can
+        apply a time filter across both sources."""
+        rollup = select(
+            TrafficHourly.assignment_id.label("assignment_id"),
+            TrafficHourly.node_id.label("node_id"),
+            TrafficHourly.hour_bucket.label("bucket_start"),
+            TrafficHourly.upload_bytes.label("upload_bytes"),
+            TrafficHourly.download_bytes.label("download_bytes"),
+            TrafficHourly.total_bytes.label("total_bytes"),
+        ).where(TrafficHourly.hour_bucket < boundary)
+        raw = select(
+            TrafficRecord.assignment_id.label("assignment_id"),
+            TrafficRecord.node_id.label("node_id"),
+            TrafficRecord.collected_at.label("bucket_start"),
+            TrafficRecord.upload_bytes.label("upload_bytes"),
+            TrafficRecord.download_bytes.label("download_bytes"),
+            TrafficRecord.total_bytes.label("total_bytes"),
+        ).where(TrafficRecord.collected_at >= boundary)
+        return rollup.union_all(raw).subquery("usage_ts_src")
 
     async def totals(self) -> TrafficTotals:
-        total, up, down, count = (await self.session.execute(self._weighted_totals_stmt())).one()
+        stmt = await self._weighted_totals_stmt()
+        total, up, down, count = (await self.session.execute(stmt)).one()
         return TrafficTotals(
             total_bytes=int(total),
             upload_bytes=int(up),
@@ -118,7 +175,7 @@ class TrafficRepository:
         )
 
     async def totals_since(self, since: datetime) -> TrafficTotals:
-        stmt = self._weighted_totals_stmt().where(TrafficRecord.collected_at >= since)
+        stmt = await self._weighted_totals_stmt(since=since)
         total, up, down, count = (await self.session.execute(stmt)).one()
         return TrafficTotals(
             total_bytes=int(total),
@@ -214,6 +271,114 @@ class TrafficRepository:
     async def count(self) -> int:
         return int(await self.session.scalar(select(func.count()).select_from(TrafficRecord)) or 0)
 
+    async def hourly_count(self) -> int:
+        return int(await self.session.scalar(select(func.count()).select_from(TrafficHourly)) or 0)
+
+    # ------------------------------------------------------------------
+    # Hourly rollup / compaction
+    # ------------------------------------------------------------------
+    async def get_rollup_watermark(self) -> datetime | None:
+        state = await self.session.get(TrafficRollupState, 1)
+        wm = state.hourly_watermark if state is not None else None
+        if wm is not None and wm.tzinfo is None:
+            wm = wm.replace(tzinfo=UTC)
+        return wm
+
+    async def set_rollup_watermark(self, watermark: datetime) -> None:
+        state = await self.session.get(TrafficRollupState, 1)
+        if state is None:
+            state = TrafficRollupState(id=1, hourly_watermark=watermark)
+            self.session.add(state)
+        else:
+            state.hourly_watermark = watermark
+        await self.session.flush()
+
+    async def rollup_hourly(self, *, floor_hour: datetime, since: datetime | None) -> int:
+        """Aggregate raw traffic_records for CLOSED hour buckets into traffic_hourly.
+
+        Only buckets strictly before `floor_hour` (the current hour) are rolled up
+        — the in-progress hour is still receiving samples and would produce a
+        partial sum. `since` limits the recomputation to buckets at/after the
+        watermark so a steady-state run only touches recent buckets.
+
+        Idempotency: each bucket is upserted with the freshly recomputed SUM
+        (ON CONFLICT ... DO UPDATE SET col = excluded.col), NOT an increment, so
+        re-running over the same window yields the same totals and never
+        double-counts. Returns the number of (assignment, bucket) rows written.
+        """
+        dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
+        bucket = _hour_bucket_expr(dialect)
+        conditions = [TrafficRecord.collected_at < floor_hour]
+        if since is not None:
+            conditions.append(TrafficRecord.collected_at >= since)
+        agg = (
+            select(
+                TrafficRecord.assignment_id.label("assignment_id"),
+                func.min(TrafficRecord.node_id).label("node_id"),
+                bucket.label("hour_bucket"),
+                func.coalesce(func.sum(TrafficRecord.upload_bytes), 0).label("upload_bytes"),
+                func.coalesce(func.sum(TrafficRecord.download_bytes), 0).label("download_bytes"),
+                func.coalesce(func.sum(TrafficRecord.total_bytes), 0).label("total_bytes"),
+            )
+            .where(*conditions)
+            .group_by(TrafficRecord.assignment_id, bucket)
+        )
+        rows = (await self.session.execute(agg)).all()
+        if not rows:
+            return 0
+        payload = [
+            {
+                "assignment_id": r.assignment_id,
+                "node_id": r.node_id,
+                "hour_bucket": _as_hour_datetime(r.hour_bucket),
+                "upload_bytes": int(r.upload_bytes or 0),
+                "download_bytes": int(r.download_bytes or 0),
+                "total_bytes": int(r.total_bytes or 0),
+            }
+            for r in rows
+        ]
+        if dialect == "sqlite":
+            stmt = sqlite_insert(TrafficHourly).values(payload)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["assignment_id", "hour_bucket"],
+                set_={
+                    "node_id": stmt.excluded.node_id,
+                    "upload_bytes": stmt.excluded.upload_bytes,
+                    "download_bytes": stmt.excluded.download_bytes,
+                    "total_bytes": stmt.excluded.total_bytes,
+                },
+            )
+        else:
+            stmt = pg_insert(TrafficHourly).values(payload)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_traffic_hourly_assignment_bucket",
+                set_={
+                    "node_id": stmt.excluded.node_id,
+                    "upload_bytes": stmt.excluded.upload_bytes,
+                    "download_bytes": stmt.excluded.download_bytes,
+                    "total_bytes": stmt.excluded.total_bytes,
+                },
+            )
+        await self.session.execute(stmt)
+        await self.session.flush()
+        return len(payload)
+
+    async def delete_hourly_before(self, cutoff: datetime, *, batch: int = 10000) -> int:
+        deleted = 0
+        while True:
+            sub = (
+                select(TrafficHourly.id).where(TrafficHourly.hour_bucket < cutoff).limit(batch)
+            )
+            stmt = delete(TrafficHourly).where(TrafficHourly.id.in_(sub.scalar_subquery()))
+            result = await self.session.execute(stmt)
+            n = result.rowcount or 0
+            deleted += n
+            await self.session.commit()
+            if n < batch:
+                break
+            await asyncio.sleep(0)
+        return deleted
+
     async def usage_sum_by_user(
         self, user_ids: Sequence[uuid.UUID]
     ) -> dict[uuid.UUID, int]:
@@ -289,20 +454,63 @@ class TrafficRepository:
             r[0]: (int(r[1] or 0), int(r[2] or 0), r[2] is None) for r in rows
         }
 
+    # ------------------------------------------------------------------
+    # Rollup-aware analytics reads
+    #
+    # The raw/rollup boundary is the rollup watermark: the first hour bucket the
+    # rollup job has NOT yet aggregated. Everything strictly before it lives in
+    # traffic_hourly (closed buckets); everything at/after it is still only in
+    # traffic_records (the current + not-yet-rolled window). Reads below UNION a
+    # rollup slice (traffic_hourly, hour_bucket < boundary) with a raw slice
+    # (traffic_records, collected_at >= boundary) so the two never overlap and
+    # never double-count, regardless of when the rollup job last ran. If the
+    # rollup has never run (watermark NULL) the boundary is the epoch so the
+    # rollup slice is empty and EVERYTHING is read from raw — behaviour is then
+    # identical to the pre-rollup code.
+    # ------------------------------------------------------------------
+    _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+    async def _read_boundary(self) -> datetime:
+        wm = await self.get_rollup_watermark()
+        return wm if wm is not None else self._EPOCH
+
+    def _unified_usage_cte(self, boundary: datetime):
+        """A UNION ALL of (assignment_id, node_id, upload, download, total) rows
+        from the rollup (closed buckets) and raw (open window), as a subquery the
+        callers join to ClientAssignment/Node and aggregate over — identical to
+        how they aggregated raw records before, just over both sources."""
+        rollup = select(
+            TrafficHourly.assignment_id.label("assignment_id"),
+            TrafficHourly.node_id.label("node_id"),
+            TrafficHourly.upload_bytes.label("upload_bytes"),
+            TrafficHourly.download_bytes.label("download_bytes"),
+            TrafficHourly.total_bytes.label("total_bytes"),
+        ).where(TrafficHourly.hour_bucket < boundary)
+        raw = select(
+            TrafficRecord.assignment_id.label("assignment_id"),
+            TrafficRecord.node_id.label("node_id"),
+            TrafficRecord.upload_bytes.label("upload_bytes"),
+            TrafficRecord.download_bytes.label("download_bytes"),
+            TrafficRecord.total_bytes.label("total_bytes"),
+        ).where(TrafficRecord.collected_at >= boundary)
+        return rollup.union_all(raw).subquery("usage_src")
+
     async def usage_by_node(self) -> dict[uuid.UUID, int]:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
         # Weight by the node's usage_coefficient so reported usage matches the
         # enforced counters (ClientAssignment.used_bytes is coefficient-adjusted
-        # at ingest, while TrafficRecord.total_bytes is stored raw).
+        # at ingest, while stored bytes are raw). Reads from the rollup+raw union.
+        src = self._unified_usage_cte(await self._read_boundary())
         weighted = func.coalesce(
-            func.sum(TrafficRecord.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
+            func.sum(src.c.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
         )
         rows = (
             await self.session.execute(
                 select(Node.id, weighted)
-                .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
+                .select_from(src)
+                .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
                 .join(Node, Node.id == ClientAssignment.node_id)
                 .group_by(Node.id)
             )
@@ -313,13 +521,15 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
+        src = self._unified_usage_cte(await self._read_boundary())
         weighted = func.coalesce(
-            func.sum(TrafficRecord.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
+            func.sum(src.c.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
         )
         rows = (
             await self.session.execute(
                 select(ClientAssignment.user_id, weighted)
-                .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
+                .select_from(src)
+                .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
                 .join(Node, Node.id == ClientAssignment.node_id)
                 .where(ClientAssignment.node_id == node_id)
                 .group_by(ClientAssignment.user_id)
@@ -332,13 +542,15 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
+        src = self._unified_usage_cte(await self._read_boundary())
         weighted = func.coalesce(
-            func.sum(TrafficRecord.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
+            func.sum(src.c.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
         )
         rows = (
             await self.session.execute(
                 select(Node.id, Node.name, weighted)
-                .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
+                .select_from(src)
+                .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
                 .join(Node, Node.id == ClientAssignment.node_id)
                 .where(ClientAssignment.user_id == user_id)
                 .group_by(Node.id, Node.name)
@@ -352,7 +564,35 @@ class TrafficRepository:
     ) -> list[tuple[str, int, int]]:
         from app.domain.client_assignment import ClientAssignment
 
-        rows = (
+        # Hourly series: closed hours come pre-bucketed from traffic_hourly, the
+        # current/not-yet-rolled window from raw records bucketed in Python. The
+        # boundary keeps the two disjoint so no hour is counted from both.
+        boundary = await self._read_boundary()
+        buckets: dict[datetime, list[int]] = {}
+
+        hourly_rows = (
+            await self.session.execute(
+                select(
+                    TrafficHourly.hour_bucket,
+                    TrafficHourly.upload_bytes,
+                    TrafficHourly.download_bytes,
+                )
+                .join(ClientAssignment, ClientAssignment.id == TrafficHourly.assignment_id)
+                .where(
+                    getattr(ClientAssignment, field_name) == field_value,
+                    TrafficHourly.hour_bucket >= since,
+                    TrafficHourly.hour_bucket < boundary,
+                )
+            )
+        ).all()
+        for ts, up, down in hourly_rows:
+            when = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
+            hour = when.replace(minute=0, second=0, microsecond=0)
+            slot = buckets.setdefault(hour, [0, 0])
+            slot[0] += int(up or 0)
+            slot[1] += int(down or 0)
+
+        raw_rows = (
             await self.session.execute(
                 select(
                     TrafficRecord.collected_at,
@@ -363,11 +603,11 @@ class TrafficRepository:
                 .where(
                     getattr(ClientAssignment, field_name) == field_value,
                     TrafficRecord.collected_at >= since,
+                    TrafficRecord.collected_at >= boundary,
                 )
             )
         ).all()
-        buckets: dict[datetime, list[int]] = {}
-        for ts, up, down in rows:
+        for ts, up, down in raw_rows:
             when = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
             hour = when.replace(minute=0, second=0, microsecond=0)
             slot = buckets.setdefault(hour, [0, 0])
@@ -389,11 +629,13 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
+        src = self._unified_usage_cte(await self._read_boundary())
         coeff = func.coalesce(Node.usage_coefficient, 1.0)
         total = (
             await self.session.execute(
-                select(func.coalesce(func.sum(TrafficRecord.total_bytes * coeff), 0))
-                .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
+                select(func.coalesce(func.sum(src.c.total_bytes * coeff), 0))
+                .select_from(src)
+                .join(ClientAssignment, ClientAssignment.id == src.c.assignment_id)
                 .join(Node, Node.id == ClientAssignment.node_id)
                 .where(ClientAssignment.profile_id == profile_id)
             )
@@ -405,24 +647,57 @@ class TrafficRepository:
     ) -> list[tuple[str, int, int]]:
         from app.domain.client_assignment import ClientAssignment
 
-        day = func.date(TrafficRecord.collected_at)
-        rows = (
+        # Daily series derived by grouping the hourly rollup (closed hours) plus
+        # the raw open window by calendar day. The boundary keeps the two
+        # disjoint. Day grouping is done in Python so the two source shapes
+        # (hour_bucket vs collected_at) fold into the same day key uniformly.
+        boundary = await self._read_boundary()
+        days: dict[str, list[int]] = {}
+
+        def _add(ts: datetime, up: int, dn: int) -> None:
+            when = ts if ts.tzinfo else ts.replace(tzinfo=UTC)
+            key = when.date().isoformat()
+            slot = days.setdefault(key, [0, 0])
+            slot[0] += int(up or 0)
+            slot[1] += int(dn or 0)
+
+        hourly_rows = (
             await self.session.execute(
                 select(
-                    day,
-                    func.coalesce(func.sum(TrafficRecord.upload_bytes), 0),
-                    func.coalesce(func.sum(TrafficRecord.download_bytes), 0),
+                    TrafficHourly.hour_bucket,
+                    TrafficHourly.upload_bytes,
+                    TrafficHourly.download_bytes,
+                )
+                .join(ClientAssignment, ClientAssignment.id == TrafficHourly.assignment_id)
+                .where(
+                    ClientAssignment.user_id == user_id,
+                    TrafficHourly.hour_bucket >= since,
+                    TrafficHourly.hour_bucket < boundary,
+                )
+            )
+        ).all()
+        for ts, up, dn in hourly_rows:
+            _add(ts, up, dn)
+
+        raw_rows = (
+            await self.session.execute(
+                select(
+                    TrafficRecord.collected_at,
+                    TrafficRecord.upload_bytes,
+                    TrafficRecord.download_bytes,
                 )
                 .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
                 .where(
                     ClientAssignment.user_id == user_id,
                     TrafficRecord.collected_at >= since,
+                    TrafficRecord.collected_at >= boundary,
                 )
-                .group_by(day)
-                .order_by(day)
             )
         ).all()
-        return [(str(d), int(up or 0), int(dn or 0)) for d, up, dn in rows]
+        for ts, up, dn in raw_rows:
+            _add(ts, up, dn)
+
+        return [(d, days[d][0], days[d][1]) for d in sorted(days)]
 
     async def reactivate_disabled_assignments(self, user_id: uuid.UUID) -> list[uuid.UUID]:
         from app.domain.client_assignment import AssignmentStatus, ClientAssignment

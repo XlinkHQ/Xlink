@@ -145,6 +145,16 @@ class Settings(BaseSettings):
     rate_limit_fail_open: bool = True
     trusted_proxy_ips: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
+    # Per-node ingest quota (fixed 60s window keyed by the authenticated node id,
+    # NOT the client IP — agents behind one egress IP must not share a bucket, and
+    # distinct-IP agents must not each get a full quota). Bounds a looping or
+    # compromised agent flooding the ingest endpoints (traffic/state/metrics/logs/
+    # provider-health/connections). Generous default: a healthy node polls ~every
+    # 10s across a handful of endpoints, so 300/min leaves wide headroom while
+    # still capping a flood. 0 disables the per-node quota. Fails OPEN on a Redis
+    # outage (a limiter blip must not take real nodes offline).
+    agent_ingest_rate_limit_per_minute: int = 300
+
     default_page_size: int = 20
     max_page_size: int = 100
 
@@ -156,8 +166,16 @@ class Settings(BaseSettings):
     metrics_summary_refresh_seconds: int = 30
 
     traffic_retention_enabled: bool = True
+    # Rollup horizon: how long hourly aggregates are kept for analytics.
     traffic_retention_days: int = 90
     traffic_retention_interval_seconds: int = 86400
+    # Raw per-sample retention: raw traffic_records exist only for sub-hour/live
+    # precision and are dropped after this many days (never past the rollup
+    # watermark). Rollups carry history for the full traffic_retention_days.
+    traffic_raw_retention_days: int = 7
+    # Hourly rollup/compaction job cadence. Runs closed-hour aggregation.
+    traffic_rollup_enabled: bool = True
+    traffic_rollup_interval_seconds: int = 900
 
     assignment_expiration_enabled: bool = True
     assignment_expiration_interval_seconds: int = 30

@@ -61,6 +61,12 @@ class PermissionDeniedError(XLinkError):
     message = "You do not have permission to perform this action."
 
 
+class RateLimitError(XLinkError):
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    code = "rate_limited"
+    message = "Too many requests."
+
+
 def _envelope(code: str, message: str, details: Any = None) -> dict[str, Any]:
     body: dict[str, Any] = {"error": {"code": code, "message": message}}
     if details:

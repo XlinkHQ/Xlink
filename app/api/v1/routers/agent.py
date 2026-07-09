@@ -10,7 +10,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from app.agent.heartbeat import NodeHeartbeatService
 from app.agent.ip_limit import IpLimitService
-from app.dependencies.auth import SudoAdminUser
+from app.dependencies.auth import AgentIngestQuota, SudoAdminUser
 from app.dependencies.core import CacheDep, DatabaseDep
 from app.dependencies.services import NodeAgentServiceDep
 from app.repositories.node import NodeRepository
@@ -63,6 +63,7 @@ async def report_traffic(
     node_id: uuid.UUID,
     payload: TrafficReportRequest,
     agent: NodeAgentServiceDep,
+    _quota: AgentIngestQuota,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> TrafficReportResponse:
     batch = TrafficBatch(
@@ -96,6 +97,7 @@ async def report_connections(
     agent: NodeAgentServiceDep,
     db: DatabaseDep,
     cache: CacheDep,
+    _quota: AgentIngestQuota,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> StreamAck:
     await agent.authenticate(node_id, x_agent_token)
@@ -169,6 +171,7 @@ async def report_state(
     node_id: uuid.UUID,
     payload: ReportedStateRequest,
     agent: NodeAgentServiceDep,
+    _quota: AgentIngestQuota,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> DriftReportOut:
     report = await agent.report_state(
@@ -238,6 +241,7 @@ async def report_provider_health(
     node_id: uuid.UUID,
     payload: ProviderHealthReportRequest,
     agent: NodeAgentServiceDep,
+    _quota: AgentIngestQuota,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> StreamAck:
     count = await agent.record_provider_health(
@@ -253,6 +257,7 @@ async def stream_metrics(
     node_id: uuid.UUID,
     payload: MetricsStreamRequest,
     agent: NodeAgentServiceDep,
+    _quota: AgentIngestQuota,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> StreamAck:
     accepted, dropped = await agent.push_metrics(
@@ -268,6 +273,7 @@ async def stream_logs(
     node_id: uuid.UUID,
     payload: LogStreamRequest,
     agent: NodeAgentServiceDep,
+    _quota: AgentIngestQuota,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> StreamAck:
     accepted, dropped = await agent.push_logs(

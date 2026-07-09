@@ -5,10 +5,14 @@ from typing import Any
 import yaml
 
 from app.subscription.formats.base import FormatRenderError, label, setting, validate_node
+from app.subscription.formats.capabilities import supported_protocols
 from app.subscription.models import ProviderConfig
+from app.subscription.schemas import SubscriptionFormat
 
-CLASH_PROTOCOLS = frozenset({"vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022"})
-MIHOMO_PROTOCOLS = CLASH_PROTOCOLS | frozenset({"hysteria2", "tuic", "socks", "http", "shadowtls"})
+# Kept as module-level names for back-compat; sourced from the single capability
+# matrix so the allow-set can no longer drift from what the renderer emits.
+CLASH_PROTOCOLS = supported_protocols(SubscriptionFormat.CLASH_YAML)
+MIHOMO_PROTOCOLS = supported_protocols(SubscriptionFormat.MIHOMO_YAML)
 
 
 def _proxy_name(config: ProviderConfig) -> str:
