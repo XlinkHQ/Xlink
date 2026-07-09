@@ -203,12 +203,12 @@
   --input-height: 28px;
   --grid-gutter: 12px;
   --disabled-opacity: 0.5;
-  --focus-outline: 2px solid rgba(37, 99, 235, 0.25);
+  --focus-outline: 2px solid color-mix(in srgb, var(--accent-ring) 25%, transparent);
   --shadow-block: 0 4px 16px 0 rgba(0, 0, 0, 0.1);
 
   /* Design system v2 — Control Plane */
   --on-primary: #ffffff; /* text on blue primary (both modes) */
-  --focus-ring: rgba(37, 99, 235, 0.25); /* blue focus glow */
+  --focus-ring: color-mix(in srgb, var(--accent-ring) 25%, transparent); /* blue focus glow */
   --hairline: #dfe3e8; /* low-contrast 1px border (Linear) */
   --shadow-1: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
   --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
@@ -248,8 +248,8 @@
   --red-error-bg: #2a1620;
   --hairline: rgba(65, 65, 65, 0.1); /* WarpProxy dark border */
   --shadow-1: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --focus-outline: 2px solid rgba(14, 127, 248, 0.4);
-  --focus-ring: rgba(14, 127, 248, 0.35);
+  --focus-outline: 2px solid color-mix(in srgb, var(--accent-ring) 40%, transparent);
+  --focus-ring: color-mix(in srgb, var(--accent-ring) 35%, transparent);
 }
 
 *,
@@ -785,7 +785,7 @@ input.switch::before {
   left: 1px;
   width: 16px;
   height: 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--white);
   box-shadow: var(--shadow-soft);
   transition: transform 0.15s ease;
@@ -3013,7 +3013,7 @@ input.switch:focus-visible {
   justify-content: center;
   gap: var(--space-xxs);
   padding: 0 var(--space-sm);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background-color: var(--bg-light);
   color: var(--body-muted);
   font-size: var(--font-sm);
@@ -3127,14 +3127,14 @@ input.switch:focus-visible {
   width: 100%;
   height: 6px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--bg-light);
 }
 
 .metric-bar-track > span {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--primary);
   transition: width 0.3s ease;
 }
@@ -4149,8 +4149,8 @@ input.switch:focus-visible {
 }
 .warp-radial-fill {
   height: 10px;
-  border-radius: 9999px;
-  background-color: #0e7ff8;
+  border-radius: var(--radius-full);
+  background-color: var(--accent);
   transition: width 0.5s ease;
 }
 
@@ -4210,7 +4210,7 @@ input.switch:focus-visible {
 .warp-foot-dot {
   height: 6px;
   width: 6px;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   background-color: #d4d4d8;
   margin-right: 6px;
   display: inline-block;
@@ -4229,7 +4229,7 @@ input.switch:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--border-default);
 }
 .warp-tab-dark-light button {
@@ -4241,7 +4241,7 @@ input.switch:focus-visible {
   justify-content: center;
   border: none;
   background: transparent;
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
   cursor: pointer;
   color: #2a2a2a;
   font-size: 14px;
@@ -4322,7 +4322,7 @@ input.switch:focus-visible {
 .xlink-dark .warp-si-badge.warp-si-bg-green { color: #3FCE92; background: rgb(3 128 38 / .16); }
 .warp-si-badge .warp-si-sub { font-size: 10px; color: var(--fg-muted); }
 .warp-si-bg-green { padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(44,188,99,0.4); background-color: color-mix(in srgb, rgb(44,188,99) 16%, transparent); color: rgb(31,131,61); }
-.warp-si-bg-blue { padding: 3px 8px; border-radius: 8px; border: 1px solid rgba(14,127,248,0.4); background-color: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); cursor: pointer; }
+.warp-si-bg-blue { padding: 3px 8px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); background-color: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); cursor: pointer; }
 .xlink-dark .warp-si-box { background-color: transparent; border-color: rgba(255,255,255,0.08); }
 .xlink-dark .warp-si-box h5 { color: #fff; }
 .xlink-dark .warp-si-ip h4, .xlink-dark .warp-si-ip p { color: var(--fg-muted); }
@@ -4331,7 +4331,7 @@ input.switch:focus-visible {
 .xlink-dark .warp-si-badge { background-color: transparent; color: #9aa0a6; border-color: transparent; }
 .xlink-dark .warp-si-badge .warp-si-sub { color: #4a5361; }
 .xlink-dark .warp-si-badge.warp-si-bg-green { background-color: color-mix(in srgb, rgb(44,188,99) 16%, transparent); color: rgb(31,131,61); border-color: rgba(44,188,99,0.4); }
-.xlink-dark .warp-si-badge.warp-si-bg-blue { background-color: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: rgba(14,127,248,0.4); }
+.xlink-dark .warp-si-badge.warp-si-bg-blue { background-color: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 /* Dark: IP chip — no fill, just a green ring + green glyph. */
 .xlink-dark .warp-si-iconchip { background-color: transparent; border-color: rgba(255,255,255,0.08); color: #9aa0a6; }
 
@@ -4345,7 +4345,7 @@ input.switch:focus-visible {
 
 /* Node Activity — box-in-box (matches System Info) */
 .warp-node-chip {
-  height: 9px; width: 9px; flex: none; border-radius: 9999px;
+  height: 9px; width: 9px; flex: none; border-radius: var(--radius-full);
 }
 .warp-node-on { background-color: #038026; }
 .warp-node-off { background-color: var(--fg-subtle); }
@@ -4695,7 +4695,7 @@ input.switch:focus-visible {
 .warp-modal .modal-header {
   padding: 8px 12px 8px 16px;
   border-bottom: 1px solid var(--border-default);
-  font: 600 16px/24px var(--warp-font);
+  font: var(--fw-medium) 16px/24px var(--warp-font);
 }
 .warp-modal .modal-content { padding: 20px; }
 .warp-modal .modal-controls { padding-top: 24px; }
@@ -4751,7 +4751,7 @@ input.switch:focus-visible {
   caret-color: var(--fg, #1c1c1c);
   overflow: auto;
 }
-.warp-json-ta::selection { background: rgba(14,127,248,0.18); }
+.warp-json-ta::selection { background: color-mix(in srgb, var(--accent-ring) 18%, transparent); }
 .warp-json-ta::placeholder { color: var(--fg-muted, #9a9a9a); }
 .warp-json-pre .jk { color: #0451a5; }
 .warp-json-pre .js { color: #a31515; }
@@ -4802,7 +4802,7 @@ input.switch:focus-visible {
 .warp-code-editor.is-light .warp-code-ta { padding: 4px 0; }
 .warp-code-editor.is-light .warp-code-pre { color: #1c1c1c; }
 .warp-code-editor.is-light .warp-code-ta { caret-color: #1c1c1c; }
-.warp-code-editor.is-light .warp-code-ta::selection { background: rgba(14,127,248,0.18); }
+.warp-code-editor.is-light .warp-code-ta::selection { background: color-mix(in srgb, var(--accent-ring) 18%, transparent); }
 .warp-code-editor.is-light .warp-code-ta::placeholder { color: #9a9a9a; }
 .warp-code-editor.is-light .c-tag { color: #1e62d0; }
 .warp-code-editor.is-light .c-attr { color: #0e7ff8; }
@@ -4980,7 +4980,7 @@ input.switch:focus-visible {
 .warp-radial-svg { flex: none; }
 .warp-radial-track { fill: none; stroke: var(--border-default); stroke-width: 3.5; }
 .warp-radial-fill { fill: none; stroke-width: 3.5; stroke-linecap: round; transition: stroke-dashoffset 0.4s ease; }
-.warp-radial-fill.is-blue { stroke: #2563eb; }
+.warp-radial-fill.is-blue { stroke: var(--accent); }
 .warp-radial-fill.is-green { stroke: #16a34a; }
 .warp-radial-fill.is-orange { stroke: #d97706; }
 .warp-radial-fill.is-red { stroke: #dc2626; }
@@ -4988,8 +4988,8 @@ input.switch:focus-visible {
 .xlink-dark .warp-radial-track { stroke: rgba(255,255,255,0.1); }
 .xlink-dark .warp-radial-label { color: #ddd; }
 
-.warp-tb-bar { height: 5px; width: 64px; border-radius: 9999px; background: #e8e8e9; overflow: hidden; flex: none; }
-.warp-tb-bar > div { height: 5px; border-radius: 9999px; background: #0e7ff8; transition: width 0.3s ease; }
+.warp-tb-bar { height: 5px; width: 64px; border-radius: var(--radius-full); background: #e8e8e9; overflow: hidden; flex: none; }
+.warp-tb-bar > div { height: 5px; border-radius: var(--radius-full); background: var(--accent); transition: width 0.3s ease; }
 .warp-tb-bar.is-unlimited > div { background: #17803d; }
 .warp-tb-bar.is-danger > div { background: #e0564f; }
 
@@ -5137,7 +5137,7 @@ input.switch:focus-visible {
 .warp-chips { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .warp-chip {
   height: 30px; padding: 0 12px;
-  border: 1px solid var(--border-default); border-radius: 9999px;
+  border: 1px solid var(--border-default); border-radius: var(--radius-full);
   background: #fff; color: var(--fg-muted);
   font-family: var(--warp-font); font-size: 13px; cursor: pointer;
   transition: background-color 0.15s ease;
@@ -5254,7 +5254,7 @@ input.switch:focus-visible {
 .warp-tb-rowicon:focus-visible,
 .warp-confirm-input:focus-visible,
 .warp-set-input:focus-visible {
-  outline: 2px solid #0e7ff8;
+  outline: 2px solid var(--accent-ring);
   outline-offset: 2px;
 }
 .warp-tb-row:focus-visible { outline-offset: -2px; }
@@ -5300,7 +5300,7 @@ input.switch:focus-visible {
   font-family: var(--font-mono); font-size: 14px; color: #111; outline: none;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.warp-confirm-input:focus { border-color: #0e7ff8; box-shadow: 0 0 0 3px rgba(14,127,248,0.12); background: #fff; }
+.warp-confirm-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-ring) 12%, transparent); background: #fff; }
 .warp-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .xlink-dark .warp-confirm-input { background: #161616; }
 .xlink-dark .warp-confirm { background: #0b0b0b; border-color: rgba(255,255,255,0.12); }
@@ -5315,7 +5315,7 @@ input.switch:focus-visible {
 }
 .warp-confirm-select::-webkit-scrollbar { width: 8px; }
 .warp-confirm-select::-webkit-scrollbar-thumb {
-  background: var(--border-default); border-radius: 999px;
+  background: var(--border-default); border-radius: var(--radius-full);
   border: 2px solid transparent; background-clip: content-box;
 }
 .warp-confirm-select::-webkit-scrollbar-thumb:hover { background: var(--fg-subtle); background-clip: content-box; }
@@ -5333,7 +5333,7 @@ input.switch:focus-visible {
 .warp-confirm-option.is-selected { background: var(--accent-muted); color: var(--accent); font-weight: 500; }
 .warp-confirm-option.is-selected::before {
   content: ""; position: absolute; left: 11px; top: 50%;
-  width: 6px; height: 6px; margin-top: -3px; border-radius: 999px;
+  width: 6px; height: 6px; margin-top: -3px; border-radius: var(--radius-full);
   background: var(--accent);
 }
 .warp-confirm-option.is-disabled { cursor: default; opacity: 0.6; }
@@ -5710,7 +5710,7 @@ input.switch:focus-visible {
 .warp-rt-status { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:500; user-select:none; background:none; border:0; padding:0; cursor:pointer; }
 .warp-rt-status.is-on { color:#14bc6e; }
 .warp-rt-status.is-off { color:#899ca8; }
-.warp-rt-dot { width:7px; height:7px; border-radius:999px; background: currentColor; flex:none; }
+.warp-rt-dot { width:7px; height:7px; border-radius: var(--radius-full); background: currentColor; flex:none; }
 
 .warp-rt-actions { display:flex; justify-content:flex-end; }
 
@@ -5770,11 +5770,11 @@ input.switch:focus-visible {
 /* Badge (shadcn-style variants, XLink colors) */
 .warp-badge2 {
   display: inline-flex; align-items: center; gap: 6px;
-  height: 20px; padding: 0 9px; border-radius: 999px;
+  height: 20px; padding: 0 9px; border-radius: var(--radius-full);
   font-family: var(--warp-font); font-size: 11.5px; font-weight: 500; line-height: 1;
   white-space: nowrap; border: 1px solid transparent;
 }
-.warp-badge2-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.warp-badge2-dot { width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; }
 .warp-badge2.is-default { background: var(--accent); color: #fff; }
 .warp-badge2.is-secondary { background: var(--bg-emphasis); color: var(--fg-default); }
 .warp-badge2.is-destructive { background: #CC3C3C; color: #fff; }
@@ -5843,7 +5843,7 @@ input.switch:focus-visible {
 .warp-switch { position: relative; display: inline-flex; cursor: pointer; }
 .warp-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
 .warp-switch-track {
-  width: 36px; height: 20px; border-radius: 999px;
+  width: 36px; height: 20px; border-radius: var(--radius-full);
   background: var(--bg-emphasis);
   border: 1px solid var(--border-default);
   transition: background .15s ease, border-color .15s ease;
@@ -5851,7 +5851,7 @@ input.switch:focus-visible {
 }
 .warp-switch-track::after {
   content: ""; position: absolute; top: 2px; left: 2px;
-  width: 14px; height: 14px; border-radius: 999px;
+  width: 14px; height: 14px; border-radius: var(--radius-full);
   background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
   transition: transform .15s ease;
 }
@@ -5937,7 +5937,7 @@ input.switch:focus-visible {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 100px;      /* radius-full */
+  border-radius: var(--radius-full);      /* radius-full */
   background: var(--accent-muted);
   color: var(--accent);
 }
@@ -5956,7 +5956,7 @@ input.switch:focus-visible {
 .warp-ss-head { margin-bottom: 20px; }     /* SizedBox spacing-xl before fields */
 .warp-ss-title {
   margin: 0;
-  font: 600 16px/24px var(--warp-font);    /* --t-body-primary-600 */
+  font: var(--fw-medium) 16px/24px var(--warp-font);    /* --t-body-primary-600 */
   color: var(--fg-default);
 }
 .warp-ss-desc {
@@ -5988,7 +5988,7 @@ input.switch:focus-visible {
   display: grid; place-items: center; height: 16px; width: 16px; flex: none;
   border-radius: 4px; border: 1px solid rgba(0,0,0,0.2); font-size: 10px; line-height: 1;
 }
-.warp-dlg-picker-item.is-sel .warp-dlg-check { background: #2563eb; color: #fff; border-color: #2563eb; }
+.warp-dlg-picker-item.is-sel .warp-dlg-check { background: var(--accent); color: #fff; border-color: var(--accent); }
 .xlink-dark .warp-dlg-check { border-color: rgba(255,255,255,0.25); }
 
 /* Dialog password field — input + inline icons, same width as other fields */
@@ -6114,7 +6114,7 @@ input.switch:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font: 600 18px/28px var(--warp-font);
+  font: var(--fw-medium) 18px/28px var(--warp-font);
   color: var(--fg-default);
 }
 .warp-overview-title svg { color: #7E8794; }
@@ -6154,7 +6154,7 @@ input.switch:focus-visible {
 .warp-stat > .label svg { color: #7E8794; flex: none; }
 .warp-stat > .count {
   padding-bottom: var(--space-2);
-  font: 600 28px/40px var(--warp-font);
+  font: var(--fw-medium) 28px/40px var(--warp-font);
   color: var(--fg-faded);
 }
 .warp-stat-sub {
@@ -6248,19 +6248,19 @@ input.switch:focus-visible {
   color: var(--fg-muted);
 }
 .warp-res-pct {
-  font: 600 26px/32px var(--warp-font);
+  font: var(--fw-medium) 26px/32px var(--warp-font);
   color: var(--fg-default);
   padding-bottom: var(--space-2);
 }
 .warp-res-bar {
   height: 6px;
-  border-radius: 100px;
+  border-radius: var(--radius-full);
   background: var(--bg-active);
   overflow: hidden;
 }
 .warp-res-fill {
   height: 100%;
-  border-radius: 100px;
+  border-radius: var(--radius-full);
   background: var(--accent);
   transition: width 0.4s ease;
 }
@@ -6453,7 +6453,7 @@ input.switch:focus-visible {
 .warp-svc-bundles { display: flex; flex-flow: row wrap; gap: 8px; }
 .warp-svc-bundle {
   display: inline-flex; align-items: center; gap: 6px;
-  height: 32px; padding: 0 12px; border-radius: 100px;
+  height: 32px; padding: 0 12px; border-radius: var(--radius-full);
   font-family: var(--warp-font); font-weight: 500; font-size: 13px; line-height: 1;
   cursor: pointer; white-space: nowrap;
   background: transparent; color: var(--accent);
@@ -6576,10 +6576,10 @@ input.switch:focus-visible {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .warp-nu-bar {
-  flex: 1 1 auto; height: 8px; border-radius: 100px; overflow: hidden;
+  flex: 1 1 auto; height: 8px; border-radius: var(--radius-full); overflow: hidden;
   background: var(--accent-muted);
 }
-.warp-nu-bar-fill { display: block; height: 100%; border-radius: 100px; background: var(--accent); }
+.warp-nu-bar-fill { display: block; height: 100%; border-radius: var(--radius-full); background: var(--accent); }
 .warp-nu-row-val {
   width: 112px; flex: none; text-align: right;
   font-family: var(--warp-font); font-weight: 500; font-size: 14px; line-height: 20px;
@@ -6612,14 +6612,14 @@ input.switch:focus-visible {
 .warp-topbar-bar {
   width: 30px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--bg-active);
   overflow: hidden;
 }
 .warp-topbar-bar .bar {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: rgb(3 128 38);
 }
 .warp-topbar-bar.critical .bar { background: rgb(204 60 60); }
@@ -6751,7 +6751,7 @@ input.switch:focus-visible {
   border-color: #939CA9;
 }
 .xlink-dark .warp-section-select { border-color: #32363B; }
-.xlink-dark .warp-section-select:hover { border-color: #4A5059; }
+.xlink-dark .warp-section-select:hover { border-color: var(--border-strong); }
 .warp-section-select-content {
   display: flex;
   flex-direction: column;
