@@ -485,25 +485,16 @@ class UserService:
         return {gid for (gid,) in rows.all()}
 
     async def scoped_profile_ids(self, admin_id: uuid.UUID) -> set[uuid.UUID]:
-        # Profiles a scoped admin may use = the union of profile_ids across the
+        # Profiles a scoped admin may use = the union of profile ids across the
         # groups granted to them. Used to stop a reseller from pinning a user
-        # onto an arbitrary profile/node outside their scope.
-        from app.domain.group import Group
+        # onto an arbitrary profile/node outside their scope. Now a single
+        # indexed query over the group_profiles join table.
+        from app.repositories.group import GroupRepository
 
         group_ids = await self.scoped_group_ids(admin_id)
         if not group_ids:
             return set()
-        rows = await self._repo.session.execute(
-            select(Group.profile_ids).where(Group.id.in_(group_ids))
-        )
-        out: set[uuid.UUID] = set()
-        for (pids,) in rows.all():
-            for pid in pids or []:
-                try:
-                    out.add(uuid.UUID(str(pid)))
-                except (ValueError, TypeError):
-                    continue
-        return out
+        return await GroupRepository(self._repo.session).profile_ids_for_groups(group_ids)
 
     async def get_by_identifier(self, identifier: str) -> User | None:
         return await self._repo.get_by_identifier(identifier)

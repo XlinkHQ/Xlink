@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+import uuid
+from collections.abc import Iterable, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import delete, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError
-from app.domain.group import Group
+from app.domain.group import Group, group_profiles
 from app.repositories.base import BaseRepository
 from app.repositories.conflicts import conflict_from_integrity
 
@@ -45,3 +46,46 @@ class GroupRepository(BaseRepository[Group]):
     async def list_all(self) -> Sequence[Group]:
         result = await self.session.execute(select(Group).order_by(Group.created_at.desc()))
         return result.scalars().all()
+
+    async def set_profiles(
+        self, group_id: uuid.UUID, profile_ids: Iterable[uuid.UUID]
+    ) -> None:
+        """Replace a group's profile membership in the join table. Indexed
+        delete-then-insert instead of rewriting a JSON blob."""
+        await self.session.execute(
+            delete(group_profiles).where(group_profiles.c.group_id == group_id)
+        )
+        rows = [{"group_id": group_id, "profile_id": pid} for pid in dict.fromkeys(profile_ids)]
+        if rows:
+            await self.session.execute(insert(group_profiles), rows)
+
+    async def remove_profile_everywhere(self, profile_id: uuid.UUID) -> Sequence[uuid.UUID]:
+        """Drop a profile from every group that contains it, returning the
+        affected group ids. Replaces the full-table JSON scan on profile delete."""
+        affected = (
+            await self.session.execute(
+                select(group_profiles.c.group_id).where(
+                    group_profiles.c.profile_id == profile_id
+                )
+            )
+        ).scalars().all()
+        if affected:
+            await self.session.execute(
+                delete(group_profiles).where(group_profiles.c.profile_id == profile_id)
+            )
+        return affected
+
+    async def profile_ids_for_groups(
+        self, group_ids: Iterable[uuid.UUID]
+    ) -> set[uuid.UUID]:
+        """Union of profile ids across the given groups — one indexed query
+        instead of loading every group and unioning JSON in Python."""
+        ids = list(group_ids)
+        if not ids:
+            return set()
+        rows = await self.session.execute(
+            select(group_profiles.c.profile_id)
+            .where(group_profiles.c.group_id.in_(ids))
+            .distinct()
+        )
+        return set(rows.scalars().all())

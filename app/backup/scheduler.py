@@ -2,55 +2,37 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import dataclasses
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 
 import anyio
 
-from app.backup.models import BackupDocument
-from app.backup.service import BackupService
+from app.backup.models import BackupScope
+from app.backup.stream_writer import prune_backups, stream_export_to_file
 from app.core.logging import get_logger
 from app.db.session import Database
 
 logger = get_logger("xlink.backup.scheduler")
 
 
-def _serialize(document: BackupDocument) -> str:
-    payload = dataclasses.asdict(document)
-    payload["scope"] = document.scope.value
-    payload["exported_at"] = document.exported_at.isoformat()
-    return json.dumps(payload, default=str, indent=2)
-
-
-def _write_backup(directory: Path, keep: int, payload: str) -> tuple[Path, int]:
+def _prepare_dir(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     with contextlib.suppress(OSError):
         directory.chmod(0o700)
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    target = directory / f"xlink-backup-{stamp}.json"
-    # Backups carry node/proxy secrets in cleartext — restrict to owner before
-    # writing so they aren't world/group-readable on shared hosts.
-    target.touch(mode=0o600, exist_ok=True)
-    with contextlib.suppress(OSError):
-        target.chmod(0o600)
-    target.write_text(payload, encoding="utf-8")
-
-    backups = sorted(directory.glob("xlink-backup-*.json"))
-    for stale in backups[: max(0, len(backups) - keep)]:
-        with contextlib.suppress(OSError):
-            stale.unlink()
-    return target, min(len(backups), keep)
 
 
 async def run_backup(db: Database, *, directory: Path, keep: int) -> Path:
-    async with db.session() as session:
-        document = await BackupService(session).export_full()
+    await anyio.to_thread.run_sync(_prepare_dir, directory)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    target = directory / f"xlink-backup-{stamp}.json"
+    # Write to a sibling tmp file then atomically rename: readers/retention never
+    # observe a partially-written backup, and the export streams row-by-row so
+    # memory stays bounded regardless of dataset size (500k+ assignment rows).
+    tmp = directory / f".xlink-backup-{stamp}.json.tmp"
 
-    target, kept = await anyio.to_thread.run_sync(
-        _write_backup, directory, keep, _serialize(document)
-    )
+    await stream_export_to_file(db, target=target, tmp=tmp, scope=BackupScope.FULL)
+    kept = await anyio.to_thread.run_sync(prune_backups, directory, keep)
+
     logger.info("auto_backup_written", path=str(target), kept=kept)
     return target
 

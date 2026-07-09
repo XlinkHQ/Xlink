@@ -208,18 +208,11 @@ class ProfileService:
         await self._invalidate_subscription_cache(node_id)
 
     async def _scrub_profile_from_groups(self, profile_id: uuid.UUID) -> None:
-        from sqlalchemy import select
+        # Indexed delete on the join table — no longer loads every group and
+        # rewrites its JSON in Python.
+        from app.repositories.group import GroupRepository
 
-        from app.domain.group import Group
-
-        pid = str(profile_id)
-        rows = (await self._repo.session.execute(select(Group))).scalars().all()
-        for group in rows:
-            ids = group.profile_ids or []
-            filtered = [p for p in ids if str(p) != pid]
-            if len(filtered) != len(ids):
-                group.profile_ids = filtered
-                self._repo.session.add(group)
+        await GroupRepository(self._repo.session).remove_profile_everywhere(profile_id)
 
     async def list_profiles_keyset(
         self,

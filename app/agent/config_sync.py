@@ -216,6 +216,167 @@ def _build_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str,
     return None
 
 
+# --- sing-box routing translation ---------------------------------------
+#
+# sing-box has its own routing engine (route.rules + route.final + outbound
+# objects), shaped differently from Xray's. The Xray path above is left
+# untouched; this path mirrors its guards (dangling-outbound drop, direct
+# default) in sing-box's own vocabulary so a sing-box node honours the SAME
+# admin routing rules instead of silently ignoring every one of them.
+#
+# Builtin outbound tag mapping (Xray <-> sing-box):
+#   direct / proxy / freedom  -> {"type": "direct"}
+#   block   / blackhole       -> {"type": "block"}
+#   warp                      -> {"type": "wireguard", ...}  (needs WARP keys)
+# Custom DB outbounds are translated by _build_singbox_outbound where the
+# protocol maps cleanly; anything that can't be expressed is dropped and the
+# rule referencing it is dropped too (with a logged warning), never faked.
+
+# sing-box 1.11 inline route rules do not accept the geosite/geoip/ext:
+# selectors Xray takes (those moved to rule_set); rather than emit a config
+# the core rejects wholesale, we drop those individual selectors and log.
+def _singbox_route_rule(match_type: str, values: list[str], outbound: str) -> tuple[dict[str, Any] | None, list[str]]:
+    """Translate one admin RoutingRule into a sing-box route rule.
+
+    Returns (rule, dropped_selectors). rule is None when nothing survived the
+    translation (e.g. every value was a geosite/geoip selector)."""
+    rule: dict[str, Any] = {"outbound": outbound}
+    dropped: list[str] = []
+    if match_type == "ip":
+        cidrs = [v for v in values if not v.startswith(("geoip:", "ext:"))]
+        dropped = [v for v in values if v.startswith(("geoip:", "ext:"))]
+        if not cidrs:
+            return None, dropped
+        rule["ip_cidr"] = cidrs
+    elif match_type == "port":
+        ports: list[int] = []
+        ranges: list[str] = []
+        for v in values:
+            if "-" in v:
+                lo, _, hi = v.partition("-")
+                ranges.append(f"{lo}:{hi}")
+            elif v.isdigit():
+                ports.append(int(v))
+            else:
+                dropped.append(v)
+        if ports:
+            rule["port"] = ports
+        if ranges:
+            rule["port_range"] = ranges
+        if not ports and not ranges:
+            return None, dropped
+    else:  # domain
+        exact: list[str] = []
+        suffix: list[str] = []
+        for v in values:
+            if v.startswith(("geosite:", "ext:")):
+                dropped.append(v)
+            elif v.startswith("full:"):
+                exact.append(v[len("full:") :])
+            elif v.startswith("domain:"):
+                suffix.append(v[len("domain:") :])
+            else:
+                # Xray treats a bare domain as a subdomain match; domain_suffix
+                # is the closest sing-box equivalent.
+                suffix.append(v)
+        if exact:
+            rule["domain"] = exact
+        if suffix:
+            rule["domain_suffix"] = suffix
+        if not exact and not suffix:
+            return None, dropped
+    return rule, dropped
+
+
+def _build_singbox_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str, Any] | None:
+    """Translate a DB Outbound (or a builtin spec) to a sing-box outbound.
+
+    Returns None when the type can't be expressed in sing-box — the caller
+    drops any rule pointing at it and logs, rather than faking a passthrough."""
+    if type_ in ("direct", "freedom", "proxy"):
+        return {"type": "direct", "tag": tag}
+    if type_ in ("block", "blackhole"):
+        return {"type": "block", "tag": tag}
+    if type_ == "dns":
+        return {"type": "dns", "tag": tag}
+    if type_ == "custom":
+        raw = settings.get("raw")
+        # A custom outbound authored as raw sing-box (has a sing-box "type")
+        # passes through; a raw Xray outbound (has "protocol") can't be reused.
+        if isinstance(raw, dict) and raw.get("type"):
+            return {**raw, "tag": tag}
+        return None
+    if type_ in ("socks", "http"):
+        host, port = _parse_host_port(str(settings.get("address", "")))
+        if host is None or port is None:
+            return None
+        out: dict[str, Any] = {"type": type_, "tag": tag, "server": host, "server_port": port}
+        if settings.get("username"):
+            out["username"] = str(settings["username"])
+            out["password"] = str(settings.get("password", ""))
+        return out
+    if type_ == "shadowsocks":
+        host, port = _parse_host_port(str(settings.get("address", "")))
+        if host is None or port is None or not settings.get("password"):
+            return None
+        return {
+            "type": "shadowsocks",
+            "tag": tag,
+            "server": host,
+            "server_port": port,
+            "method": settings.get("method", "aes-256-gcm"),
+            "password": settings["password"],
+        }
+    if type_ in ("vmess", "vless"):
+        host, port = _parse_host_port(str(settings.get("address", "")))
+        uid = settings.get("id") or settings.get("uuid")
+        if host is None or port is None or not uid:
+            return None
+        out = {"type": type_, "tag": tag, "server": host, "server_port": port, "uuid": uid}
+        if type_ == "vless" and settings.get("flow"):
+            out["flow"] = settings["flow"]
+        return out
+    if type_ == "trojan":
+        host, port = _parse_host_port(str(settings.get("address", "")))
+        if host is None or port is None or not settings.get("password"):
+            return None
+        return {
+            "type": "trojan",
+            "tag": tag,
+            "server": host,
+            "server_port": port,
+            "password": settings["password"],
+        }
+    if type_ == "wireguard":
+        if not settings.get("secretKey"):
+            return None
+        return {
+            "type": "wireguard",
+            "tag": tag,
+            "server": settings.get("endpoint", "").rsplit(":", 1)[0] or settings.get("endpoint", ""),
+            "server_port": _wg_endpoint_port(settings.get("endpoint", "")),
+            "local_address": [
+                a.strip()
+                for a in str(settings.get("address", "172.16.0.2/32")).split(",")
+                if a.strip()
+            ],
+            "private_key": settings["secretKey"],
+            "peer_public_key": settings.get("publicKey", ""),
+            **({"pre_shared_key": settings["preSharedKey"]} if settings.get("preSharedKey") else {}),
+            **(
+                {"reserved": [int(x) for x in str(settings["reserved"]).split(",") if x.strip().isdigit()]}
+                if settings.get("reserved")
+                else {}
+            ),
+        }
+    return None
+
+
+def _wg_endpoint_port(endpoint: str) -> int:
+    _, port = _parse_host_port(endpoint)
+    return port if port is not None else 2408
+
+
 def _user_serviceable(now: datetime):
     return and_(
         User.is_active.is_(True),
@@ -589,6 +750,174 @@ class ConfigSyncService:
             xray["outbounds"] = outbounds
             xray["routing"] = routing
             templates["xray"] = xray
+
+        # sing-box has its own routing engine — translate the SAME admin rules /
+        # outbounds into its shape so a sing-box node honours them instead of
+        # silently ignoring every one. Xray path above is untouched.
+        if isinstance(templates.get("sing-box"), dict):
+            self._merge_singbox_routing(templates, row, db_rules, db_outbounds, node)
+
+        # hysteria / wireguard have no general routing engine — a rule simply
+        # cannot be expressed there. Don't fake it: log ONCE per core per apply
+        # (not per rule) so an admin knows their rules won't reach these nodes.
+        if db_rules:
+            for core in ("hysteria", "wireguard"):
+                if isinstance(templates.get(core), dict):
+                    logger.warning(
+                        "routing_rules_unsupported_by_core",
+                        core=core,
+                        rule_count=len(db_rules),
+                    )
+
+    def _merge_singbox_routing(
+        self, templates: dict[str, Any], row, db_rules, db_outbounds, node
+    ) -> None:
+        sb = dict(templates.get("sing-box") or {})
+        outbounds = list(sb.get("outbounds") or [])
+        route = dict(sb.get("route") or {})
+        rules = list(route.get("rules") or [])
+        changed = False
+
+        present = {o.get("tag") for o in outbounds if isinstance(o, dict)}
+
+        # WARP: sing-box expresses WARP as a wireguard outbound built from the
+        # panel's WARP keys (same source as the Xray path).
+        if (
+            row is not None
+            and row.warp_enabled
+            and row.warp_private_key
+            and row.warp_address
+            and "warp" not in present
+        ):
+            warp_ob = _build_singbox_outbound(
+                "warp",
+                "wireguard",
+                {
+                    "secretKey": row.warp_private_key,
+                    "publicKey": row.warp_public_key,
+                    "endpoint": row.warp_endpoint,
+                    "address": row.warp_address,
+                    "reserved": row.warp_reserved,
+                },
+            )
+            if warp_ob is not None:
+                outbounds.append(warp_ob)
+                present.add("warp")
+                changed = True
+
+        # Translate custom DB outbounds. A type that can't be expressed in
+        # sing-box is skipped here and any rule pointing at it is dropped below.
+        for ob in db_outbounds:
+            if ob.tag in present:
+                continue
+            try:
+                built = _build_singbox_outbound(ob.tag, ob.type, ob.settings or {})
+            except Exception as exc:
+                logger.warning(
+                    "singbox_outbound_build_failed", tag=ob.tag, type=ob.type, error=str(exc)
+                )
+                built = None
+            if built is None:
+                logger.warning("singbox_outbound_unsupported", tag=ob.tag, type=ob.type)
+                continue
+            outbounds.append(built)
+            present.add(ob.tag)
+            changed = True
+
+        # Build sing-box rules from the same admin RoutingRules. Prepend them so
+        # they run before any template rules (mirrors the Xray first-match order).
+        _BUILTIN = {
+            "direct": ("direct", {}),
+            "proxy": ("direct", {}),
+            "block": ("block", {}),
+            "dns": ("dns", {}),
+        }
+        db_built: list[dict[str, Any]] = []
+        dropped_selectors: dict[str, list[str]] = {}
+        for rr in db_rules:
+            values = [v.strip() for v in rr.match_values.split(",") if v.strip()]
+            if not values:
+                continue
+            rule, dropped = _singbox_route_rule(rr.match_type, values, rr.outbound)
+            if dropped:
+                dropped_selectors.setdefault(rr.match_type, []).extend(dropped)
+            if rule is None:
+                continue
+            db_built.append(rule)
+        if dropped_selectors:
+            logger.warning(
+                "singbox_route_selectors_unsupported",
+                dropped={k: sorted(set(v)) for k, v in dropped_selectors.items()},
+            )
+        if db_built:
+            rules = db_built + rules
+            changed = True
+
+        # Provide builtin outbounds on demand and drop rules that still dangle —
+        # a rule pointing at a missing outbound makes sing-box reject the whole
+        # config (so the node keeps its stale config).
+        referenced = {r.get("outbound") for r in rules if isinstance(r, dict) and r.get("outbound")}
+        for tag in referenced - present:
+            spec = _BUILTIN.get(tag)
+            if spec is not None:
+                built = _build_singbox_outbound(tag, spec[0], spec[1])
+                if built is not None:
+                    outbounds.append(built)
+                    present.add(tag)
+                    changed = True
+        still_missing = referenced - present
+        if still_missing:
+            kept = [
+                r for r in rules if not (isinstance(r, dict) and r.get("outbound") in still_missing)
+            ]
+            if len(kept) != len(rules):
+                logger.warning(
+                    "singbox_routing_rule_dropped_missing_outbound", tags=sorted(still_missing)
+                )
+                rules = kept
+                changed = True
+
+        # sing-box routes UNMATCHED traffic through route.final (or, absent that,
+        # the first outbound). Guarantee a `direct` outbound exists and is the
+        # default so unmatched user traffic never silently exits through a relay,
+        # and so an empty outbounds list (which sing-box rejects) is never emitted.
+        if changed or rules:
+            if "direct" not in present:
+                direct = _build_singbox_outbound("direct", "direct", {})
+                if direct is not None:
+                    outbounds.insert(0, direct)
+                    present.add("direct")
+                    changed = True
+            if not route.get("final"):
+                route["final"] = "direct"
+                changed = True
+
+        if node is not None and node.socks_enabled and node.socks_address:
+            host, port = _parse_host_port(node.socks_address)
+            if not host or port is None:
+                logger.warning(
+                    "socks_address_invalid", node_id=str(node.id), address=node.socks_address
+                )
+            elif "socks-out" not in present:
+                socks_outbound: dict[str, Any] = {
+                    "type": "socks",
+                    "tag": "socks-out",
+                    "server": host,
+                    "server_port": port,
+                }
+                if node.socks_username:
+                    socks_outbound["username"] = node.socks_username
+                    socks_outbound["password"] = node.socks_password or ""
+                outbounds.append(socks_outbound)
+                present.add("socks-out")
+                route["final"] = "socks-out"
+                changed = True
+
+        if changed:
+            route["rules"] = rules
+            sb["route"] = route
+            sb["outbounds"] = outbounds
+            templates["sing-box"] = sb
 
     async def build_snapshot(self, node: Node) -> dict[str, Any]:
         config = await self.desired_config(node.id)
