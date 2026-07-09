@@ -154,15 +154,11 @@ export function DashboardScreen() {
   const cpuPct = Math.round(s?.cpu_percent ?? 0);
 
   const WINDOW = 60;
-  const seed = () => {
-    const now = Date.now();
-    return Array.from({ length: WINDOW }, (_, i) => ({
-      x: now - (WINDOW - 1 - i) * 5000,
-      y: 0,
-    }));
-  };
-  const [down, setDown] = useState<{ x: number; y: number }[]>(seed);
-  const [up, setUp] = useState<{ x: number; y: number }[]>(seed);
+  // Start EMPTY, not with 60 fake zero points — a pre-seeded zero line drew a flat
+  // graph even when no traffic had ever been sampled ("chart makes up a line with
+  // no traffic"). Points are appended only from real successive-poll deltas.
+  const [down, setDown] = useState<{ x: number; y: number }[]>([]);
+  const [up, setUp] = useState<{ x: number; y: number }[]>([]);
   const prevTotals = useRef<{ d: number; u: number; at: number } | null>(null);
   useEffect(() => {
     if (!t) return;
@@ -171,6 +167,8 @@ export function DashboardScreen() {
     const uBytes = t.upload_bytes;
     const prev = prevTotals.current;
     prevTotals.current = { d: dBytes, u: uBytes, at: now };
+    // The first poll only establishes a baseline — a rate needs two samples, so
+    // don't plot anything until we have a real delta between two polls.
     if (!prev) return;
     const dt = Math.max(1, (now - prev.at) / 1000);
     const dMbps = +((Math.max(0, dBytes - prev.d) * 8) / 1e6 / dt).toFixed(2);
@@ -178,6 +176,7 @@ export function DashboardScreen() {
     setDown((s) => [...s.slice(-(WINDOW - 1)), { x: now, y: dMbps }]);
     setUp((s) => [...s.slice(-(WINDOW - 1)), { x: now, y: uMbps }]);
   }, [trafficQ.dataUpdatedAt]);
+  const hasThroughput = down.length > 0;
 
   const activity = useMemo(
     () =>
@@ -275,7 +274,16 @@ export function DashboardScreen() {
                 <span className="warp-peak-up">{fmtRate(peakUp)}</span>
               </div>
             </div>
-            <ReactApexChart options={chartOptions} series={chartSeries} type="area" height={250} />
+            {hasThroughput ? (
+              <ReactApexChart options={chartOptions} series={chartSeries} type="area" height={250} />
+            ) : (
+              <div
+                className="grid place-items-center text-sm text-fg-muted"
+                style={{ height: 250 }}
+              >
+                Waiting for live traffic…
+              </div>
+            )}
           </div>
         </div>
       </OverviewCard>
