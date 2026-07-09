@@ -15,6 +15,7 @@ from app.schemas.auth import (
     RefreshRequest,
     TokenPair,
     TotpConfirmRequest,
+    TotpEnrollRequest,
     TotpEnrollResponse,
 )
 from app.schemas.user import UserCreate
@@ -37,8 +38,12 @@ async def login(payload: LoginRequest, auth: AuthServiceDep) -> AuthResponse:
 
 
 @router.post("/2fa/enroll", response_model=TotpEnrollResponse)
-async def totp_enroll(user: CurrentUser, auth: AuthServiceDep) -> TotpEnrollResponse:
-    secret, uri = await auth.begin_totp_enrollment(user.id)
+async def totp_enroll(
+    user: CurrentUser, auth: AuthServiceDep, payload: TotpEnrollRequest | None = None
+) -> TotpEnrollResponse:
+    secret, uri = await auth.begin_totp_enrollment(
+        user.id, code=payload.code if payload else None
+    )
     return TotpEnrollResponse(secret=secret, otpauth_uri=uri)
 
 

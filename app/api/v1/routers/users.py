@@ -234,6 +234,12 @@ async def bulk_user_action(
         raise ValidationError("Unknown bulk action.", code="unknown_bulk_action")
     if len(payload.user_ids) > 1000:
         raise ValidationError("Too many users in one request (max 1000).", code="bulk_too_large")
+    # The single-user endpoints forbid an admin acting destructively on their own
+    # account (_guard_not_self); the bulk path must not be an escape hatch. Reject
+    # a self-targeting destructive bulk action outright rather than silently
+    # skipping it, so the caller notices.
+    if payload.action in ("delete", "disable") and admin.id in payload.user_ids:
+        _guard_not_self(admin, admin.id)
     return await users.bulk_action(
         payload.action,
         payload.user_ids,

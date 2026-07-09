@@ -17,6 +17,12 @@ class TotpConfirmRequest(InputModel):
     code: str = Field(min_length=6, max_length=12)
 
 
+class TotpEnrollRequest(InputModel):
+    # Required only when re-enrolling an account that already has 2FA active
+    # (proves possession of the current second factor); omitted on first enroll.
+    code: str | None = Field(default=None, max_length=12)
+
+
 class TotpEnrollResponse(APIModel):
     secret: str
     otpauth_uri: str

@@ -63,7 +63,21 @@ class AuthService:
         tokens = await self._tokens.issue_pair(user)
         return AuthResponse(user=UserRead.model_validate(user), tokens=tokens)
 
-    async def begin_totp_enrollment(self, user_id: uuid.UUID) -> tuple[str, str]:
+    async def begin_totp_enrollment(
+        self, user_id: uuid.UUID, *, code: str | None = None
+    ) -> tuple[str, str]:
+        # If 2FA is ALREADY active, re-enrolling rotates the secret and (until
+        # confirm) drops totp_enabled — effectively disabling the account's 2FA.
+        # Require the current TOTP code first so a hijacked session can't silently
+        # reset someone's second factor. A first-time enrollment (no active 2FA)
+        # needs no code.
+        existing = await self._users.get(user_id)
+        already_active = bool(existing.totp_enabled and existing.totp_secret)
+        if already_active and (not code or not totp_verify(existing.totp_secret, code)):
+            raise AuthenticationError(
+                "Two-factor is already enabled — provide your current code to re-enroll.",
+                code="totp_reenroll_requires_code",
+            )
         secret = totp_generate_secret()
         user = await self._users.update_totp_secret(user_id, secret)
         return secret, totp_provisioning_uri(secret, user.username)

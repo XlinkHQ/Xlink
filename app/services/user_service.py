@@ -714,6 +714,13 @@ class UserService:
             try:
                 # Savepoint per user: a failing row rolls back only itself and
                 # doesn't poison the outer transaction for the remaining users.
+                # Savepoint spans BOTH the field change AND the recovery step
+                # (_reactivate_recovered mutates assignment status). If it were
+                # released before the recovery, a failure there would leave the
+                # field change already merged into the outer transaction and the
+                # partial status changes un-rolled-back, while still being counted
+                # as "failed". Keep every DB mutation for this user in one
+                # savepoint so a failure rolls back the whole user atomically.
                 async with self._repo.session.begin_nested():
                     target = await self.get(uid)
                     self.assert_can_manage(admin, target)
@@ -747,6 +754,16 @@ class UserService:
                         target.data_reset_strategy = strategy_value or DataResetStrategy.NO_RESET
                     else:
                         raise ValidationError("Unknown bulk action.", code="unknown_bulk_action")
+                    # Raising a limit / extending expiry can make a LIMITED/expired
+                    # user serviceable again — flip them back to ACTIVE, matching
+                    # the single-edit update_quota path. Inside the savepoint so a
+                    # failure here rolls back the field change too.
+                    if action in ("set_data_limit", "set_expiry", "extend_expiry"):
+                        refreshed = await self.get(uid)
+                        await self._repo.session.refresh(refreshed, ["users_data_usage"])
+                        await self._reactivate_recovered(refreshed)
+                # Cache invalidation is non-transactional and idempotent — safe to
+                # run only after the savepoint has committed this user's changes.
                 if action in ("set_data_limit", "set_expiry", "extend_expiry", "set_reset_strategy"):
                     await self._invalidate(uid)
                 # Also drop the cached subscription feed for actions that change
@@ -754,13 +771,6 @@ class UserService:
                 # the stale (old) configs for up to cache_ttl (matches update_quota).
                 if action in ("set_data_limit", "set_expiry", "extend_expiry"):
                     await self._invalidate_user_feed(uid)
-                # Raising a limit / extending expiry can make a LIMITED/expired
-                # user serviceable again — flip them back to ACTIVE, matching the
-                # single-edit update_quota path (else bulk-raise leaves them cut).
-                if action in ("set_data_limit", "set_expiry", "extend_expiry"):
-                    refreshed = await self.get(uid)
-                    await self._repo.session.refresh(refreshed, ["users_data_usage"])
-                    await self._reactivate_recovered(refreshed)
                 ok += 1
             except Exception as exc:
                 # Best-effort per user; log so a genuine failure (vs an authz
