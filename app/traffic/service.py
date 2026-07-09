@@ -32,9 +32,13 @@ class TrafficService:
         events: EventBus | None = None,
         collector: TrafficCollector | None = None,
         cache: RedisCache | None = None,
+        reader_session: AsyncSession | None = None,
     ) -> None:
         self._session = session
-        self._repo = TrafficRepository(session)
+        # reader_session (when a replica is configured) carries only the pure
+        # analytics reads; None → the repo uses the primary session for them,
+        # identical to before. Writes/ingest/rollup always use `session`.
+        self._repo = TrafficRepository(session, reader_session=reader_session)
         self._events = events
         self._collector = collector or TrafficCollector()
         self._cache = cache
