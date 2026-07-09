@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.subscription.formats.base import FormatRenderError, setting, validate_node
+from app.subscription.formats.base import FormatRenderError, setting, setting_int, validate_node
 from app.subscription.models import ProviderConfig
 
 
@@ -97,7 +97,7 @@ def _shadowtls_outbounds(config: ProviderConfig, tag: str) -> list[dict[str, Any
         "tag": st_tag,
         "server": config.host,
         "server_port": config.port,
-        "version": int(setting(config, "shadowtls_version", 3)),
+        "version": setting_int(config, "shadowtls_version", 3),
         "password": str(setting(config, "shadowtls_password", config.resolved_password)),
         "tls": st_tls,
     }
@@ -133,7 +133,7 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
             if flow:
                 base["flow"] = flow
         else:
-            base["alter_id"] = int(setting(config, "alterId", 0))
+            base["alter_id"] = setting_int(config, "alterId", 0)
     elif protocol == "trojan":
         base["type"] = "trojan"
         base["password"] = config.resolved_password

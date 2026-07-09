@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, select, update
 
 from app.core.logging import get_logger
 from app.db.session import Database
@@ -205,6 +205,19 @@ class FailoverExecutor:
                     )
                     return False
 
+            # Remove any stale (non-ACTIVE) assignment on the SAME triplet first —
+            # the unique constraint (user_id, profile_id, node_id) spans all
+            # statuses, so an old DISABLED/EXPIRED row from a prior failover-back
+            # would otherwise make this INSERT fail and strand the user.
+            await session.execute(
+                delete(ClientAssignment).where(
+                    ClientAssignment.user_id == ctx.user_id,
+                    ClientAssignment.profile_id == ctx.profile_id,
+                    ClientAssignment.node_id == ctx.target_node_id,
+                    ClientAssignment.status != AssignmentStatus.ACTIVE,
+                )
+            )
+
             new_assignment = ClientAssignment(
                 id=new_id,
                 user_id=ctx.user_id,
@@ -218,24 +231,44 @@ class FailoverExecutor:
             )
             assignment.status = AssignmentStatus.DISABLED
             session.add(new_assignment)
+            await session.flush()
 
-            if assignment.node_id is not None:
+            # Recompute both nodes' current_users from the live ACTIVE count
+            # rather than ±1, so this never drifts against the COUNT-based resync
+            # that traffic ingest / reconcile / jobs also run on this column.
+            for node_id in {ctx.target_node_id, assignment.node_id}:
+                if node_id is None:
+                    continue
                 await session.execute(
                     update(Node)
-                    .where(Node.id == assignment.node_id, Node.current_users > 0)
-                    .values(current_users=Node.current_users - 1)
+                    .where(Node.id == node_id)
+                    .values(
+                        current_users=(
+                            select(func.count())
+                            .select_from(ClientAssignment)
+                            .where(
+                                ClientAssignment.node_id == node_id,
+                                ClientAssignment.status == AssignmentStatus.ACTIVE,
+                            )
+                            .scalar_subquery()
+                        )
+                    )
                     .execution_options(synchronize_session=False)
                 )
-
             await session.flush()
         return True
 
     async def _already_migrated(
         self, session, assignment: ClientAssignment, target_node_id: uuid.UUID
     ) -> bool:
+        # Only a LIVE (ACTIVE) assignment on the target blocks a migration. A
+        # stale DISABLED/EXPIRED row from an earlier failover-back must NOT strand
+        # the user — the triplet unique constraint spans all statuses, so that
+        # stale row is deleted just before the new INSERT (see _commit_migration).
         stmt = select(ClientAssignment.id).where(
             ClientAssignment.user_id == assignment.user_id,
             ClientAssignment.profile_id == assignment.profile_id,
             ClientAssignment.node_id == target_node_id,
+            ClientAssignment.status == AssignmentStatus.ACTIVE,
         )
         return await session.scalar(stmt) is not None

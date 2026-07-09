@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from app.subscription.formats.base import label, setting
+from app.subscription.formats.base import FormatRenderError, label, setting, setting_int
 from app.subscription.formats.capabilities import supported_protocols
 from app.subscription.models import ProviderConfig
 from app.subscription.schemas import SubscriptionFormat
@@ -81,7 +81,7 @@ def _proxy_outbound(config: ProviderConfig) -> dict:
     elif proto == "vmess":
         user = {
             "id": config.resolved_uuid,
-            "alterId": int(setting(config, "alterId", 0) or 0),
+            "alterId": setting_int(config, "alterId", 0),
             "security": str(setting(config, "cipher", "auto")),
         }
         settings = {"vnext": [{"address": config.host, "port": config.port, "users": [user]}]}
@@ -172,5 +172,14 @@ def render_one(config: ProviderConfig) -> dict:
 
 def render(configs: tuple[ProviderConfig, ...]) -> str:
     allowed = supported_protocols(SubscriptionFormat.XRAY_JSON)
-    supported = [c for c in configs if c.protocol in allowed]
-    return json.dumps([render_one(c) for c in supported], indent=2, ensure_ascii=False)
+    out = []
+    for c in configs:
+        if c.protocol not in allowed:
+            continue
+        # Skip a single config with bad data (e.g. non-numeric alterId) instead
+        # of 500-ing the whole feed on the public endpoint.
+        try:
+            out.append(render_one(c))
+        except FormatRenderError:
+            continue
+    return json.dumps(out, indent=2, ensure_ascii=False)

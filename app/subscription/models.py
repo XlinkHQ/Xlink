@@ -39,7 +39,17 @@ _DEFAULT_PORT: dict[str, int] = {"wireguard": 51820}
 def _resolve_port(protocol: str, settings: Mapping[str, Any], node_port: int) -> int:
     port = settings.get("port")
     if port:
-        return int(port)
+        # A stored non-numeric port must skip just this source, not 500 the whole
+        # feed — the generator catches ValidationError; a raw ValueError would not.
+        from app.core.exceptions import ValidationError
+
+        try:
+            return int(port)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(
+                f"Profile port must be an integer, got {port!r}.",
+                code="subscription_invalid_port",
+            ) from exc
     return _DEFAULT_PORT.get(protocol, node_port)
 
 

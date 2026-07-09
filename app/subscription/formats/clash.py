@@ -4,7 +4,7 @@ from typing import Any
 
 import yaml
 
-from app.subscription.formats.base import FormatRenderError, label, setting, validate_node
+from app.subscription.formats.base import FormatRenderError, label, setting, setting_int, validate_node
 from app.subscription.formats.capabilities import supported_protocols
 from app.subscription.models import ProviderConfig
 from app.subscription.schemas import SubscriptionFormat
@@ -96,7 +96,7 @@ def build_proxy(config: ProviderConfig, *, allowed: frozenset[str]) -> dict[str,
     elif protocol == "vmess":
         proxy["type"] = "vmess"
         proxy["uuid"] = config.resolved_uuid
-        proxy["alterId"] = int(setting(config, "alterId", 0))
+        proxy["alterId"] = setting_int(config, "alterId", 0)
         proxy["cipher"] = str(setting(config, "cipher", "auto"))
         _tls_fields(config, proxy)
         _network_fields(config, proxy)
@@ -122,7 +122,7 @@ def build_proxy(config: ProviderConfig, *, allowed: frozenset[str]) -> dict[str,
         proxy["plugin-opts"] = {
             "host": str(setting(config, "sni", setting(config, "host", ""))),
             "password": str(setting(config, "shadowtls_password", config.resolved_password)),
-            "version": int(setting(config, "shadowtls_version", 3)),
+            "version": setting_int(config, "shadowtls_version", 3),
         }
     elif protocol == "hysteria2":
         proxy["type"] = "hysteria2"

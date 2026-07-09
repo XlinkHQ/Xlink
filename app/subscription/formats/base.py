@@ -114,3 +114,24 @@ def query(values: dict[str, Any]) -> str:
 def setting(config: ProviderConfig, key: str, default: Any = "") -> Any:
     value = config.settings.get(key, default)
     return value if value is not None else default
+
+
+def setting_int(config: ProviderConfig, key: str, default: int = 0) -> int:
+    """Coerce a numeric setting, turning bad data into a per-config skip.
+
+    A stored non-numeric value (e.g. alterId="x") must NOT crash the whole feed
+    with a raw ValueError — the renderers only catch FormatRenderError, and the
+    public /sub endpoint would otherwise 500. Raising FormatRenderError here lets
+    the per-config loop skip just that entry.
+    """
+    value = config.settings.get(key, default)
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise FormatRenderError(
+            f"Setting '{key}' must be an integer, got {value!r}.",
+            code="subscription_setting_not_int",
+            details={"setting": key},
+        ) from exc

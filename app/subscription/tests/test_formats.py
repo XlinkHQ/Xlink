@@ -205,3 +205,30 @@ def test_feed_content_hash_etag_stable():
     b = renderer.render_feed((config,), feed_format=SubscriptionFormat.TEXT)
     assert a.content_hash == b.content_hash
     assert a.etag == f'"{a.content_hash}"'
+
+
+def test_bad_int_setting_skips_config_not_feed():
+    """A stored non-numeric numeric-setting (e.g. alterId='x') must skip just
+    that config, never 500 the whole feed (public endpoint DoS guard)."""
+    import uuid
+    from types import MappingProxyType
+    from app.subscription.models import ProviderConfig
+    from app.subscription.renderer import SubscriptionRenderer
+    from app.subscription.schemas import RenderVersion, SubscriptionFormat
+
+    def mk(alter):
+        return ProviderConfig(
+            assignment_id=uuid.uuid4(), user_id=uuid.uuid4(), provider_kind=None,
+            provider_name="p", protocol="vmess", client_id=str(uuid.uuid4()),
+            email=None, inbound_tag="t", host="1.2.3.4", port=443, expires_at=None,
+            traffic_limit_bytes=None,
+            settings=MappingProxyType({"alterId": alter, "network": "tcp",
+                                       "security": "none", "uuid": str(uuid.uuid4())}),
+        )
+
+    r = SubscriptionRenderer()
+    good, bad = mk(0), mk("x")
+    for fmt in (SubscriptionFormat.CLASH_YAML, SubscriptionFormat.SINGBOX_JSON,
+                SubscriptionFormat.XRAY_JSON):
+        out = r.render_feed((good, bad), version=RenderVersion.V1, feed_format=fmt)
+        assert out.content  # good kept, bad skipped, no exception

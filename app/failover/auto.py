@@ -31,6 +31,11 @@ class AutoFailoverHandler:
         if not isinstance(event, NodeOffline):
             return
         now = self._clock()
+        # Drop cooldown entries that have expired so the map can't grow unbounded
+        # with one row per node ever seen offline over the process lifetime.
+        expired = [nid for nid, t in self._recent.items() if now - t >= self._cooldown]
+        for nid in expired:
+            del self._recent[nid]
         last = self._recent.get(event.node_id)
         if last is not None and now - last < self._cooldown:
             logger.info("auto_failover_skipped_cooldown", node_id=str(event.node_id))

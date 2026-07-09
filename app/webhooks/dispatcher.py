@@ -207,7 +207,10 @@ class WebhookDispatcher:
         return line
 
     async def _send_all(self, payload: dict) -> None:
-        headers = {"x-webhook-secret": self._secret} if self._secret else {}
+        # Do NOT send the raw secret as a header — _post signs the body with it
+        # (x-webhook-signature, HMAC-SHA256). Sending the secret itself would let
+        # any receiver forge valid signatures, defeating the scheme.
+        headers: dict[str, str] = {}
         for url in self._urls:
             try:
                 await asyncio.to_thread(_post, url, payload, headers, self._secret)

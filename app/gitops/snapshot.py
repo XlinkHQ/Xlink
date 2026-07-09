@@ -22,6 +22,18 @@ _SENSITIVE_FRAGMENTS = (
     "auth_key",
     "signing_key",
     "ssh_key",
+    # broader coverage so a secret under a differently-named key isn't persisted
+    # cleartext in the immutable gitops_records audit table
+    "passwd",
+    "pwd",
+    "seed",
+    "mnemonic",
+    "privatekey",
+    "priv_key",
+    "salt",
+    "hashed",
+    "psk",
+    "totp",
 )
 
 
