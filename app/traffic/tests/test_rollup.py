@@ -203,6 +203,42 @@ async def test_rollup_excludes_current_hour(app_state: AppState):
     assert total == 300
 
 
+async def test_rollup_folds_in_late_arriving_old_bucket(app_state: AppState):
+    """A node re-delivering old WAL after the watermark already advanced past
+    that hour must still get its usage into traffic_hourly — not silently lost."""
+    ids = await _seed(app_state)
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+
+    # First rollup advances the watermark to the current hour (no old raw yet).
+    async with app_state.db.session() as session:
+        await TrafficService(session).rollup_hourly(now=now)
+
+    # A late batch lands in a bucket 5 hours old — well below watermark-1h.
+    late_hour = now - timedelta(hours=5)
+    await _ingest(
+        app_state,
+        _batch(ids["node_id"], ids["assignment_id"], count=3, start=late_hour, batch_id="late"),
+    )
+
+    # Re-run the rollup: the old bucket must be folded in despite being far
+    # below the normal (watermark-1h) window.
+    async with app_state.db.session() as session:
+        written = await TrafficService(session).rollup_hourly(now=now)
+    assert written == 1
+
+    # Prove it is in the rollup by dropping raw and reading back.
+    async with app_state.db.session() as session:
+        from sqlalchemy import delete
+
+        from app.traffic.models import TrafficRecord
+
+        await session.execute(delete(TrafficRecord))
+        await session.commit()
+    async with app_state.db.session() as session:
+        total = await TrafficService(session).usage_total_for_profile(ids["profile_id"])
+    assert total == 3 * 300
+
+
 async def test_hourly_series_hybrid_raw_and_rollup(app_state: AppState):
     ids = await _seed(app_state)
     now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)

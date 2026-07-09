@@ -326,6 +326,23 @@ class TrafficRepository:
             state.hourly_watermark = watermark
         await self.session.flush()
 
+    async def min_raw_collected_at_before(self, boundary: datetime) -> datetime | None:
+        """Oldest raw collected_at strictly before `boundary`, or None.
+
+        Used to detect late-arriving samples: a node re-delivering hours/days-old
+        WAL lands raw rows in buckets BELOW the normal rollup window
+        (watermark-1h). This one cheap MIN lets the rollup lower its `since` to
+        cover them so their usage is folded into traffic_hourly before the raw
+        rows are purged. Returns None when there is nothing older (steady state)."""
+        val = await self.session.scalar(
+            select(func.min(TrafficRecord.collected_at)).where(
+                TrafficRecord.collected_at < boundary
+            )
+        )
+        if val is not None and val.tzinfo is None:
+            val = val.replace(tzinfo=UTC)
+        return val
+
     async def rollup_hourly(self, *, floor_hour: datetime, since: datetime | None) -> int:
         """Aggregate raw traffic_records for CLOSED hour buckets into traffic_hourly.
 

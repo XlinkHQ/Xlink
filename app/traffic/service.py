@@ -151,6 +151,17 @@ class TrafficService:
         # overlap safe (no double-count). On first run (no watermark) aggregate
         # everything closed.
         since = (watermark - timedelta(hours=1)) if watermark is not None else None
+        # A node re-delivering hours/days-old WAL lands raw rows in buckets BELOW
+        # that window. Because the rollup upsert RECOMPUTES each bucket's SUM
+        # (idempotent), it is safe to lower `since` to the oldest such late row so
+        # its usage is folded into traffic_hourly before the raw rows are purged —
+        # otherwise it is lost from the rollup permanently. Bounded by raw
+        # retention: no raw exists older than the purge cutoff, so the widened
+        # window can never scan unbounded history.
+        if since is not None:
+            oldest_late = await self._repo.min_raw_collected_at_before(since)
+            if oldest_late is not None:
+                since = oldest_late.replace(minute=0, second=0, microsecond=0)
         written = await self._repo.rollup_hourly(floor_hour=floor_hour, since=since)
         await self._repo.set_rollup_watermark(floor_hour)
         await self._session.commit()
