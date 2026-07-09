@@ -79,14 +79,16 @@ class TrafficService:
         owned = await self._owned_assignment_ids(batch)
         filtered = self._filter_to_owned(batch, owned)
         prepared = self._collector.prepare(filtered)
-        before = await self._repo.existing_keys(
-            [row["assignment_id"] for row in prepared.rows],
-            [row["collected_at"] for row in prepared.rows],
-        )
-        inserted = await self._repo.bulk_insert(prepared.rows)
+        # bulk_insert applies ON CONFLICT DO NOTHING and returns the per-assignment
+        # sum of bytes for the rows it ACTUALLY inserted (RETURNING). Usage deltas
+        # come from that, not a pre-insert existing-keys snapshot: a snapshot
+        # races two concurrent batches that carry the same sample under different
+        # batch_ids (both see it absent → both count it, but only one row
+        # survives → double-count). RETURNING attributes each row's bytes to the
+        # one transaction that inserted it.
+        deltas, inserted = await self._repo.bulk_insert(prepared.rows)
         duplicates = len(prepared.rows) - inserted + prepared.deduped
         skipped = prepared.skipped + (len(batch.samples) - len(filtered.samples))
-        deltas = self._inserted_deltas(prepared, before)
 
         node = await self._session.get(Node, batch.node_id)
         coeff = node.usage_coefficient if node is not None else 1.0
@@ -259,15 +261,6 @@ class TrafficService:
             return batch
         kept = tuple(s for s in batch.samples if s.assignment_id in owned)
         return TrafficBatch(node_id=batch.node_id, batch_id=batch.batch_id, samples=kept)
-
-    def _inserted_deltas(self, prepared, before: set) -> dict[uuid.UUID, int]:
-        deltas: dict[uuid.UUID, int] = {}
-        for row in prepared.rows:
-            key = (row["assignment_id"], row["collected_at"])
-            if key in before:
-                continue
-            deltas[row["assignment_id"]] = deltas.get(row["assignment_id"], 0) + row["total_bytes"]
-        return deltas
 
     async def _check_limits(
         self,

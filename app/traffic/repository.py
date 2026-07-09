@@ -5,7 +5,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import case, delete, func, select, tuple_, update
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,9 +79,21 @@ class TrafficRepository:
         )
         await self.session.flush()
 
-    async def bulk_insert(self, rows: Sequence[dict]) -> int:
+    async def bulk_insert(self, rows: Sequence[dict]) -> tuple[dict[uuid.UUID, int], int]:
+        """Insert rows, ignoring (assignment_id, collected_at) conflicts, and
+        return (per-assignment SUM of total_bytes, number of rows) that were
+        ACTUALLY inserted (via RETURNING).
+
+        The caller applies these as usage deltas, NOT a delta derived from a
+        pre-insert existing-keys snapshot: two concurrent batches carrying the
+        same sample under different batch_ids both see the key absent in a
+        snapshot, but ON CONFLICT lets only one row survive — RETURNING
+        attributes each inserted row's bytes to exactly the one transaction that
+        inserted it, so a sample is counted once. Summing the RETURNING bytes
+        directly also sidesteps any timestamp round-trip mismatch between the
+        Python-side input rows and the DB-stored collected_at."""
         if not rows:
-            return 0
+            return {}, 0
         dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
         if dialect == "sqlite":
             stmt = sqlite_insert(TrafficRecord).values(list(rows))
@@ -89,9 +101,15 @@ class TrafficRepository:
         else:
             stmt = pg_insert(TrafficRecord).values(list(rows))
             stmt = stmt.on_conflict_do_nothing(constraint="uq_traffic_records_assignment_collected")
+        stmt = stmt.returning(TrafficRecord.assignment_id, TrafficRecord.total_bytes)
         result = await self.session.execute(stmt)
+        deltas: dict[uuid.UUID, int] = {}
+        inserted = 0
+        for aid, total in result.all():
+            deltas[aid] = deltas.get(aid, 0) + int(total or 0)
+            inserted += 1
         await self.session.flush()
-        return result.rowcount if result.rowcount is not None and result.rowcount >= 0 else 0
+        return deltas, inserted
 
     async def claim_batch(self, node_id: uuid.UUID, batch_id: str) -> bool:
         """Record (node_id, batch_id) idempotently. Returns True if this call
@@ -213,18 +231,6 @@ class TrafficRepository:
             max(1, limit)
         )
         return (await self.session.execute(stmt)).scalars().all()
-
-    async def existing_keys(
-        self, assignment_ids: Sequence[uuid.UUID], collected_ats: Sequence[datetime]
-    ) -> set[tuple[uuid.UUID, datetime]]:
-        if not assignment_ids:
-            return set()
-        pairs = list(set(zip(assignment_ids, collected_ats, strict=True)))
-        stmt = select(TrafficRecord.assignment_id, TrafficRecord.collected_at).where(
-            tuple_(TrafficRecord.assignment_id, TrafficRecord.collected_at).in_(pairs),
-        )
-        rows = (await self.session.execute(stmt)).all()
-        return {(aid, ts) for aid, ts in rows}
 
     async def sum_bytes_before(self, cutoff: datetime) -> dict[uuid.UUID, int]:
         from app.domain.node import Node

@@ -153,8 +153,10 @@ async def test_bulk_insert_repository(app_state: AppState):
         for i in range(500)
     ]
     async with app_state.db.session() as session:
-        inserted = await TrafficRepository(session).bulk_insert(rows)
+        deltas, inserted = await TrafficRepository(session).bulk_insert(rows)
     assert inserted == 500
+    # total_bytes = 2*i for i in 0..499 → all attributed to the one assignment.
+    assert deltas[ids["assignment_id"]] == sum(2 * i for i in range(500))
     async with app_state.db.session() as session:
         assert await TrafficRepository(session).count() == 500
 
