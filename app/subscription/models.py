@@ -10,24 +10,13 @@ from typing import Any
 from app.domain.client_assignment import ClientAssignment
 from app.domain.node import Node
 from app.domain.profile import Profile
+from app.protocols import subscription_protocols
 from app.providers.base.models import ProviderKind
 
-SUPPORTED_SUBSCRIPTION_PROTOCOLS = frozenset(
-    {
-        "vless",
-        "vmess",
-        "trojan",
-        "shadowsocks",
-        "shadowsocks2022",
-        "shadowtls",
-        "hysteria2",
-        "tuic",
-        "socks",
-        "http",
-        "naive",
-        "wireguard",
-    }
-)
+# Derived from the single source of truth in ``app.protocols`` (every protocol
+# with ``subscription=True``); do NOT hand-edit. A drift guard lives in
+# ``app/subscription/tests/test_protocol_source.py``.
+SUPPORTED_SUBSCRIPTION_PROTOCOLS = subscription_protocols()
 
 
 def _resolve_host(protocol: str, settings: Mapping[str, Any], node_host: str) -> str:

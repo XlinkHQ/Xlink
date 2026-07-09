@@ -1102,6 +1102,37 @@ _WG_RELOAD_DEFAULT = (
 )
 
 
+# --- Protocol mirror (SEPARATE RUNTIME) ------------------------------------
+#
+# This daemon runs on the node, standalone, and CANNOT import the panel's
+# Python (app/). The panel's single source of truth for which core provisions
+# which protocol is app/protocols.py (PROTOCOLS -> provider_protocols()). This
+# map MIRRORS it for the node side. If you add/remove a protocol here or there,
+# app/subscription/tests/test_protocol_source.py reads BOTH and fails in CI, so
+# the two can't silently drift.
+#
+# Keyed by CORE name (matches CORES below / the panel's ProviderKind values).
+CORE_PROTOCOLS: dict[str, frozenset[str]] = {
+    "xray": frozenset({"vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022"}),
+    "sing-box": frozenset(
+        {
+            "vless",
+            "vmess",
+            "trojan",
+            "shadowsocks",
+            "shadowsocks2022",
+            "shadowtls",
+            "hysteria2",
+            "tuic",
+            "naive",
+            "socks",
+        }
+    ),
+    "hysteria": frozenset({"hysteria2"}),
+    "wireguard": frozenset({"wireguard"}),
+}
+
+
 CORES = {
     "xray": {
         "builder": build_xray_config,

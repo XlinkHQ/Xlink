@@ -20,34 +20,33 @@ class ProviderKind(StrEnum):
     WIREGUARD = "wireguard"
 
 
-# Which client protocols each provider can actually create. Single source of
-# truth shared by the profile validator and (mirrored in) the web UI's
-# protocolsFor(); keep the two in sync.
-PROVIDER_PROTOCOLS: dict[ProviderKind, frozenset[str]] = {
-    ProviderKind.XRAY: frozenset(
-        {"vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022"}
-    ),
-    ProviderKind.SING_BOX: frozenset(
-        {
-            "vless",
-            "vmess",
-            "trojan",
-            "shadowsocks",
-            "shadowsocks2022",
-            "shadowtls",
-            "hysteria2",
-            "tuic",
-            "naive",
-            "socks",
-        }
-    ),
-    ProviderKind.HYSTERIA: frozenset({"hysteria2"}),
-    ProviderKind.WIREGUARD: frozenset({"wireguard"}),
-}
+# Which client protocols each provider can actually create.
+#
+# These are DERIVED from the single source of truth in ``app.protocols``; do
+# NOT hand-edit them. The names ``PROVIDER_PROTOCOLS`` and ``protocols_for`` are
+# kept as public exports here (the profile validator imports them from this
+# module) but the actual data lives in ``app.protocols.PROTOCOLS``. They are
+# resolved lazily via ``__getattr__`` to avoid an import cycle: ``app.protocols``
+# imports ``ProviderKind`` from this module, so this module must be fully
+# initialised before ``app.protocols`` is imported.
+#
+# The web UI's ``protocolsFor()`` (web/.../profiles/util.ts) is a SEPARATE
+# runtime and mirrors this; ``app/subscription/tests/test_protocol_source.py``
+# asserts the two stay in sync.
 
 
-def protocols_for(kind: ProviderKind) -> frozenset[str]:
-    return PROVIDER_PROTOCOLS.get(kind, frozenset())
+def protocols_for(kind: "ProviderKind") -> frozenset[str]:
+    from app.protocols import protocols_for as _protocols_for
+
+    return _protocols_for(kind)
+
+
+def __getattr__(name: str) -> Any:
+    if name == "PROVIDER_PROTOCOLS":
+        from app.protocols import provider_protocols
+
+        return provider_protocols()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class ProviderMetadata(BaseModel):
