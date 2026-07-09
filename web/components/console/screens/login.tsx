@@ -44,12 +44,10 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
 
   return (
     <div className="warp-login-page">
-      {/* SIDE ILLUSTRATION PANEL (DefGuard split layout) */}
       <aside className="warp-login-aside">
         <img src="/login.png" alt="" loading="eager" decoding="async" draggable={false} />
       </aside>
 
-      {/* FORM PANEL */}
       <div className="warp-login-track">
         <main className="warp-login-main">
           <img
@@ -62,7 +60,6 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
           <h1 className="warp-login-title">Sign in to your account</h1>
           <h2 className="warp-login-subtitle">Enter your credentials to continue.</h2>
 
-          {/* FORM */}
           <form className="warp-login-form" onSubmit={submit} autoCapitalize="off" autoCorrect="off">
             <div className="warp-login-field">
               <label htmlFor="warp-login-username">Username</label>
@@ -120,7 +117,6 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
         </main>
       </div>
 
-      {/* INDICATOR (rainbow bottom bar) */}
       <div className="warp-indicator-warpper warp-indicator-animation">
         <div className="warp-indicator" />
       </div>

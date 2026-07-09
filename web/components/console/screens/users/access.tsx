@@ -250,7 +250,6 @@ export function AccessManager({ userId }: { userId: string }) {
         </div>
       ) : null}
 
-      {/* Add a single inbound */}
       {adding ? (
         <div className="warp-svc-add">
           <Select value={profileId} onChange={(e) => setProfileId(e.target.value)} className="h-9">
@@ -294,7 +293,6 @@ export function AccessManager({ userId }: { userId: string }) {
         </div>
       ) : null}
 
-      {/* Granted inbounds */}
       <div className="warp-svc-group">
         <p className="warp-svc-label">Granted inbounds</p>
         {mine.length === 0 ? (
