@@ -102,7 +102,12 @@ async def report_connections(
 ) -> StreamAck:
     await agent.authenticate(node_id, x_agent_token)
     service = IpLimitService(db, cache)
-    await service.report((s.assignment_id, s.source_ip) for s in payload.samples)
+    # Scope ownership resolution to the reporting node: a node may only report
+    # source IPs for assignments IT hosts, otherwise it could inflate another
+    # node's users' ipset and wrongly trip their device limit.
+    await service.report(
+        ((s.assignment_id, s.source_ip) for s in payload.samples), node_id=node_id
+    )
     return StreamAck(accepted=len(payload.samples), dropped=0)
 
 

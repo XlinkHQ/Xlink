@@ -26,20 +26,24 @@ class IpLimitService:
         self._db = db
         self._redis = cache.client
 
-    async def report(self, samples: Iterable[tuple[uuid.UUID, str]]) -> None:
+    async def report(
+        self, samples: Iterable[tuple[uuid.UUID, str]], *, node_id: uuid.UUID | None = None
+    ) -> None:
         pairs = [(aid, ip) for aid, ip in samples if ip]
         if not pairs:
             return
 
         aids = list({aid for aid, _ in pairs})
         async with self._db.session() as session:
-            rows = (
-                await session.execute(
-                    select(ClientAssignment.id, ClientAssignment.user_id).where(
-                        ClientAssignment.id.in_(aids)
-                    )
-                )
-            ).all()
+            stmt = select(ClientAssignment.id, ClientAssignment.user_id).where(
+                ClientAssignment.id.in_(aids)
+            )
+            # Only accept reports for assignments the reporting node actually
+            # hosts — a node must not be able to inflate another node's users'
+            # device-count ipset (and thus wrongly trip their device limit).
+            if node_id is not None:
+                stmt = stmt.where(ClientAssignment.node_id == node_id)
+            rows = (await session.execute(stmt)).all()
             owner = dict(rows)
 
         touched: set[uuid.UUID] = set()
