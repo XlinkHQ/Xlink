@@ -5,6 +5,7 @@ import contextlib
 import hashlib
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -261,9 +262,14 @@ def _log(msg: str) -> None:
 _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
-def _http_call(method: str, path: str, body: dict | None = None):
+def _http_call(method: str, path: str, body: dict | None = None, known_version: str | None = None):
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(f"{BASE}{path}", data=data, headers=HEADERS, method=method)
+    headers = HEADERS
+    if known_version:
+        # Send the currently-applied version so the panel can short-circuit the
+        # render and answer "unchanged" without recomputing the whole config.
+        headers = {**HEADERS, "If-None-Match": f'"{known_version}"'}
+    req = urllib.request.Request(f"{BASE}{path}", data=data, headers=headers, method=method)
     try:
         with _OPENER.open(req, timeout=15) as resp:
             return resp.status, json.loads(resp.read() or "{}")
@@ -341,14 +347,18 @@ def _grpc_ms(iso: str) -> int:
         return int(time.time() * 1000)
 
 
-def _grpc_call(path: str, body: dict | None):
+def _grpc_call(path: str, body: dict | None, known_version: str | None = None):
     global _grpc_stub, _grpc_channel
     pb = _grpc_pb
     stub = _grpc_stub
     md = _grpc_meta()
     try:
         if path == "/config":
-            resp = stub.GetConfig(pb.ConfigRequest(node_id=NODE_ID), metadata=md, timeout=15)
+            resp = stub.GetConfig(
+                pb.ConfigRequest(node_id=NODE_ID, known_version=known_version or ""),
+                metadata=md,
+                timeout=15,
+            )
             return 200, {
                 "node_id": resp.node_id,
                 "config_version": resp.config_version,
@@ -435,12 +445,12 @@ def _grpc_call(path: str, body: dict | None):
         return None
 
 
-def _call(method: str, path: str, body: dict | None = None):
+def _call(method: str, path: str, body: dict | None = None, known_version: str | None = None):
     if _grpc_ready():
-        res = _grpc_call(path, body)
+        res = _grpc_call(path, body, known_version=known_version)
         if res is not None:
             return res
-    return _http_call(method, path, body)
+    return _http_call(method, path, body, known_version=known_version)
 
 
 TLS_CERT_DIR = os.environ.get("XLINK_TLS_DIR", "/etc/ssl/xlink")
@@ -1695,7 +1705,10 @@ def _do_poll_commands() -> None:
 
 
 def cycle() -> None:
-    sc, cfg = _call("GET", "/config")
+    global _xray_core, _singbox_core, _hysteria_core
+    global _usage_acc, _over_users
+    global _last_clients, _last_kinds, _last_effective_version
+    sc, cfg = _call("GET", "/config", known_version=_last_version)
     if sc != 200:
         _log(f"config pull failed ({sc}): {cfg}")
         # Still report liveness so a transient config-pull failure doesn't flip
@@ -1705,10 +1718,21 @@ def cycle() -> None:
         return
     version = cfg.get("config_version")
     conf = cfg.get("config") or {}
-    clients = conf.get("clients", [])
-    global _xray_core, _singbox_core, _hysteria_core
-    cores = conf.get("core_templates") or {}
-    _log(f"pulled config v={version} clients={len(clients)}")
+    # "unchanged": the panel confirms our applied version is still current and did
+    # NOT re-render the config (empty body). Keep the current config as-is — do NOT
+    # apply the empty body (that would drain every core). Reuse the last-applied
+    # client set so traffic collection / enforcement still run this cycle.
+    unchanged = bool(cfg.get("unchanged")) or (
+        version is not None and version == _last_version and not conf.get("clients")
+    )
+    if unchanged and _last_clients:
+        clients = _last_clients
+        cores = None  # signal: don't swap templates
+        _log(f"config unchanged v={version} (short-circuit) clients={len(clients)}")
+    else:
+        clients = conf.get("clients", [])
+        cores = conf.get("core_templates") or {}
+        _log(f"pulled config v={version} clients={len(clients)}")
 
     kinds_present = {_effective_core(c) for c in clients} & set(CORES)
     pre_samples: list[dict] = []
@@ -1716,18 +1740,20 @@ def cycle() -> None:
     locally_limited = 0
     try:
         with _enforce_lock:
-            # Swap the core templates under the same lock the fast-enforce loop
-            # holds when it reads them (via the config builders), so it never
-            # pairs a new client set with a stale/half-updated template.
-            _xray_core = cores.get("xray") or {}
-            _singbox_core = cores.get("sing-box") or {}
-            _hysteria_core = cores.get("hysteria") or {}
-            # Fresh config: the panel's used_bytes now already accounts for every
-            # delta reported so far, so rebase the local accumulator to avoid
-            # double-counting (which would falsely keep users over-limit forever).
-            global _usage_acc, _over_users
-            _usage_acc = {}
-            _over_users = set()
+            if cores is not None:
+                # Fresh config. Swap the core templates under the same lock the
+                # fast-enforce loop holds when it reads them (via the config
+                # builders), so it never pairs a new client set with a
+                # stale/half-updated template.
+                _xray_core = cores.get("xray") or {}
+                _singbox_core = cores.get("sing-box") or {}
+                _hysteria_core = cores.get("hysteria") or {}
+                # Fresh config: the panel's used_bytes now already accounts for
+                # every delta reported so far, so rebase the local accumulator to
+                # avoid double-counting (which would falsely keep users over-limit
+                # forever).
+                _usage_acc = {}
+                _over_users = set()
             pre_samples = collect_traffic(kinds_present, clients) if not DRY_RUN else []
             # Persist immediately: collect_traffic reset the core counters, so a
             # crash before the WAL write (which used to happen ~50 lines later,
@@ -1741,8 +1767,14 @@ def cycle() -> None:
             effective_version = (
                 f"{version}-local{len(effective)}" if locally_limited else version
             )
-            active_kinds = apply_config(effective, effective_version)
-            global _last_clients, _last_kinds, _last_effective_version
+            if cores is not None or locally_limited:
+                # Apply on a fresh config, or when local enforcement changed the
+                # served set. An "unchanged" pull with no new drops leaves the
+                # running config exactly as-is (apply_config is a no-op via the
+                # per-core hash anyway, but skipping avoids needless work).
+                active_kinds = apply_config(effective, effective_version)
+            else:
+                active_kinds = {_effective_core(c) for c in clients} & set(CORES)
             _last_clients = clients
             _last_kinds = kinds_present
             _last_effective_version = effective_version
@@ -1931,7 +1963,12 @@ def main() -> int:
             if not threads[name].is_alive():
                 _log(f"worker '{name}' died — respawning")
                 threads[name] = _spawn(fn)
-        _wake.wait(timeout=INTERVAL)
+        # Jitter the interval (±20%) so 50 nodes installed/restarted together don't
+        # poll in lockstep and hammer the panel on the same tick (thundering herd).
+        # An SSE wake still fires an immediate re-poll (wait returns early), so a
+        # real config change still propagates promptly.
+        jitter = INTERVAL * (1 + random.uniform(-0.2, 0.2))
+        _wake.wait(timeout=max(1.0, jitter))
         _wake.clear()
 
 

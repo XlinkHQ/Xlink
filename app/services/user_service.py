@@ -440,14 +440,15 @@ class UserService:
         return user
 
     async def _invalidate_user_feed(self, user_id: uuid.UUID) -> None:
-        # Key layout is subscription:{subject_id}:{scope}:{version}:{format}
-        # (subject id FIRST) — the old subscription:*:user:{id} pattern never
-        # matched, so quota/expiry edits served stale cached feeds.
-        pattern = f"subscription:{user_id}:*"
+        # O(1) invalidation: bump the user's per-subject cache revision so their
+        # cached feed keys (which embed the revision) go stale at once. Replaces the
+        # old SCAN+DEL over subscription:{user_id}:* — that recomputed every feed
+        # for the user in a burst and scanned the keyspace on a hot mutation path.
         try:
-            keys = [key async for key in self._cache.client.scan_iter(match=pattern)]
-            if keys:
-                await self._cache.client.delete(*keys)
+            if self._subscription_service is not None:
+                await self._subscription_service.invalidate_subject(user_id)
+            else:
+                await self._cache.incr(f"subscription:rev:{user_id}")
         except Exception as exc:
             logger.warning("user_feed_cache_invalidation_failed", error=str(exc))
 

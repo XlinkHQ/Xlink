@@ -81,11 +81,17 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
     async def GetConfig(self, request: pb.ConfigRequest, context) -> pb.DesiredConfig:
         node_id = await _req_uuid(request.node_id, context)
         token = _token(context)
+        known_version = request.known_version or None
         async with self._db.session() as session:
             try:
-                snap = await self._agent_service(session).config_snapshot(node_id, token=token)
+                snap = await self._agent_service(session).config_snapshot(
+                    node_id, token=token, known_version=known_version
+                )
             except AuthenticationError:
                 await context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid node token")
+        # On "unchanged", config is intentionally empty; the agent short-circuits
+        # by comparing config_version to the version it sent (it keeps its current
+        # config and skips the re-apply), mirroring the HTTP `unchanged` flag.
         return pb.DesiredConfig(
             node_id=str(snap["node_id"]),
             config_version=snap["config_version"],

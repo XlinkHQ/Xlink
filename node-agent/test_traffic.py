@@ -45,12 +45,14 @@ def test_wireguard_maps_peer_and_deltas():
     orig = subprocess.check_output
     subprocess.check_output = lambda *a, **k: b"PUB1\t1000\t2000\n"
     try:
+        # First sight establishes a baseline and emits NO delta, so an agent
+        # restart can't re-count the interface's whole lifetime as fresh usage.
         out1 = m._wireguard_traffic(clients)
-        assert out1[0]["assignment_id"] == "A1"
-        assert out1[0]["upload_bytes"] == 1000
-        assert out1[0]["download_bytes"] == 2000
+        assert out1 == []
+        # Second poll reports the delta from that baseline.
         subprocess.check_output = lambda *a, **k: b"PUB1\t1500\t2000\n"
         out2 = m._wireguard_traffic(clients)
+        assert out2[0]["assignment_id"] == "A1"
         assert out2[0]["upload_bytes"] == 500
         assert out2[0]["download_bytes"] == 0
     finally:

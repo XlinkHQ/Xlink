@@ -109,13 +109,20 @@ async def pull_config(
     node_id: uuid.UUID,
     agent: NodeAgentServiceDep,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
+    known_version: str | None = Query(default=None),
 ) -> DesiredConfig:
-    snapshot = await agent.config_snapshot(node_id, token=x_agent_token)
+    # The agent sends its currently-applied version (If-None-Match header, or a
+    # known_version query param). When it matches the current config the panel
+    # skips the full render and returns an empty "unchanged" body — cheap poll.
+    kv = known_version or (if_none_match.strip('"') if if_none_match else None)
+    snapshot = await agent.config_snapshot(node_id, token=x_agent_token, known_version=kv)
     return DesiredConfig(
         node_id=snapshot["node_id"],
         config_version=snapshot["config_version"],
         config=snapshot["config"],
         assignment_count=snapshot["assignment_count"],
+        unchanged=bool(snapshot.get("unchanged", False)),
     )
 
 

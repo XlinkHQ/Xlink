@@ -227,6 +227,10 @@ class AssignmentExpirationJob:
     async def _wake_nodes(self, node_ids: list) -> None:
         if self._cache is None or not node_ids:
             return
-        await self._cache.delete_by_pattern("subscription:*")
+        # Broad invalidation is O(1): bump the global subscription cache epoch so
+        # every cached feed goes stale at once, instead of a SCAN+DEL over the
+        # whole subscription:* keyspace (which stampeded every user into a
+        # recompute). Stale keys expire by TTL.
+        await self._cache.incr("subscription:rev:__global__")
         for nid in node_ids:
             await self._cache.publish_node_event(nid, "config_changed")

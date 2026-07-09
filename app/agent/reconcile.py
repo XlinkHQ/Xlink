@@ -142,7 +142,9 @@ async def reconcile_once(
         # NodeOffline events / webhook alerts from two racing scans.
         reset_nodes = await _apply_data_resets(session)
         if reset_nodes and cache is not None:
-            await cache.delete_by_pattern("subscription:*")
+            # O(1) broad invalidation: bump the global cache epoch instead of a
+            # SCAN+DEL over subscription:* (which stampeded every user's feed).
+            await cache.incr("subscription:rev:__global__")
             for nid in reset_nodes:
                 await cache.publish_node_event(nid, "config_changed")
         node_ids = (

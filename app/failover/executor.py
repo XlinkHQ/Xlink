@@ -89,7 +89,7 @@ class FailoverExecutor:
             # subscription keyspace (a single-user failover shouldn't cold-wipe
             # every user's cache → thundering herd).
             for uid in {i.user_id for i in plan.items}:
-                await self._cache.delete_by_pattern(f"subscription:{uid}:*")
+                await self._cache.incr(f"subscription:rev:{uid}")
             for nid in node_ids:
                 await self._cache.publish_node_event(nid, "config_changed")
         except Exception as exc:

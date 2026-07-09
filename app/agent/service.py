@@ -108,9 +108,13 @@ class NodeAgentService:
             batch = TrafficBatch(node_id=node_id, batch_id=batch.batch_id, samples=batch.samples)
         return await self._traffic.ingest(batch)
 
-    async def config_snapshot(self, node_id: uuid.UUID, *, token: str) -> dict:
+    async def config_snapshot(
+        self, node_id: uuid.UUID, *, token: str, known_version: str | None = None
+    ) -> dict:
         node = await self.authenticate(node_id, token)
-        return await self._config_sync.build_snapshot(node)
+        return await self._config_sync.build_snapshot(
+            node, cache=self._cache, known_version=known_version
+        )
 
     async def report_state(
         self,

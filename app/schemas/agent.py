@@ -52,6 +52,10 @@ class DesiredConfig(BaseModel):
     config_version: str
     config: dict[str, Any]
     assignment_count: int
+    # True when the agent's known_version already matches the current config, so
+    # the body carries no config to re-apply — the agent keeps what it has. Lets a
+    # poll short-circuit the full render on the panel and the apply on the node.
+    unchanged: bool = False
 
 
 class ReportedStateRequest(BaseModel):

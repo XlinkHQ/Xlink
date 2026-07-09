@@ -15,12 +15,13 @@ class GroupService:
         self._repo = repo
 
     async def create(self, data: GroupCreate) -> Group:
-        group = Group(
-            name=data.name,
-            slug=data.slug,
-            profile_ids=[str(pid) for pid in data.profile_ids],
-        )
-        return await self._repo.create_group(group)
+        group = Group(name=data.name, slug=data.slug)
+        group = await self._repo.create_group(group)
+        await self._repo.set_profiles(group.id, data.profile_ids)
+        # Reload the eager ``profiles`` collection so GroupRead serializes the
+        # freshly-linked profile ids.
+        await self._repo.session.refresh(group, attribute_names=["profiles"])
+        return group
 
     async def get(self, group_id: uuid.UUID) -> Group:
         group = await self._repo.get(group_id)
@@ -38,11 +39,17 @@ class GroupService:
         if data.name is not None:
             group.name = data.name
         if data.profile_ids is not None:
-            group.profile_ids = [str(pid) for pid in data.profile_ids]
+            await self._repo.set_profiles(group.id, data.profile_ids)
+            # The membership lives in the join table, so a profiles-only change
+            # doesn't dirty the ``groups`` row on its own. Re-set a mapped column
+            # to itself to mark the row dirty; the UPDATE then lets version_id_col
+            # bump the version and refresh updated_at, preserving the old
+            # optimistic-locking behaviour.
+            group.name = group.name
 
         async def _save(g: Group) -> Group:
             await self._repo.session.flush()
-            await self._repo.session.refresh(g)
+            await self._repo.session.refresh(g, attribute_names=["profiles"])
             return g
 
         return await save_or_conflict(_save, group, "Group")

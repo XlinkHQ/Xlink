@@ -919,7 +919,33 @@ class ConfigSyncService:
             sb["outbounds"] = outbounds
             templates["sing-box"] = sb
 
-    async def build_snapshot(self, node: Node) -> dict[str, Any]:
+    async def build_snapshot(
+        self,
+        node: Node,
+        *,
+        cache: Any | None = None,
+        known_version: str | None = None,
+        cache_ttl: int = 300,
+    ) -> dict[str, Any]:
+        # Cheap path: a warm Redis snapshot cache lets a poll short-circuit the ~5
+        # full-table SELECTs + template render + SHA256 that desired_config runs.
+        # The cache is dropped on every config_changed event (see
+        # RedisCache.publish_node_event), so a hit is always the current desired
+        # config. When the agent's known_version matches, we return "unchanged"
+        # without even shipping the (cached) config body.
+        if cache is not None:
+            cached = await self._read_cached_snapshot(cache, node)
+            if cached is not None:
+                if known_version is not None and known_version == cached["config_version"]:
+                    return {
+                        "node_id": node.id,
+                        "config_version": cached["config_version"],
+                        "config": {},
+                        "assignment_count": cached["assignment_count"],
+                        "unchanged": True,
+                    }
+                return {**cached, "unchanged": False}
+
         config = await self.desired_config(node.id)
 
         config["restart_nonce"] = node.node_metadata.get("restart_nonce", 0)
@@ -929,12 +955,53 @@ class ConfigSyncService:
             metadata[_DESIRED_VERSION_KEY] = version
             node.node_metadata = metadata
             await self._session.flush()
-        return {
+        snapshot = {
             "node_id": node.id,
             "config_version": version,
             "config": config,
             "assignment_count": config["client_count"],
         }
+        if cache is not None:
+            await self._write_cached_snapshot(cache, node, snapshot, cache_ttl)
+        if known_version is not None and known_version == version:
+            return {
+                "node_id": node.id,
+                "config_version": version,
+                "config": {},
+                "assignment_count": config["client_count"],
+                "unchanged": True,
+            }
+        return {**snapshot, "unchanged": False}
+
+    async def _read_cached_snapshot(self, cache: Any, node: Node) -> dict[str, Any] | None:
+        try:
+            raw = await cache.get_node_config(node.id)
+        except Exception:
+            return None
+        if not isinstance(raw, dict) or "config_version" not in raw:
+            return None
+        return {
+            "node_id": node.id,
+            "config_version": raw["config_version"],
+            "config": raw.get("config") or {},
+            "assignment_count": int(raw.get("assignment_count", 0) or 0),
+        }
+
+    async def _write_cached_snapshot(
+        self, cache: Any, node: Node, snapshot: dict[str, Any], ttl: int
+    ) -> None:
+        try:
+            await cache.set_node_config(
+                node.id,
+                {
+                    "config_version": snapshot["config_version"],
+                    "config": snapshot["config"],
+                    "assignment_count": snapshot["assignment_count"],
+                },
+                ttl,
+            )
+        except Exception:
+            logger.warning("node_config_snapshot_cache_write_failed", node_id=str(node.id))
 
     async def record_reported_state(
         self,
