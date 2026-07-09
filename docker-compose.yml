@@ -55,9 +55,13 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        # Secret admin path is baked into the Next.js build (basePath). Empty=root.
+        XLINK_WEB_PATH: ${XLINK_WEB_PATH:-}
     restart: unless-stopped
     environment:
       XLINK_API_URL: http://api:8000
+      XLINK_WEB_PATH: ${XLINK_WEB_PATH:-}
     ports:
       - "${XLINK_WEB_PORT:-3000}:3000"
     depends_on:

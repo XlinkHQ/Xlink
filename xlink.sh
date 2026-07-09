@@ -118,6 +118,35 @@ gen_env() {
   [ -n "$dom" ] && [ -z "$acme" ] && acme="admin@${dom}"
   cors="*"; th="*"
   [ -n "$dom" ] && cors="https://$dom" && th="$dom"
+
+  # Web port: ask (default 3000), so it needn't collide with something already
+  # on 3000. Non-interactive installs keep the default or an env override.
+  local web_port
+  web_port="${XLINK_WEB_PORT:-}"
+  if [ -z "$web_port" ] && [ -t 0 ]; then
+    printf "  Web UI port [3000]: "; read -r web_port || web_port=""
+  fi
+  web_port="${web_port:-3000}"
+  case "$web_port" in ''|*[!0-9]*) web_port=3000 ;; esac
+
+  # Secret admin path: serve the panel under an unguessable prefix instead of
+  # bare "/", so a random scan of the IP finds nothing. Blank = a fresh random
+  # path is generated; type "/" to keep the panel at root; or set your own.
+  local web_path
+  web_path="${XLINK_WEB_PATH:-}"
+  if [ -z "$web_path" ] && [ -t 0 ]; then
+    printf "  Secret panel path (blank = random, '/' = root): "; read -r web_path || web_path=""
+  fi
+  if [ -z "$web_path" ]; then
+    web_path="/$(openssl rand -hex 8)"
+  fi
+  # Normalise: root stays empty (no prefix); otherwise ensure a single leading
+  # slash and no trailing slash.
+  if [ "$web_path" = "/" ]; then
+    web_path=""
+  else
+    web_path="/$(printf '%s' "$web_path" | sed 's#^/*##; s#/*$##')"
+  fi
   # Detect the server's real public IP HERE (on the host — inside the container
   # detection only sees the docker bridge). Prefer an external lookup, fall back
   # to the default-route source address.
@@ -136,7 +165,8 @@ XLINK_ENV=production
 XLINK_DEBUG=false
 XLINK_HOST=0.0.0.0
 XLINK_PORT=8000
-XLINK_WEB_PORT=3000
+XLINK_WEB_PORT=$web_port
+XLINK_WEB_PATH=$web_path
 XLINK_PUBLIC_IP=$pub_ip
 XLINK_DOMAIN=$dom
 XLINK_ACME_EMAIL=$acme
@@ -227,9 +257,9 @@ migrate() {
 }
 
 summary() {
-  local dom wp ip; dom="$(grep -E '^XLINK_DOMAIN=' "$APP_DIR/.env" | cut -d= -f2-)"; wp="$(grep -E '^XLINK_WEB_PORT=' "$APP_DIR/.env" | cut -d= -f2- || echo 3000)"
+  local dom wp wpath ip; dom="$(grep -E '^XLINK_DOMAIN=' "$APP_DIR/.env" | cut -d= -f2-)"; wp="$(grep -E '^XLINK_WEB_PORT=' "$APP_DIR/.env" | cut -d= -f2- || echo 3000)"; wpath="$(grep -E '^XLINK_WEB_PATH=' "$APP_DIR/.env" | cut -d= -f2-)"
   echo; printf "${C_B}${C_CYAN}── XLink ready ──${C_RST}\n"
-  if [ -n "$dom" ]; then printf "  %-8s https://%s\n" panel "$dom"; else ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; printf "  %-8s http://%s:%s\n" panel "$ip" "$wp"; fi
+  if [ -n "$dom" ]; then printf "  %-8s https://%s%s\n" panel "$dom" "$wpath"; else ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; printf "  %-8s http://%s:%s%s\n" panel "$ip" "$wp" "$wpath"; fi
   [ -n "${ADMIN_PW:-}" ] && { printf "  %-8s ${C_B}admin / %s${C_RST}\n" login "$ADMIN_PW"; warn "save this password — shown once"; }
   printf "  %-8s xlink up | down | logs | update | backup | cli | help\n" manage
 }
@@ -240,7 +270,15 @@ cmd_install() {
   local free; free="$(free_gb)"; log "free disk: ${free}G"
   [ "${free:-0}" -ge "$MIN_FREE_GB" ] || { docker builder prune -af >/dev/null 2>&1 || true; docker image prune -af >/dev/null 2>&1 || true; }
   do_backup
-  if [ "${1:-pull}" = "build" ]; then build_images; else
+  # A secret admin path (XLINK_WEB_PATH) is baked into the web image at build
+  # time, so a registry-pulled image can't carry it — force a local build when
+  # one is configured.
+  local mode="${1:-pull}"
+  if [ "$mode" != "build" ] && grep -qE '^XLINK_WEB_PATH=.+' "$APP_DIR/.env" 2>/dev/null; then
+    log "secret web path set → building images locally so it's baked in"
+    mode="build"
+  fi
+  if [ "$mode" = "build" ]; then build_images; else
     log "pulling images"; compose pull 2>/dev/null && ok "images pulled" || { warn "pull failed — building locally"; build_images; }
   fi
   migrate
@@ -251,7 +289,13 @@ cmd_install() {
 
 cmd_update() {
   need_root; install_self; pin_version "${VERSION:-}"; do_backup
-  log "pulling images"; compose pull 2>/dev/null || warn "pull failed"
+  # Rebuild locally when a secret web path is set (baked into the image at build
+  # time); otherwise pull the prebuilt images.
+  if grep -qE '^XLINK_WEB_PATH=.+' "$APP_DIR/.env" 2>/dev/null; then
+    log "secret web path set → rebuilding images locally"; build_images
+  else
+    log "pulling images"; compose pull 2>/dev/null || warn "pull failed"
+  fi
   migrate
   compose up -d
   prune_cache; docker image prune -f >/dev/null 2>&1 || true

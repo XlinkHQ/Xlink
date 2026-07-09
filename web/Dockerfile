@@ -10,6 +10,9 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit --no-fund
 
 COPY . .
+# Secret admin path is baked at build time (Next.js basePath). Empty = root.
+ARG XLINK_WEB_PATH=""
+ENV XLINK_WEB_PATH=${XLINK_WEB_PATH}
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
