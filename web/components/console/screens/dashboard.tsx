@@ -8,7 +8,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, listNodes, type NodeRead, restartPanel, systemStats, trafficSummary } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
 import { isNodeOnline, relativeTime } from "./nodes/util";
-import { chartTheme } from "./usage-chart";
+import { baseAreaOptions, CHART_COLORS } from "./usage-chart";
 import { useTheme } from "@/lib/theme";
 
 const OS_LOGOS: Record<string, string> = {
@@ -140,7 +140,7 @@ function ResourceCard({
 }
 
 export function DashboardScreen() {
-  const ct = chartTheme(useTheme() === "dark");
+  const dark = useTheme() === "dark";
   const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 1000, refetchIntervalInBackground: false });
   const nodesQ = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes(), refetchInterval: 10000, refetchIntervalInBackground: false });
   const trafficQ = useQuery({ queryKey: ["traffic"], queryFn: () => trafficSummary(), refetchInterval: 10000, refetchIntervalInBackground: false });
@@ -203,38 +203,25 @@ export function DashboardScreen() {
   };
 
   const fmtRate = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} Gbps` : `${v.toFixed(1)} Mbps`);
+  const chartBase = baseAreaOptions(dark, {
+    height: 250,
+    // Download = accent, Upload = danger red (semantic up-vs-down).
+    colors: [CHART_COLORS.accent, CHART_COLORS.danger],
+  });
   const chartOptions: ApexOptions = {
-    chart: {
-      id: "net-throughput",
-      type: "area",
-      height: 250,
-      toolbar: { show: false },
-      animations: { enabled: true, dynamicAnimation: { speed: 350 } },
-      fontFamily: "var(--warp-font)",
-      foreColor: ct.axisText,
-    },
-    theme: { mode: ct.mode },
-    dataLabels: { enabled: false },
-    stroke: { curve: "smooth", width: 2.5 },
-    fill: {
-      type: "gradient",
-      gradient: { shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05, stops: [0, 100] },
-    },
-    colors: ["#3961DB", "#CC3C3C"],
-    markers: { size: 0, hover: { size: 5 } },
-    grid: { borderColor: ct.grid, strokeDashArray: 4 },
-    legend: { show: true, position: "top", horizontalAlign: "right", labels: { colors: ct.axisText } },
+    ...chartBase,
+    chart: { ...chartBase.chart, id: "net-throughput" },
     xaxis: {
-      type: "datetime",
-      labels: { datetimeUTC: false, format: "HH:mm:ss", style: { fontSize: "11px", colors: ct.axisText } },
+      ...chartBase.xaxis,
+      labels: { ...(chartBase.xaxis as { labels?: object }).labels, format: "HH:mm:ss" },
     },
     yaxis: {
-      min: 0,
+      ...chartBase.yaxis,
       forceNiceScale: true,
-      labels: { formatter: (v) => fmtRate(v), style: { fontSize: "11px", colors: ct.axisText } },
+      labels: { ...(chartBase.yaxis as { labels?: object }).labels, formatter: (v) => fmtRate(v) },
     },
     tooltip: {
-      theme: ct.tooltip,
+      ...chartBase.tooltip,
       x: { format: "HH:mm:ss" },
       y: { formatter: (v) => fmtRate(v) },
     },
