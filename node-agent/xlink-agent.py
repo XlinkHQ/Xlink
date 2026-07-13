@@ -981,6 +981,17 @@ def build_wireguard_config(clients: list[dict]) -> str:
         raise RuntimeError("wireguard: no private key in settings or XLINK_WG_PRIVATE_KEY")
     addr = _wg_safe_addr(str(s0.get("address") or "10.8.0.1/24"))
     subnet = _wg_subnet(addr)
+    # Preshared key is interface-wide in this design (stored in profile settings
+    # and handed to every client in the subscription). If the client config
+    # carries a PresharedKey but the server peer omits it, the crypto is
+    # asymmetric and the handshake is silently rejected — the tunnel shows
+    # bytes received but NEVER completes a handshake and no traffic passes. Read
+    # it here so the server peer matches the client.
+    psk = str(s0.get("presharedKey") or s0.get("preshared_key") or "").strip()
+    try:
+        psk = _wg_safe_key(psk) if psk else ""
+    except ValueError:
+        psk = ""
     post_up = (
         "WAN=$(ip route list default | awk '{print $5; exit}'); "
         "sysctl -w net.ipv4.ip_forward=1; "
@@ -1031,7 +1042,20 @@ def build_wireguard_config(clients: list[dict]) -> str:
         except ValueError:
             continue
         seen_ips.add(ip)
-        lines += ["", "[Peer]", f"PublicKey = {pub}", f"AllowedIPs = {ip}/32"]
+        peer_lines = ["", "[Peer]", f"PublicKey = {pub}"]
+        # Per-client PSK (credentials) if present, else the interface-wide PSK
+        # from profile settings. Must match the client's PresharedKey or the
+        # handshake is rejected.
+        peer_psk = str(creds.get("preshared_key") or creds.get("presharedKey") or "").strip()
+        try:
+            peer_psk = _wg_safe_key(peer_psk) if peer_psk else ""
+        except ValueError:
+            peer_psk = ""
+        effective_psk = peer_psk or psk
+        if effective_psk:
+            peer_lines.append(f"PresharedKey = {effective_psk}")
+        peer_lines.append(f"AllowedIPs = {ip}/32")
+        lines += peer_lines
     return "\n".join(lines) + "\n"
 
 
