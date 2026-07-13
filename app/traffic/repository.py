@@ -791,6 +791,13 @@ class TrafficRepository:
         await self.session.execute(
             delete(TrafficRecord).where(TrafficRecord.assignment_id.in_(ids))
         )
+        # Also drop the hourly rollup rows: every analytics read (totals,
+        # usage_by_node, usage_series, usage_hourly_*) serves from the rollup+raw
+        # UNION, so deleting only raw would leave the pre-reset usage visible from
+        # the retained rollup buckets and contradict the zeroed used_bytes.
+        await self.session.execute(
+            delete(TrafficHourly).where(TrafficHourly.assignment_id.in_(ids))
+        )
         await self.session.execute(
             update(ClientAssignment).where(ClientAssignment.id.in_(ids)).values(used_bytes=0)
         )

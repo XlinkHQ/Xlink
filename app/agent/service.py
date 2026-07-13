@@ -129,8 +129,13 @@ class NodeAgentService:
         node = await self.authenticate(node_id, token)
 
         node.last_seen_at = datetime.now(UTC)
-        if node.status is NodeStatus.OFFLINE:
+        recovered = node.status is NodeStatus.OFFLINE
+        if recovered:
             node.status = NodeStatus.ACTIVE
+            # A config report is also a liveness signal — fire the SAME recovery
+            # event + webhook the heartbeat path fires, so a node that comes back
+            # via its config poll isn't silently un-alerted.
+            await self._heartbeat.emit_recovery(node)
         await self._config_sync.record_reported_state(
             node,
             config_version_value=config_version,

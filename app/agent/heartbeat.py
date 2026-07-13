@@ -78,17 +78,23 @@ class NodeHeartbeatService:
         node.last_seen_at = datetime.now(UTC)
         node.status = status
         saved = await self._nodes.save(node)
-        recovered = previous_status is NodeStatus.OFFLINE and status is NodeStatus.ACTIVE
-        if recovered:
-            if self._events is not None:
-                await self._events.publish(NodeRecovered(node_id=node_id))
-            if self._dispatcher is not None and await self._node_alerts_enabled():
-                await self._dispatcher.dispatch(
-                    webhook_events.NODE_RECOVERED,
-                    saved.name,
-                    detail=f"Node '{saved.name}' ({saved.host}) recovered",
-                )
+        if previous_status is NodeStatus.OFFLINE and status is NodeStatus.ACTIVE:
+            await self.emit_recovery(saved)
         return saved
+
+    async def emit_recovery(self, node: Node) -> None:
+        """Publish the NodeRecovered event + webhook for an OFFLINE→ACTIVE
+        transition. Shared so every path that brings a node back (heartbeat AND
+        the config report_state path) fires the identical notification instead
+        of one silently skipping it."""
+        if self._events is not None:
+            await self._events.publish(NodeRecovered(node_id=node.id))
+        if self._dispatcher is not None and await self._node_alerts_enabled():
+            await self._dispatcher.dispatch(
+                webhook_events.NODE_RECOVERED,
+                node.name,
+                detail=f"Node '{node.name}' ({node.host}) recovered",
+            )
 
     async def health_check(self, node_id: uuid.UUID, *, token: str) -> bool:
         node = await self.authenticate(node_id, token)

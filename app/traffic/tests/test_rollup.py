@@ -186,6 +186,24 @@ async def test_rollup_coefficient_weighting(app_state: AppState):
     assert by_node[ids["node_id"]] == 1800
 
 
+async def test_reset_user_clears_rollup_not_just_raw(app_state: AppState):
+    """After a usage reset, analytics (served from the rollup+raw union) must
+    read zero — not the pre-reset total left behind in retained rollup buckets."""
+    ids = await _seed(app_state)
+    await _ingest(app_state, _batch(ids["node_id"], ids["assignment_id"], count=4, start=BASE))
+    async with app_state.db.session() as session:
+        await TrafficService(session).rollup_hourly(now=datetime.now(UTC))
+
+    async with app_state.db.session() as session:
+        await TrafficService(session).reset_user(ids["user_id"])
+
+    async with app_state.db.session() as session:
+        svc = TrafficService(session)
+        assert (await svc.usage_total_for_profile(ids["profile_id"])) == 0
+        assert (await svc.usage_by_node()).get(ids["node_id"], 0) == 0
+        assert (await TrafficRepository(session).totals()).total_bytes == 0
+
+
 async def test_rollup_excludes_current_hour(app_state: AppState):
     ids = await _seed(app_state)
     now = datetime.now(UTC)
