@@ -989,8 +989,14 @@ def build_wireguard_config(clients: list[dict]) -> str:
         "sysctl -w net.ipv4.conf.%i.rp_filter=0; "
         "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 2>/dev/null; "
         f"iptables -t nat -A POSTROUTING -s {subnet} -o $WAN -j MASQUERADE; "
-        "iptables -A FORWARD -i %i -j ACCEPT; "
-        "iptables -A FORWARD -o %i -j ACCEPT"
+        # Insert (not append) ahead of any Docker DROP/DOCKER-USER jumps on a
+        # host that also runs containers; append would sit after them and never
+        # be reached (tunnel up, no traffic forwarded). See the reload command.
+        "iptables -I FORWARD 1 -i %i -j ACCEPT; "
+        "iptables -I FORWARD 1 -o %i -j ACCEPT; "
+        "if iptables -L DOCKER-USER >/dev/null 2>&1; then "
+        "iptables -I DOCKER-USER 1 -i %i -j ACCEPT; "
+        "iptables -I DOCKER-USER 1 -o %i -j ACCEPT; fi"
     )
     post_down = (
         "WAN=$(ip route list default | awk '{print $5; exit}'); "
@@ -1108,10 +1114,23 @@ _WG_RELOAD_DEFAULT = (
     "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
     "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
     "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
+    # INSERT the FORWARD accepts at the TOP of the chain, not append. When the
+    # host also runs Docker (e.g. the panel containers), Docker sets the FORWARD
+    # policy to DROP and inserts DOCKER-USER / DOCKER-FORWARD jumps ahead of any
+    # appended rule — so an appended wg accept is never reached and every
+    # forwarded WG packet is dropped (tunnel connects, but no traffic passes).
+    # Also insert the same accepts into DOCKER-USER, which Docker evaluates first
+    # of all and which returns/drops non-Docker forwarded traffic.
     f"iptables -C FORWARD -i {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -A FORWARD -i {WG_INTERFACE} -j ACCEPT; "
+    f"iptables -I FORWARD 1 -i {WG_INTERFACE} -j ACCEPT; "
     f"iptables -C FORWARD -o {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -A FORWARD -o {WG_INTERFACE} -j ACCEPT"
+    f"iptables -I FORWARD 1 -o {WG_INTERFACE} -j ACCEPT; "
+    "if iptables -L DOCKER-USER >/dev/null 2>&1; then "
+    f"iptables -C DOCKER-USER -i {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
+    f"iptables -I DOCKER-USER 1 -i {WG_INTERFACE} -j ACCEPT; "
+    f"iptables -C DOCKER-USER -o {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
+    f"iptables -I DOCKER-USER 1 -o {WG_INTERFACE} -j ACCEPT; "
+    "fi"
 )
 
 
