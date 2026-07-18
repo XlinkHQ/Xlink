@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.gitops import GitOpsAction, GitOpsRecord
 from app.events.models import DomainEvent
 from app.gitops.diff import DiffEngine
-from app.gitops.models import GitDiff, GitSnapshot, RollbackPlan
+from app.gitops.models import GitDiff, GitSnapshot
 from app.gitops.repository import GitOpsRepository
 from app.gitops.snapshot import SnapshotBuilder
 
@@ -53,21 +53,6 @@ class GitOpsService:
             action=GitOpsAction.COMMIT,
             actor=actor,
             message=message,
-        )
-
-    async def rollback_plan(
-        self,
-        *,
-        record: GitOpsRecord,
-        current: GitSnapshot,
-    ) -> RollbackPlan:
-        target = record.snapshot
-        forward = self._diffs.compare(target, current.data)
-        return RollbackPlan(
-            entity_type=current.entity_type,
-            entity_id=current.entity_id,
-            restore_to=target,
-            reverse_diff=self._diffs.reverse(forward),
         )
 
     async def snapshot_event(self, event: DomainEvent) -> GitOpsRecord:

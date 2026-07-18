@@ -53,7 +53,6 @@ def test_register_and_get() -> None:
     p = _read_only()
     reg.register(p)
     assert reg.get("readonly") is p
-    assert reg.has("readonly")
     assert "readonly" in reg
     assert len(reg) == 1
 
@@ -79,15 +78,6 @@ def test_get_unknown_raises() -> None:
         reg.get("nope")
 
 
-def test_unregister() -> None:
-    reg = ProviderRegistry()
-    reg.register(_read_only())
-    reg.unregister("readonly")
-    assert not reg.has("readonly")
-    with pytest.raises(ProviderNotFoundError):
-        reg.unregister("readonly")
-
-
 def test_get_by_kind() -> None:
     reg = ProviderRegistry()
     reg.register(_read_only())
@@ -106,22 +96,6 @@ def test_discovery_and_names() -> None:
     )
     assert reg.names() == ["a", "b"]
     assert len(reg.metadata()) == 2
-
-
-def test_with_capability_filter() -> None:
-    reg = ProviderRegistry()
-    reg.discover(
-        [
-            StubProvider("ro", ProviderKind.SING_BOX, {ProviderCapability.GET_CLIENT}),
-            StubProvider(
-                "rw",
-                ProviderKind.HYSTERIA,
-                {ProviderCapability.GET_CLIENT, ProviderCapability.CREATE_CLIENT},
-            ),
-        ]
-    )
-    creators = reg.with_capability(ProviderCapability.CREATE_CLIENT)
-    assert [p.name for p in creators] == ["rw"]
 
 
 async def test_capability_enforcement() -> None:

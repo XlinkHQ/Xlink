@@ -10,7 +10,7 @@ from app.agent.command_service import CommandService
 from app.agent.commands import CommandSigner
 from app.agent.config_sync import ConfigSyncService
 from app.agent.domain import NodeCommand, NodeDriftReport, NodeProviderHealth
-from app.agent.healing import AutoUpgradeService, HealingPolicy, SelfHealingService
+from app.agent.healing import HealingPolicy, SelfHealingService
 from app.agent.heartbeat import NodeHeartbeatService
 from app.agent.models import AgentHeartbeat, RetryPolicy, SyncBatch, SyncCursor
 from app.agent.provider_health import ProviderHealthService
@@ -46,17 +46,14 @@ class NodeAgentService:
         self._signer = signer
         self._cache = cache
         self._events = events
-        self._healing_policy = healing_policy
         if signer is not None:
             self._commands = CommandService(session, signer=signer, events=events)
             self._healing = SelfHealingService(
                 self._config_sync, self._commands, policy=healing_policy
             )
-            self._upgrade = AutoUpgradeService(self._commands)
         else:
             self._commands = None
             self._healing = None
-            self._upgrade = None
         self._stream = AgentStreamService(cache) if cache is not None else None
 
     async def authenticate(self, node_id: uuid.UUID, token: str) -> Node:
@@ -188,13 +185,6 @@ class NodeAgentService:
         return await self._commands.report_result(
             command_id, node_id=node_id, lease_token=lease_token, success=success, result=result
         )
-
-    async def ensure_upgrade(
-        self, node_id: uuid.UUID, *, target_version: str
-    ) -> NodeCommand | None:
-        self._require_commands()
-        node = await self._heartbeat._get_node(node_id)
-        return await self._upgrade.ensure_target(node, target_version=target_version)
 
     async def record_provider_health(
         self, node_id: uuid.UUID, *, token: str, checks: list[dict]

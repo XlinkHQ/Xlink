@@ -38,3 +38,5 @@ deploy.env.*
 
 # Internal Claude tooling/skills — not part of the shipped project
 .claude/
+loadtest/.sub_tokens
+loadtest/report*

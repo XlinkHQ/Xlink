@@ -121,8 +121,5 @@ class BackupExporter:
             async for row in stream_rows(self._session, model, since=since, redacted=redacted)
         ]
 
-    def _serialize(self, row, *, redacted: bool = False) -> dict[str, Any]:
-        return serialize_row(row, redacted=redacted)
-
     async def _traffic_metadata(self, *, since: datetime | None = None) -> list[dict[str, Any]]:
         return [row async for row in stream_traffic_metadata(self._session, since=since)]

@@ -49,20 +49,6 @@ async def test_commit_record_stored(db: Database) -> None:
         assert stored.diff["added"] == {"v": 1}
 
 
-async def test_rollback_plan(db: Database) -> None:
-    async with db.session() as session:
-        service = GitOpsService(session)
-        entity_id = uuid.uuid4()
-        original = service.snapshot(entity_type="node", entity_id=entity_id, payload={"v": 1})
-        changed = service.snapshot(entity_type="node", entity_id=entity_id, payload={"v": 2})
-        record = await service.commit(before=None, after=original)
-
-        plan = await service.rollback_plan(record=record, current=changed)
-
-        assert plan.restore_to == {"v": 1}
-        assert plan.reverse_diff.changed["v"]["after"] == 1
-
-
 async def test_event_driven_snapshot(db: Database) -> None:
     async with db.session() as session:
         service = GitOpsService(session)

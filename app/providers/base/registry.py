@@ -6,7 +6,7 @@ from app.providers.base.exceptions import (
     ProviderAlreadyRegisteredError,
     ProviderNotFoundError,
 )
-from app.providers.base.models import ProviderCapability, ProviderKind, ProviderMetadata
+from app.providers.base.models import ProviderKind, ProviderMetadata
 from app.providers.base.provider import Provider
 
 
@@ -23,13 +23,6 @@ class ProviderRegistry:
             )
         self._providers[name] = provider
         return provider
-
-    def unregister(self, name: str) -> None:
-        if name not in self._providers:
-            raise ProviderNotFoundError(
-                f"Provider '{name}' is not registered.", details={"provider": name}
-            )
-        del self._providers[name]
 
     def get(self, name: str) -> Provider:
         try:
@@ -48,9 +41,6 @@ class ProviderRegistry:
             details={"kind": kind.value},
         )
 
-    def has(self, name: str) -> bool:
-        return name in self._providers
-
     def names(self) -> list[str]:
         return sorted(self._providers)
 
@@ -59,9 +49,6 @@ class ProviderRegistry:
 
     def metadata(self) -> list[ProviderMetadata]:
         return [provider.metadata for provider in self._providers.values()]
-
-    def with_capability(self, capability: ProviderCapability) -> list[Provider]:
-        return [p for p in self._providers.values() if p.supports(capability)]
 
     def discover(self, providers: Iterable[Provider], *, replace: bool = False) -> None:
         for provider in providers:
