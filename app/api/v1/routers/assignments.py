@@ -8,7 +8,7 @@ from app.core.authz import assert_group_in_scope, owner_scope
 from app.core.exceptions import PermissionDeniedError
 from app.dependencies.auth import AdminUser, WriteAdminUser
 from app.dependencies.pagination import CursorPaginationDep
-from app.dependencies.services import AssignmentServiceDep, UserServiceDep
+from app.dependencies.services import AdminServiceDep, AssignmentServiceDep, UserServiceDep
 from app.domain.client_assignment import AssignmentStatus
 from app.providers.base.models import ProviderKind
 from app.schemas.client_assignment import (
@@ -27,14 +27,15 @@ async def create_assignment(
     admin: WriteAdminUser,
     assignments: AssignmentServiceDep,
     users: UserServiceDep,
+    admins: AdminServiceDep,
 ) -> AssignmentRead:
     users.assert_can_manage(admin, await users.get(payload.user_id))
     if not admin.is_sudo and not admin.all_groups_access:
-        scoped = await users.scoped_group_ids(admin.id)
+        scoped = await admins.scoped_group_ids(admin.id)
         assert_group_in_scope(admin, payload.group_id, scoped)
         # Also ensure the target profile is one the reseller may actually use,
         # so they can't pin an owned user onto an out-of-scope profile/node.
-        scoped_profiles = await users.scoped_profile_ids(admin.id)
+        scoped_profiles = await admins.scoped_profile_ids(admin.id)
         if payload.profile_id not in scoped_profiles:
             raise PermissionDeniedError(
                 "This profile is not in your scope.", code="profile_out_of_scope"

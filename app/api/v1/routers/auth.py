@@ -6,7 +6,7 @@ from app.core.exceptions import AuthenticationError, PermissionDeniedError
 from app.core.security import hash_password_async, verify_password_async
 from app.dependencies.auth import CurrentUser
 from app.dependencies.core import SettingsDep
-from app.dependencies.services import AuthServiceDep, TokenServiceDep, UserServiceDep
+from app.dependencies.services import AuthServiceDep, TokenServiceDep, UserTotpServiceDep
 from app.schemas.auth import (
     AuthResponse,
     ChangePasswordRequest,
@@ -81,7 +81,7 @@ async def logout_all(user: CurrentUser, auth: AuthServiceDep) -> None:
 async def change_password(
     payload: ChangePasswordRequest,
     user: CurrentUser,
-    users: UserServiceDep,
+    users: UserTotpServiceDep,
     tokens: TokenServiceDep,
 ) -> None:
     if not user.hashed_password or not await verify_password_async(

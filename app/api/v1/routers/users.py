@@ -16,8 +16,11 @@ from app.dependencies.auth import AdminUser, CurrentUser, SudoAdminUser, WriteAd
 from app.dependencies.core import DatabaseDep
 from app.dependencies.pagination import ListPaginationDep
 from app.dependencies.services import (
+    AdminServiceDep,
     AssignmentServiceDep,
     ProfileServiceDep,
+    UserBulkServiceDep,
+    UserDeviceServiceDep,
     UserServiceDep,
 )
 from app.domain.user import User, UserRole
@@ -173,6 +176,7 @@ async def create_user(
     payload: UserCreate,
     admin: WriteAdminUser,
     users: UserServiceDep,
+    admins: AdminServiceDep,
     profiles: ProfileServiceDep,
     assignments: AssignmentServiceDep,
 ) -> UserRead:
@@ -181,7 +185,7 @@ async def create_user(
     # does — otherwise a reseller could auto-assign an owned user onto a profile/
     # node outside their scope (capacity theft / cross-tenant) via this shortcut.
     if payload.profile_ids and not admin.is_sudo and not admin.all_groups_access:
-        scoped_profiles = await users.scoped_profile_ids(admin.id)
+        scoped_profiles = await admins.scoped_profile_ids(admin.id)
         for profile_id in payload.profile_ids:
             if profile_id not in scoped_profiles:
                 raise PermissionDeniedError(
@@ -228,7 +232,7 @@ _BULK_ACTIONS = {
 async def bulk_user_action(
     payload: BulkUserAction,
     admin: WriteAdminUser,
-    users: UserServiceDep,
+    users: UserBulkServiceDep,
 ) -> dict[str, int]:
     if payload.action not in _BULK_ACTIONS:
         raise ValidationError("Unknown bulk action.", code="unknown_bulk_action")
@@ -265,9 +269,10 @@ async def list_user_devices(
     user_id: uuid.UUID,
     admin: AdminUser,
     users: UserServiceDep,
+    device_svc: UserDeviceServiceDep,
 ) -> list[UserDeviceRead]:
     await _scoped_get(users, admin, user_id)
-    devices = await users.list_devices(user_id)
+    devices = await device_svc.list_devices(user_id)
     return [UserDeviceRead.model_validate(d, from_attributes=True) for d in devices]
 
 
@@ -276,9 +281,10 @@ async def reset_user_devices(
     user_id: uuid.UUID,
     admin: AdminUser,
     users: UserServiceDep,
+    device_svc: UserDeviceServiceDep,
 ) -> None:
     await _scoped_get(users, admin, user_id)
-    await users.reset_devices(user_id)
+    await device_svc.reset_devices(user_id)
 
 
 @router.post("/{user_id}/disable", response_model=UserRead)
@@ -345,7 +351,7 @@ async def update_user(
 async def create_admin(
     payload: UserCreate,
     _admin: SudoAdminUser,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> UserRead:
     user = await users.create_admin(payload)
     return UserRead.model_validate(user)
@@ -356,7 +362,7 @@ async def update_admin(
     user_id: uuid.UUID,
     payload: AdminUpdate,
     _admin: SudoAdminUser,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> UserRead:
     return UserRead.model_validate(await users.update_admin(user_id, payload))
 
@@ -373,7 +379,7 @@ class AdminUsageRead(BaseModel):
 async def admin_usage(
     user_id: uuid.UUID,
     _admin: SudoAdminUser,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> AdminUsageRead:
     return AdminUsageRead(**await users.admin_usage(user_id))
 
@@ -382,7 +388,7 @@ async def admin_usage(
 async def enable_admin_users(
     user_id: uuid.UUID,
     _admin: SudoAdminUser,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> dict[str, int]:
     return {"affected": await users.set_owned_users_active(user_id, active=True)}
 
@@ -391,7 +397,7 @@ async def enable_admin_users(
 async def disable_admin_users(
     user_id: uuid.UUID,
     _admin: SudoAdminUser,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> dict[str, int]:
     return {"affected": await users.set_owned_users_active(user_id, active=False)}
 
@@ -410,7 +416,7 @@ async def revoke_subscription(
 async def promote_user(
     user_id: uuid.UUID,
     _admin: SudoAdminUser,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> UserRead:
     return UserRead.model_validate(await users.set_role(user_id, UserRole.ADMIN))
 
@@ -419,7 +425,7 @@ async def promote_user(
 async def demote_user(
     user_id: uuid.UUID,
     admin: SudoAdminUser,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> UserRead:
     _guard_not_self(admin, user_id)
     return UserRead.model_validate(await users.set_role(user_id, UserRole.USER))

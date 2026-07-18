@@ -20,8 +20,10 @@ from app.repositories.node import NodeRepository
 from app.repositories.user import UserRepository
 from app.schemas.node import NodeCreate
 from app.schemas.user import UserCreate, UserUpdate
+from app.services.admin_service import AdminService
 from app.services.node_service import NodeService
 from app.services.user_service import UserService
+from app.services.user_totp_service import UserTotpService
 from app.subscription.schemas import FeedScope
 from app.subscription.tokens import create_subscription_token
 from app.webhooks.dispatcher import WebhookDispatcher
@@ -178,7 +180,11 @@ async def _find_user(session: AsyncSession, username: str, *, admin: bool = Fals
 async def _admin(session, cache, settings, rest):
     sub, *args = rest or ["list"]
     _, kv, flags = _opts(args)
-    svc = UserService(UserRepository(session), cache, WebhookDispatcher(settings))
+    repo = UserRepository(session)
+    disp = WebhookDispatcher(settings)
+    svc = UserService(repo, cache, disp)
+    admin_svc = AdminService(repo, cache, disp)
+    totp_svc = UserTotpService(repo, cache, disp)
     if sub == "list":
         rows = (
             (await session.execute(select(User).where(User.role == UserRole.ADMIN))).scalars().all()
@@ -206,7 +212,7 @@ async def _admin(session, cache, settings, rest):
             raise CliError("--password is required (or set XLINK_ADMIN_PASSWORD)")
 
         is_sudo = not ("no-sudo" in flags or "reseller" in flags)
-        user = await svc.create_admin(
+        user = await admin_svc.create_admin(
             UserCreate(username=_need(kv, "username"), password=password, is_sudo=is_sudo)
         )
         await session.commit()
@@ -216,7 +222,7 @@ async def _admin(session, cache, settings, rest):
         if kv.get("password"):
             from app.core.security import hash_password
 
-            await svc.update_password_hash(admin, hash_password(kv["password"]))
+            await totp_svc.update_password_hash(admin, hash_password(kv["password"]))
         if "sudo" in flags:
             admin.is_sudo = True
         elif "no-sudo" in flags:
@@ -228,7 +234,7 @@ async def _admin(session, cache, settings, rest):
         from app.core.security import hash_password
 
         admin.is_active = True
-        await svc.update_password_hash(admin, hash_password(_need(kv, "password")))
+        await totp_svc.update_password_hash(admin, hash_password(_need(kv, "password")))
         await session.commit()
         return f"admin '{admin.username}' password reset and re-enabled."
     if sub == "import-from-env":
@@ -239,12 +245,12 @@ async def _admin(session, cache, settings, rest):
             from app.core.security import hash_password
 
             existing.is_sudo = True
-            await svc.update_password_hash(
+            await totp_svc.update_password_hash(
                 existing, hash_password(settings.admin_password.get_secret_value())
             )
             await session.commit()
             return f"admin '{existing.username}' updated from env."
-        user = await svc.create_admin(
+        user = await admin_svc.create_admin(
             UserCreate(
                 username=settings.admin_username,
                 password=settings.admin_password.get_secret_value(),

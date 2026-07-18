@@ -30,6 +30,7 @@ from app.repositories.profile import ProfileRepository
 from app.repositories.refresh_token import RefreshTokenRepository
 from app.repositories.user import UserRepository
 from app.scheduler.service import SmartSchedulerService
+from app.services.admin_service import AdminService
 from app.services.auth_service import AuthService
 from app.services.certificate_service import CertificateService
 from app.services.client_assignment_service import ClientAssignmentService
@@ -39,7 +40,10 @@ from app.services.node_service import NodeService
 from app.services.profile_service import ProfileService
 from app.services.settings_service import SettingsService
 from app.services.token_service import TokenService
+from app.services.user_bulk_service import UserBulkService
+from app.services.user_device_service import UserDeviceService
 from app.services.user_service import UserService
+from app.services.user_totp_service import UserTotpService
 from app.subscription.generator import SubscriptionGenerator
 from app.subscription.renderer import SubscriptionRenderer
 from app.subscription.repository import SubscriptionRepository
@@ -117,6 +121,50 @@ def get_user_service(
     # a fresh one only if state has none (e.g. some tests).
     disp = dispatcher or WebhookDispatcher(settings)
     return UserService(repo, cache, disp, subscription_service=subscription_service)
+
+
+def get_admin_service(
+    repo: UserRepoDep,
+    cache: CacheDep,
+    settings: SettingsDep,
+    subscription_service: SubscriptionServiceDep,
+    dispatcher: DispatcherDep = None,
+) -> AdminService:
+    disp = dispatcher or WebhookDispatcher(settings)
+    return AdminService(repo, cache, disp, subscription_service=subscription_service)
+
+
+def get_user_device_service(
+    repo: UserRepoDep,
+    cache: CacheDep,
+    settings: SettingsDep,
+    subscription_service: SubscriptionServiceDep,
+    dispatcher: DispatcherDep = None,
+) -> UserDeviceService:
+    disp = dispatcher or WebhookDispatcher(settings)
+    return UserDeviceService(repo, cache, disp, subscription_service=subscription_service)
+
+
+def get_user_totp_service(
+    repo: UserRepoDep,
+    cache: CacheDep,
+    settings: SettingsDep,
+    subscription_service: SubscriptionServiceDep,
+    dispatcher: DispatcherDep = None,
+) -> UserTotpService:
+    disp = dispatcher or WebhookDispatcher(settings)
+    return UserTotpService(repo, cache, disp, subscription_service=subscription_service)
+
+
+def get_user_bulk_service(
+    repo: UserRepoDep,
+    cache: CacheDep,
+    settings: SettingsDep,
+    subscription_service: SubscriptionServiceDep,
+    dispatcher: DispatcherDep = None,
+) -> UserBulkService:
+    disp = dispatcher or WebhookDispatcher(settings)
+    return UserBulkService(repo, cache, disp, subscription_service=subscription_service)
 
 
 def get_token_service(
@@ -213,6 +261,10 @@ def get_gitops_service(session: SessionDep) -> GitOpsService:
 
 
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
+AdminServiceDep = Annotated[AdminService, Depends(get_admin_service)]
+UserDeviceServiceDep = Annotated[UserDeviceService, Depends(get_user_device_service)]
+UserTotpServiceDep = Annotated[UserTotpService, Depends(get_user_totp_service)]
+UserBulkServiceDep = Annotated[UserBulkService, Depends(get_user_bulk_service)]
 TokenServiceDep = Annotated[TokenService, Depends(get_token_service)]
 NodeServiceDep = Annotated[NodeService, Depends(get_node_service)]
 ProfileServiceDep = Annotated[ProfileService, Depends(get_profile_service)]
@@ -273,8 +325,9 @@ GitOpsServiceDep = Annotated[GitOpsService, Depends(get_gitops_service)]
 def get_auth_service(
     user_service: UserServiceDep,
     token_service: TokenServiceDep,
+    totp_service: UserTotpServiceDep,
 ) -> AuthService:
-    return AuthService(user_service, token_service)
+    return AuthService(user_service, token_service, totp_service)
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]

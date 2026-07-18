@@ -17,6 +17,7 @@ from app.dependencies.services import (
     AssignmentServiceDep,
     SettingsServiceDep,
     SubscriptionServiceDep,
+    UserDeviceServiceDep,
     UserServiceDep,
 )
 from app.subscription.page import render_custom_page, render_subscription_page
@@ -316,6 +317,7 @@ async def public_subscription(
     subscriptions: SubscriptionServiceDep,
     app_settings: SettingsServiceDep,
     users: UserServiceDep,
+    device_svc: UserDeviceServiceDep,
     format: str | None = Query(default=None, alias="format"),
     user_agent: str = Header(default=""),
     x_hwid: str = Header(default=""),
@@ -337,7 +339,7 @@ async def public_subscription(
     device_ok = True
     if owner.device_limit:
         client_ip = request.client.host if request.client else ""
-        device_ok = await users.register_device(
+        device_ok = await device_svc.register_device(
             user_id, user_agent, client_ip, owner.device_limit, hwid=x_hwid
         )
         # A non-browser client over the limit is rejected outright. A browser

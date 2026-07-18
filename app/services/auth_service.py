@@ -19,6 +19,7 @@ from app.schemas.auth import AuthResponse, TokenPair
 from app.schemas.user import UserCreate, UserRead
 from app.services.token_service import TokenService
 from app.services.user_service import UserService
+from app.services.user_totp_service import UserTotpService
 
 
 class AuthService:
@@ -26,9 +27,11 @@ class AuthService:
         self,
         user_service: UserService,
         token_service: TokenService,
+        totp_service: UserTotpService,
     ) -> None:
         self._users = user_service
         self._tokens = token_service
+        self._totp = totp_service
 
     async def register(self, data: UserCreate) -> AuthResponse:
         user = await self._users.create(data)
@@ -58,7 +61,7 @@ class AuthService:
 
         if needs_rehash(user.hashed_password):
             new_hash = await hash_password_async(password)
-            await self._users.update_password_hash(user, new_hash, invalidate_tokens=False)
+            await self._totp.update_password_hash(user, new_hash, invalidate_tokens=False)
 
         tokens = await self._tokens.issue_pair(user)
         return AuthResponse(user=UserRead.model_validate(user), tokens=tokens)
@@ -79,7 +82,7 @@ class AuthService:
                 code="totp_reenroll_requires_code",
             )
         secret = totp_generate_secret()
-        user = await self._users.update_totp_secret(user_id, secret)
+        user = await self._totp.update_totp_secret(user_id, secret)
         return secret, totp_provisioning_uri(secret, user.username)
 
     async def confirm_totp(self, user_id: uuid.UUID, code: str) -> None:
@@ -88,13 +91,13 @@ class AuthService:
             raise AuthenticationError("Start enrollment first.", code="totp_not_started")
         if not totp_verify(user.totp_secret, code):
             raise AuthenticationError("Invalid two-factor code.", code="totp_invalid")
-        await self._users.enable_totp(user_id)
+        await self._totp.enable_totp(user_id)
 
     async def disable_totp(self, user_id: uuid.UUID, code: str) -> None:
         user = await self._users.get(user_id)
         if user.totp_secret and not totp_verify(user.totp_secret, code):
             raise AuthenticationError("Invalid two-factor code.", code="totp_invalid")
-        await self._users.disable_totp(user_id)
+        await self._totp.disable_totp(user_id)
 
     async def refresh(self, refresh_token: str) -> TokenPair:
         user_id = self._tokens.subject_id(refresh_token)
@@ -111,7 +114,7 @@ class AuthService:
         # Also invalidate already-issued (stateless) access tokens: bump the
         # per-user cutoff so get_authenticated_user rejects any access token
         # minted before now.
-        await self._users.mark_sessions_revoked(user_id)
+        await self._totp.mark_sessions_revoked(user_id)
 
     async def get_authenticated_user(
         self, user_id: uuid.UUID, *, token_issued_at: int | None = None

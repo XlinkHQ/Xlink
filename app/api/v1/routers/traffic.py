@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.dependencies.auth import AdminUser, SudoAdminUser, WriteAdminUser
 from app.dependencies.core import DatabaseDep, SettingsDep
 from app.dependencies.services import (
+    AdminServiceDep,
     AssignmentServiceDep,
     TrafficServiceDep,
     UserServiceDep,
@@ -205,7 +206,7 @@ async def users_usage(
     payload: UsageQuery,
     admin: AdminUser,
     traffic: TrafficServiceDep,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> list[UserUsage]:
     await users.assert_can_manage_many(admin, payload.user_ids, skip_missing=True)
     usage = await traffic.usage_for_users(payload.user_ids)
@@ -225,7 +226,7 @@ async def users_last_seen(
     payload: UsageQuery,
     admin: AdminUser,
     traffic: TrafficServiceDep,
-    users: UserServiceDep,
+    users: AdminServiceDep,
 ) -> list[UserLastSeen]:
     await users.assert_can_manage_many(admin, payload.user_ids, skip_missing=True)
     seen = await traffic.last_seen_for_users(payload.user_ids)
