@@ -8,7 +8,16 @@ from urllib.parse import quote
 
 import segno
 
+from app.core.logging import get_logger
 from app.subscription.formats.base import format_bytes
+
+logger = get_logger("xlink.subscription.page")
+
+_USAGE_WARN_PCT = 75
+_USAGE_CRITICAL_PCT = 90
+_USAGE_BAR_OK = "#038026"
+_USAGE_BAR_WARN = "#FF9500"
+_USAGE_BAR_CRITICAL = "#CC3C3C"
 
 _IA = 'viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"'
 _IC_COPY = f'<svg {_IA}><rect x="7.5" y="7.5" width="9.5" height="9.5" rx="2"/><path d="M13 7.5V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2.5"/></svg>'
@@ -175,12 +184,12 @@ def render_subscription_page(
         )
 
     if total:
-        if pct < 75:
-            bar_color = "#038026"
-        elif pct < 90:
-            bar_color = "#FF9500"
+        if pct < _USAGE_WARN_PCT:
+            bar_color = _USAGE_BAR_OK
+        elif pct < _USAGE_CRITICAL_PCT:
+            bar_color = _USAGE_BAR_WARN
         else:
-            bar_color = "#CC3C3C"
+            bar_color = _USAGE_BAR_CRITICAL
         usage_value = (
             f'<span class="uval">{_bytes(used)} <span class="muted">/ {_human(total)}</span></span>'
             f'<span class="ubar"><i style="width:{pct}%;background:{bar_color}"></i></span>'
@@ -223,8 +232,8 @@ def render_subscription_page(
             actions += (
                 f'<button class="act" type="button" title="QR" onclick="qr(\'{js_q}\')">{_IC_QR}</button>'
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("qr_render_failed", error=str(exc))
         actions += (
             f'<a class="act" title="Download" download="{e(fname)}" href="{conf_uri}">{_IC_DOWN}</a>'
         )

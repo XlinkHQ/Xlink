@@ -92,7 +92,11 @@ def _proxy_outbound(config: ProviderConfig) -> dict:
             ]
         }
     else:
-        raise ValueError(f"xray_json does not support protocol '{proto}'")
+        raise FormatRenderError(
+            f"xray_json does not support protocol '{proto}'.",
+            code="subscription_format_incompatible",
+            details={"protocol": proto},
+        )
 
     out: dict = {
         "tag": "proxy",

@@ -372,9 +372,12 @@ def _build_singbox_outbound(tag: str, type_: str, settings: dict[str, Any]) -> d
     return None
 
 
+_DEFAULT_WARP_ENDPOINT_PORT = 2408
+
+
 def _wg_endpoint_port(endpoint: str) -> int:
     _, port = _parse_host_port(endpoint)
-    return port if port is not None else 2408
+    return port if port is not None else _DEFAULT_WARP_ENDPOINT_PORT
 
 
 def _user_serviceable(now: datetime):
@@ -980,7 +983,8 @@ class ConfigSyncService:
     async def _read_cached_snapshot(self, cache: Any, node: Node) -> dict[str, Any] | None:
         try:
             raw = await cache.get_node_config(node.id)
-        except Exception:
+        except Exception as exc:
+            logger.warning("config_cache_read_failed", node_id=str(node.id), error=str(exc))
             return None
         if not isinstance(raw, dict) or "config_version" not in raw:
             return None

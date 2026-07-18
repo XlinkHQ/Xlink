@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.exceptions import ConflictError
 from app.domain.user import User, UserRole
@@ -71,9 +72,10 @@ class UserRepository(BaseRepository[User]):
         include_removed: bool = False,
         owner_id: uuid.UUID | None = None,
         search: str | None = None,
-    ) -> list[Any]:
-
-        conditions = [] if include_removed else [User.removed.is_(False)]
+    ) -> list[ColumnElement[bool]]:
+        conditions: list[ColumnElement[bool]] = (
+            [] if include_removed else [User.removed.is_(False)]
+        )
         if role is not None:
             conditions.append(User.role == role)
         if is_active is not None:

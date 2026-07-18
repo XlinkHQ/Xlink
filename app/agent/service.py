@@ -16,6 +16,7 @@ from app.agent.models import AgentHeartbeat, RetryPolicy, SyncBatch, SyncCursor
 from app.agent.provider_health import ProviderHealthService
 from app.agent.streaming import AgentStreamService
 from app.agent.sync import NodeSyncService
+from app.core.exceptions import ConfigurationError
 from app.db.redis import RedisCache
 from app.domain.node import Node, NodeStatus
 from app.events.bus import EventBus
@@ -228,11 +229,15 @@ class NodeAgentService:
 
     def _require_commands(self) -> None:
         if self._commands is None:
-            raise RuntimeError("command signer is not configured")
+            raise ConfigurationError(
+                "Command signer is not configured.", code="agent_commands_unconfigured"
+            )
 
     def _require_stream(self) -> None:
         if self._stream is None:
-            raise RuntimeError("stream cache is not configured")
+            raise ConfigurationError(
+                "Stream cache is not configured.", code="agent_stream_unconfigured"
+            )
 
     async def with_retry[T](self, operation: Callable[[], Awaitable[T]]) -> T:
         return await self._sync.with_retry(operation)

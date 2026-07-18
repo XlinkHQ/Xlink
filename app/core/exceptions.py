@@ -67,6 +67,12 @@ class RateLimitError(XLinkError):
     message = "Too many requests."
 
 
+class ConfigurationError(XLinkError):
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    code = "configuration_error"
+    message = "A required component is not configured."
+
+
 def _envelope(code: str, message: str, details: Any = None) -> dict[str, Any]:
     body: dict[str, Any] = {"error": {"code": code, "message": message}}
     if details:
