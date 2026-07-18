@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy import and_, or_, select, update
 
+from app.core.cache import CacheProtocol
 from app.core.leader import LeaderElector
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 from app.db.session import Database
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.user import User
@@ -81,7 +81,7 @@ class AssignmentExpirationJob:
         events: EventBus,
         *,
         interval_seconds: int,
-        cache: RedisCache | None = None,
+        cache: CacheProtocol | None = None,
         leader: LeaderElector | None = None,
     ) -> None:
         self._db = db

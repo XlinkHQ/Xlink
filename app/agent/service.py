@@ -16,8 +16,8 @@ from app.agent.models import AgentHeartbeat, RetryPolicy, SyncBatch, SyncCursor
 from app.agent.provider_health import ProviderHealthService
 from app.agent.streaming import AgentStreamService
 from app.agent.sync import NodeSyncService
+from app.core.cache import CacheProtocol
 from app.core.exceptions import ConfigurationError
-from app.db.redis import RedisCache
 from app.domain.node import Node, NodeStatus
 from app.events.bus import EventBus
 from app.repositories.node import NodeRepository
@@ -33,7 +33,7 @@ class NodeAgentService:
         events: EventBus | None = None,
         retry: RetryPolicy | None = None,
         signer: CommandSigner | None = None,
-        cache: RedisCache | None = None,
+        cache: CacheProtocol | None = None,
         healing_policy: HealingPolicy | None = None,
     ) -> None:
         self._session = session

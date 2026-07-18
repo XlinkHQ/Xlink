@@ -5,8 +5,8 @@ import contextlib
 import os
 import socket
 
+from app.core.cache import CacheProtocol
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 
 logger = get_logger("xlink.leader")
 
@@ -38,7 +38,7 @@ class LeaderElector:
     the key expires and another replica takes over within one TTL window.
     """
 
-    def __init__(self, cache: RedisCache, *, ttl_seconds: int = 30) -> None:
+    def __init__(self, cache: CacheProtocol, *, ttl_seconds: int = 30) -> None:
         self._cache = cache
         self._ttl = ttl_seconds
         self._id = f"{socket.gethostname()}:{os.getpid()}"

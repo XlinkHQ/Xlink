@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.redis import RedisCache
+from app.core.cache import CacheProtocol
 from app.monitoring.exporters import PrometheusExporter
 from app.monitoring.metrics import MetricsCollector
 from app.monitoring.models import MetricsSnapshot
@@ -16,7 +16,7 @@ class MonitoringService:
         session: AsyncSession,
         providers: ProviderRegistry,
         *,
-        cache: RedisCache | None = None,
+        cache: CacheProtocol | None = None,
         summary_ttl_seconds: int = 60,
     ) -> None:
         self._collector = MetricsCollector(session, providers)

@@ -5,8 +5,8 @@ from collections.abc import Iterable
 
 from sqlalchemy import select
 
+from app.core.cache import CacheProtocol
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 from app.db.session import Database
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.user import User
@@ -22,7 +22,7 @@ def _key(user_id: uuid.UUID) -> str:
 
 
 class IpLimitService:
-    def __init__(self, db: Database, cache: RedisCache) -> None:
+    def __init__(self, db: Database, cache: CacheProtocol) -> None:
         self._db = db
         self._redis = cache.client
 

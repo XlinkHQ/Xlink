@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from app.core.cache import CacheProtocol
 from app.core.leader import LeaderElector
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 from app.db.session import Database
 from app.domain.user import User, UserRole
 from app.webhooks import events
@@ -29,7 +29,7 @@ class NotificationJob:
         self,
         db: Database,
         dispatcher: WebhookDispatcher,
-        cache: RedisCache,
+        cache: CacheProtocol,
         *,
         interval_seconds: int,
         expiring_days: int,

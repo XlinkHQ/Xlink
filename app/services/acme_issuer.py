@@ -5,8 +5,8 @@ import asyncio
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from app.core.cache import CacheProtocol
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 
 logger = get_logger("xlink.acme")
 
@@ -21,7 +21,7 @@ class AcmeError(Exception):
     pass
 
 
-async def get_challenge(cache: RedisCache, token: str) -> str | None:
+async def get_challenge(cache: CacheProtocol, token: str) -> str | None:
     return await cache.client.get(CHALLENGE_PREFIX + token)
 
 
@@ -90,7 +90,7 @@ def _issue_blocking(
 
 
 async def issue_certificate(
-    cache: RedisCache,
+    cache: CacheProtocol,
     domain: str,
     email: str,
     staging: bool = False,

@@ -12,10 +12,10 @@ from app.agent.grpc import agent_pb2_grpc as pb_grpc
 from app.agent.healing import HealingPolicy
 from app.agent.ip_limit import IpLimitService
 from app.agent.service import NodeAgentService
+from app.core.cache import CacheProtocol
 from app.core.config import Settings
 from app.core.exceptions import AuthenticationError
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 from app.db.session import Database
 from app.events.bus import EventBus
 from app.traffic.schemas import TrafficBatch, TrafficSample
@@ -52,7 +52,7 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
     def __init__(
         self,
         db: Database,
-        cache: RedisCache,
+        cache: CacheProtocol,
         events: EventBus,
         settings: Settings,
     ) -> None:

@@ -6,7 +6,7 @@ from typing import Any
 
 import orjson
 
-from app.db.redis import RedisCache
+from app.core.cache import CacheProtocol
 
 _METRICS_PREFIX = "xlink:agent:metrics:"
 _LOGS_PREFIX = "xlink:agent:logs:"
@@ -18,7 +18,7 @@ _TTL_SECONDS = 3600
 class AgentStreamService:
     def __init__(
         self,
-        cache: RedisCache,
+        cache: CacheProtocol,
         *,
         max_metrics: int = _MAX_METRICS,
         max_logs: int = _MAX_LOGS,

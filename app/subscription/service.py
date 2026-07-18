@@ -7,9 +7,9 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from types import MappingProxyType
 
+from app.core.cache import CacheProtocol
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 from app.providers.base.models import ProviderKind
 from app.subscription.generator import SubscriptionGenerator
 from app.subscription.models import ProviderConfig, RenderedFeed
@@ -48,7 +48,7 @@ class SubscriptionService:
         repository: SubscriptionRepository,
         generator: SubscriptionGenerator,
         renderer: SubscriptionRenderer,
-        cache: RedisCache,
+        cache: CacheProtocol,
     ) -> None:
         self._repository = repository
         self._generator = generator

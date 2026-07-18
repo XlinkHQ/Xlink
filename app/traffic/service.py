@@ -9,8 +9,8 @@ from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import CacheProtocol
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.node import Node
 from app.domain.user import User
@@ -31,7 +31,7 @@ class TrafficService:
         *,
         events: EventBus | None = None,
         collector: TrafficCollector | None = None,
-        cache: RedisCache | None = None,
+        cache: CacheProtocol | None = None,
         reader_session: AsyncSession | None = None,
     ) -> None:
         self._session = session

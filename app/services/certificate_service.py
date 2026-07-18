@@ -8,8 +8,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
 from cryptography.x509.oid import NameOID
 
+from app.core.cache import CacheProtocol
 from app.core.exceptions import NotFoundError, ValidationError
-from app.db.redis import RedisCache
 from app.domain.certificate import Certificate, CertificateSource, CertificateStatus
 from app.repositories.certificate import CertificateRepository
 
@@ -131,7 +131,7 @@ class CertificateService:
         await self._repo.delete(cert)
 
     async def request_acme(
-        self, domain: str, cache: RedisCache, email: str = "", staging: bool = False
+        self, domain: str, cache: CacheProtocol, email: str = "", staging: bool = False
     ) -> Certificate:
         from app.services.acme_issuer import AcmeError, issue_certificate
 

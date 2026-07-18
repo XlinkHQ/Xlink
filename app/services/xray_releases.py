@@ -6,8 +6,8 @@ import urllib.request
 
 import anyio
 
+from app.core.cache import CacheProtocol
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 
 logger = get_logger("xlink.xray_releases")
 
@@ -19,7 +19,7 @@ _FALLBACK = ["v25.3.6", "v24.12.31", "v24.11.30", "v1.8.24", "v1.8.23"]
 
 
 class XrayReleaseService:
-    def __init__(self, cache: RedisCache) -> None:
+    def __init__(self, cache: CacheProtocol) -> None:
         self._cache = cache
 
     async def versions(self) -> list[str]:

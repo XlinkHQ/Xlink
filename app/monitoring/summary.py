@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
+from app.core.cache import CacheProtocol
 from app.core.logging import get_logger
-from app.db.redis import RedisCache
 from app.db.session import Database
 from app.monitoring.metrics import MetricsCollector, snapshot_from_summary
 from app.monitoring.models import MetricsSnapshot
@@ -18,7 +18,7 @@ _SUMMARY_KEY = "xlink:metrics:summary"
 class MetricsSummaryCache:
     def __init__(
         self,
-        cache: RedisCache,
+        cache: CacheProtocol,
         providers: ProviderRegistry,
         *,
         ttl_seconds: int = 60,
@@ -53,7 +53,7 @@ class MetricsSummaryCache:
 
 async def refresh_summary(
     db: Database,
-    cache: RedisCache,
+    cache: CacheProtocol,
     providers: ProviderRegistry,
     *,
     ttl_seconds: int = 60,
@@ -69,7 +69,7 @@ class MetricsRefreshJob:
     def __init__(
         self,
         db: Database,
-        cache: RedisCache,
+        cache: CacheProtocol,
         providers: ProviderRegistry,
         *,
         interval_seconds: int,
