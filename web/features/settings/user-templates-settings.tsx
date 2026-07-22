@@ -15,6 +15,7 @@ import {
   listUserTemplates,
   type UserTemplateRead,
 } from "@/lib/api";
+import { fromGiB, toGiB } from "@/lib/format";
 import { SettingsSection } from "@/shared/settings-kit";
 
 export function UserTemplatesSettingsScreen() {
@@ -36,7 +37,7 @@ export function UserTemplatesSettingsScreen() {
 
   const fmt = (t: UserTemplateRead) => {
     const parts: string[] = [];
-    parts.push(t.data_limit_bytes ? `${(t.data_limit_bytes / 1024 ** 3).toFixed(0)} GiB` : "∞ data");
+    parts.push(t.data_limit_bytes ? `${toGiB(t.data_limit_bytes).toFixed(0)} GiB` : "∞ data");
     parts.push(t.expire_days ? `${t.expire_days}d` : "no expiry");
     parts.push(t.device_limit != null ? `${t.device_limit} devices` : "∞ devices");
     return parts.join(" · ");
@@ -107,7 +108,7 @@ function TemplateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     try {
       await createUserTemplate({
         name: name.trim(),
-        data_limit_bytes: dataGib ? Math.round(Number(dataGib) * 1024 ** 3) : null,
+        data_limit_bytes: dataGib ? fromGiB(Number(dataGib)) : null,
         expire_days: expireDays ? Number(expireDays) : null,
         device_limit: devices ? Number(devices) : null,
         data_reset_strategy: reset,

@@ -20,6 +20,7 @@ import {
   updateUser,
   type UserRead,
 } from "@/lib/api";
+import { fromGiB, toGiB } from "@/lib/format";
 import { Field } from "@/shared/parts";
 
 export function EditUserDialog({
@@ -33,7 +34,7 @@ export function EditUserDialog({
 }) {
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [limitGib, setLimitGib] = useState(
-    user.data_limit_bytes ? (user.data_limit_bytes / 1024 ** 3).toString() : "",
+    user.data_limit_bytes ? toGiB(user.data_limit_bytes).toString() : "",
   );
   const [expire, setExpire] = useState(user.expire_at ? user.expire_at.slice(0, 10) : "");
   const [reset, setReset] = useState(user.data_reset_strategy ?? "no_reset");
@@ -61,7 +62,7 @@ export function EditUserDialog({
       };
       await updateUser(user.id, {
         full_name: fullName.trim() || null,
-        data_limit_bytes: limitGib ? Math.round(Number(limitGib) * 1024 ** 3) : null,
+        data_limit_bytes: limitGib ? fromGiB(Number(limitGib)) : null,
         // An on-hold user cannot also carry a fixed expiry (backend rejects it),
         // so clear expire_at whenever on-hold is checked.
         expire_at: onHold ? null : dateToIso(expire, user.expire_at),
@@ -213,7 +214,7 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
   const applyTemplate = (id: string) => {
     const t = templates.find((x) => x.id === id);
     if (!t) return;
-    setLimitGib(t.data_limit_bytes ? (t.data_limit_bytes / 1024 ** 3).toString() : "");
+    setLimitGib(t.data_limit_bytes ? toGiB(t.data_limit_bytes).toString() : "");
     setDevices(t.device_limit != null ? String(t.device_limit) : "");
     if (t.expire_days && t.expire_days > 0) {
       setExpireStrategy("fixed_date");
@@ -233,7 +234,7 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
       const res = await createUser({
         username: username.trim(),
         full_name: note.trim() || null,
-        data_limit_bytes: limitGib ? Math.round(Number(limitGib) * 1024 ** 3) : null,
+        data_limit_bytes: limitGib ? fromGiB(Number(limitGib)) : null,
         device_limit: devices ? Number(devices) : null,
         expire_strategy: expireStrategy,
         expire_at:

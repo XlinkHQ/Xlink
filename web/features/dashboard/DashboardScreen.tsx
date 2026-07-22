@@ -9,6 +9,7 @@ import { ApiError, listNodes, type NodeRead, restartPanel, systemStats, trafficS
 import { toast } from "@/components/ui/toast";
 import { isNodeOnline, relativeTime } from "@/features/nodes/util";
 import { baseAreaOptions, CHART_COLORS } from "@/shared/usage-chart";
+import { toGiB } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 
 const OS_LOGOS: Record<string, string> = {
@@ -22,7 +23,7 @@ function osLogo(slug?: string): string | null {
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
 function gb(v: number): string {
-  return (v / 1024 ** 3).toFixed(1);
+  return toGiB(v).toFixed(1);
 }
 function fmtUptime(s: number): string {
   if (s <= 0) return "—";

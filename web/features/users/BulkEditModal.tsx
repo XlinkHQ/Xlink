@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { type BulkAction, bulkUserAction } from "@/lib/api";
+import { fromGiB } from "@/lib/format";
 
 export function BulkEditModal({
   kind,
@@ -35,7 +36,7 @@ export function BulkEditModal({
       const gb = Number(limitGb);
       onApply(
         "set_data_limit",
-        { data_limit_bytes: limitGb.trim() === "" ? null : Math.round(gb * 1024 ** 3) },
+        { data_limit_bytes: limitGb.trim() === "" ? null : fromGiB(gb) },
         "Data limit set",
       );
     } else if (kind === "expiry") {

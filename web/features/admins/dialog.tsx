@@ -17,7 +17,7 @@ import {
   updateAdmin,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { bytes } from "@/lib/format";
+import { bytes, fromGiB, toGiB } from "@/lib/format";
 import { Field } from "@/shared/parts";
 
 const PW_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -87,7 +87,7 @@ export function AdminDialog({
   const [allServices, setAllServices] = useState(admin?.all_groups_access ?? true);
   const [userLimit, setUserLimit] = useState(admin?.admin_user_limit?.toString() ?? "");
   const [trafficLimitGib, setTrafficLimitGib] = useState(
-    admin?.admin_traffic_limit_bytes ? (admin.admin_traffic_limit_bytes / 1024 ** 3).toString() : "",
+    admin?.admin_traffic_limit_bytes ? toGiB(admin.admin_traffic_limit_bytes).toString() : "",
   );
   const [busy, setBusy] = useState(false);
 
@@ -106,7 +106,7 @@ export function AdminDialog({
         admin_traffic_limit_bytes:
           sudo || !trafficLimitGib || Number.isNaN(Number(trafficLimitGib))
             ? null
-            : Math.round(Number(trafficLimitGib) * 1024 ** 3),
+            : fromGiB(Number(trafficLimitGib)),
       };
       if (editing && admin) {
         await updateAdmin(admin.id, { ...(password ? { password } : {}), ...shared });
