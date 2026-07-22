@@ -25,7 +25,8 @@ import { MetricsAreaChart, UsageAreaChart } from "@/shared/usage-chart";
 import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 import { SettingsSection } from "@/shared/settings-kit";
 import { isNodeOnline } from "./util";
-import { CORE_LABELS, CopyField, INSTALLABLE_CORES, installCommand, protoBadge } from "./detail-parts";
+import { CORE_LABELS, CopyField, INSTALLABLE_CORES, installCommand } from "./detail-parts";
+import { protoBadge } from "@/lib/proto";
 
 export function NodeInfo({ node }: { node: NodeRead }) {
   const [token, setToken] = useState<string | null>(null);

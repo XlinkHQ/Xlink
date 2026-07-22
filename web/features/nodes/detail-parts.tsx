@@ -4,20 +4,6 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 
-export function protoBadge(p: string): string {
-  switch (p.toLowerCase()) {
-    case "vless": return "is-blue";
-    case "vmess": return "is-indigo";
-    case "trojan": return "is-pink";
-    case "shadowsocks": return "is-purple";
-    case "wireguard": return "is-orange";
-    case "hysteria":
-    case "hysteria2": return "is-teal";
-    case "tuic": return "is-cyan";
-    default: return "is-slate";
-  }
-}
-
 const XRAY_DEFAULT_TEMPLATE = JSON.stringify(
   {
     log: { loglevel: "warning" },

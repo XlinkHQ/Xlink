@@ -1,4 +1,5 @@
 "use client";
+import { protoBadge } from "@/lib/proto";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -36,20 +37,6 @@ import { HostDialog } from "./host-dialog";
 import { DgSearch } from "@/components/console/dg-icons";
 import { SettingsSection } from "@/shared/settings-kit";
 import { cn } from "@/lib/cn";
-
-function protoBadge(p: string): string {
-  switch (p.toLowerCase()) {
-    case "vless": return "is-blue";
-    case "vmess": return "is-indigo";
-    case "trojan": return "is-pink";
-    case "shadowsocks": return "is-purple";
-    case "wireguard": return "is-orange";
-    case "hysteria":
-    case "hysteria2": return "is-teal";
-    case "tuic": return "is-cyan";
-    default: return "is-slate";
-  }
-}
 
 export function ProfilesScreen() {
   const qc = useQueryClient();
