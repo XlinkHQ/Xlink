@@ -34,14 +34,23 @@ class BackupImporter:
         }
         if dry_run:
             return RestoreResult(dry_run=True, **counts)
-        for model, key in (
-            (User, "users"),
-            (Node, "nodes"),
-            (Profile, "profiles"),
-            (ClientAssignment, "assignments"),
-        ):
+        # Users carry a self-referential owner_id FK with no ORM relationship, so
+        # SQLAlchemy won't order parent-before-child on flush. Insert owners
+        # (owner_id is null) before sub-users, and within sub-users insert an
+        # owner before anyone it owns, so a reseller's own row exists before its
+        # users reference it — otherwise the FK check aborts the whole restore.
+        users = _order_users_by_ownership(data.get("users", []))
+        for row in users:
+            await self._upsert(User, row)
+        for model, key in ((Node, "nodes"), (Profile, "profiles")):
             for row in data.get(key, []):
                 await self._upsert(model, row)
+        # group_id points at the groups table, which the backup does not export;
+        # a grouped assignment restored into a DB lacking that group would raise
+        # an FK violation and abort the restore. Groups are optional metadata, so
+        # drop a group_id whose group isn't present rather than fail the restore.
+        for row in data.get("assignments", []):
+            await self._upsert(ClientAssignment, row, drop_missing_group=True)
         await self._session.flush()
         return RestoreResult(dry_run=False, **counts)
 
@@ -70,13 +79,18 @@ class BackupImporter:
                 continue
         return values
 
-    async def _upsert(self, model, row: dict[str, Any]) -> None:
+    async def _upsert(self, model, row: dict[str, Any], *, drop_missing_group: bool = False) -> None:
         values = dict(row)
         if model is Node and "metadata" in values:
             values["node_metadata"] = values.pop("metadata")
         if "id" not in values:
             raise ValidationError("Row missing required id field", code="backup_malformed")
         values = self._coerce(model, values)
+        if drop_missing_group and values.get("group_id") is not None:
+            from app.domain.group import Group
+
+            if await self._session.get(Group, values["group_id"]) is None:
+                values["group_id"] = None
         instance = await self._session.get(model, values["id"])
         if instance is None:
             if model is User and values.get("hashed_password") == _REDACTED:
@@ -96,3 +110,23 @@ class BackupImporter:
             if model is User and key == "totp_secret" and value == _REDACTED:
                 continue
             setattr(instance, key, value)
+
+
+def _order_users_by_ownership(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_id = {r.get("id"): r for r in rows}
+    ordered: list[dict[str, Any]] = []
+    placed: set = set()
+
+    def place(row: dict[str, Any]) -> None:
+        rid = row.get("id")
+        if rid in placed:
+            return
+        owner = row.get("owner_id")
+        if owner is not None and owner in by_id and owner not in placed:
+            place(by_id[owner])
+        placed.add(rid)
+        ordered.append(row)
+
+    for r in rows:
+        place(r)
+    return ordered

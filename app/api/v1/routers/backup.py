@@ -137,6 +137,12 @@ async def backup_import_db(
         settings.postgres_user,
         "-d",
         settings.postgres_db,
+        # Fail the whole restore atomically on the FIRST error instead of applying
+        # a partial dump and still exiting 0 (psql's default is to log each error,
+        # continue, and return success — a silently half-restored database).
+        "-v",
+        "ON_ERROR_STOP=1",
+        "--single-transaction",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

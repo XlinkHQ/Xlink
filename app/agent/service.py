@@ -10,7 +10,7 @@ from app.agent.command_service import CommandService
 from app.agent.commands import CommandSigner
 from app.agent.config_sync import ConfigSyncService
 from app.agent.domain import NodeCommand, NodeDriftReport, NodeProviderHealth
-from app.agent.healing import HealingPolicy, SelfHealingService
+from app.agent.healing import AutoUpgradeService, HealingPolicy, SelfHealingService
 from app.agent.heartbeat import NodeHeartbeatService
 from app.agent.models import AgentHeartbeat, RetryPolicy, SyncBatch, SyncCursor
 from app.agent.provider_health import ProviderHealthService
@@ -51,9 +51,11 @@ class NodeAgentService:
             self._healing = SelfHealingService(
                 self._config_sync, self._commands, policy=healing_policy
             )
+            self._upgrade = AutoUpgradeService(self._commands)
         else:
             self._commands = None
             self._healing = None
+            self._upgrade = None
         self._stream = AgentStreamService(cache) if cache is not None else None
 
     async def authenticate(self, node_id: uuid.UUID, token: str) -> Node:
@@ -127,12 +129,18 @@ class NodeAgentService:
         node = await self.authenticate(node_id, token)
 
         node.last_seen_at = datetime.now(UTC)
-        recovered = node.status is NodeStatus.OFFLINE
-        if recovered:
+        # A config report is a liveness signal, but liveness of the AGENT is not
+        # health of the node: if the agent is up while every installed core is
+        # unhealthy (e.g. xray crashed), flipping OFFLINE→ACTIVE would route new
+        # users onto a node that serves no traffic and fire a false NodeRecovered.
+        # Only recover when at least one core reports healthy. An empty
+        # provider_status (no cores report, e.g. a brand-new node) keeps the prior
+        # liveness-only behaviour so it isn't stuck offline.
+        cores_all_unhealthy = bool(provider_status) and all(
+            str(v) != "healthy" for v in provider_status.values()
+        )
+        if node.status is NodeStatus.OFFLINE and not cores_all_unhealthy:
             node.status = NodeStatus.ACTIVE
-            # A config report is also a liveness signal — fire the SAME recovery
-            # event + webhook the heartbeat path fires, so a node that comes back
-            # via its config poll isn't silently un-alerted.
             await self._heartbeat.emit_recovery(node)
         await self._config_sync.record_reported_state(
             node,
@@ -185,6 +193,13 @@ class NodeAgentService:
         return await self._commands.report_result(
             command_id, node_id=node_id, lease_token=lease_token, success=success, result=result
         )
+
+    async def ensure_upgrade(
+        self, node_id: uuid.UUID, *, target_version: str
+    ) -> NodeCommand | None:
+        self._require_commands()
+        node = await self._heartbeat._get_node(node_id)
+        return await self._upgrade.ensure_target(node, target_version=target_version)
 
     async def record_provider_health(
         self, node_id: uuid.UUID, *, token: str, checks: list[dict]
