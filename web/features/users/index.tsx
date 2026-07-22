@@ -1,11 +1,9 @@
 "use client";
 
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, ChevronDown, ChevronRight, ChevronUp, CircleUser, Gauge, Globe, Layers, Link as LinkIcon, Pencil, Power, RefreshCw, RotateCcw, Smartphone, Trash } from "lucide-react";
+import { CalendarClock, Gauge, Power, RefreshCw, RotateCcw, Trash } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
 import {
@@ -18,8 +16,6 @@ import {
   listUsers,
   onlineUsers,
   usersLastSeen,
-  listUserDevices,
-  resetUserDevices,
   resetUserUsage,
   restoreUser,
   revokeSubscription,
@@ -27,9 +23,7 @@ import {
   usersUsage,
   userSubscriptionUrl,
 } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import { bytes } from "@/lib/format";
-import { CopyValue } from "@/shared/table-kit";
 import {
   WarpButton,
   WarpEmpty,
@@ -38,90 +32,17 @@ import {
   WarpSkeleton,
   WarpTableCard,
   WarpRadial,
-  WarpRow,
 } from "@/shared/warp-table";
 import { copyText } from "@/lib/clipboard";
-import {
-  AccessManager,
-  UserNodesUsagePanel,
-  UserSubscriptionPanel,
-} from "./access";
 import { EditUserDialog, UserDialog } from "./dialogs";
 import { DgAddUser } from "@/components/console/dg-icons";
 import { SearchBox } from "@/components/ui/search-box";
-import { SettingsSection } from "@/shared/settings-kit";
-
-function readPref(k: string): string | null {
-  if (typeof window === "undefined") return null;
-  try { return window.localStorage.getItem(`xlink.${k}`); } catch { return null; }
-}
-function writePref(k: string, v: string): void {
-  if (typeof window === "undefined") return;
-  try { window.localStorage.setItem(`xlink.${k}`, v); } catch { /* ignore */ }
-}
+import { readPref, writePref, relTimeShort } from "./helpers";
+import { Badge, UserNameCell, SortTh, type SortCol, type SortDir } from "./components";
+import { UserProfileView } from "./UserProfileView";
+import { BulkEditModal } from "./BulkEditModal";
 
 type UserStatusKey = "all" | "online" | "active" | "expired" | "disabled" | "limited";
-type SortCol = "name" | "username" | "email" | "online" | "status" | "traffic" | "expiration";
-type SortDir = "asc" | "desc";
-type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";
-function Badge({ variant, children }: { variant: BadgeVariant; children: React.ReactNode }) {
-  return <span className={`warp-badge ${variant}`}>{children}</span>;
-}
-
-function relTimeShort(iso: string | null | undefined): string {
-  if (!iso) return "Never";
-  const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 2592000) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
-
-function initialsOf(name: string): string {
-  const s = name.trim();
-  if (!s) return "?";
-  const parts = s.split(/[\s._-]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return s.slice(0, 2).toUpperCase();
-}
-
-function UserNameCell({ name, online }: { name: string; online: boolean }) {
-  return (
-    <span className="warp-user-namecell">
-      <span
-        className={`warp-user-online-dot ${online ? "is-on" : "is-off"}`}
-        aria-label={online ? "online" : "offline"}
-        title={online ? "Online" : "Offline"}
-      />
-      <span className="warp-user-name">{name}</span>
-    </span>
-  );
-}
-
-function SortTh({
-  col,
-  label,
-  sortCol,
-  sortDir,
-  onSort,
-}: {
-  col: SortCol;
-  label: string;
-  sortCol: SortCol | null;
-  sortDir: SortDir;
-  onSort: (c: SortCol) => void;
-}) {
-  const active = sortCol === col;
-  return (
-    <button type="button" className={`warp-th-sort${active ? " is-active" : ""}`} onClick={() => onSort(col)}>
-      <span>{label}</span>
-      {active ? (
-        sortDir === "asc" ? <ChevronUp size={13} strokeWidth={2} aria-hidden /> : <ChevronDown size={13} strokeWidth={2} aria-hidden />
-      ) : null}
-    </button>
-  );
-}
 
 export function UsersScreen() {
   const qc = useQueryClient();
@@ -610,345 +531,5 @@ export function UsersScreen() {
         />
       ) : null}
     </div>
-  );
-}
-
-const USER_TABS = [
-  ["info", "Details"],
-  ["services", "Services"],
-  ["subscription", "Subscription"],
-  ["nodes", "Nodes Usage"],
-] as const;
-
-function UserProfileView({
-  user,
-  onBack,
-  onReset,
-  onToggle,
-}: {
-  user: UserRead;
-  onBack: () => void;
-  onReset: () => void;
-  onToggle: () => void;
-}) {
-  const [tab, setTab] = useState<string>("info");
-  const [editing, setEditing] = useState(false);
-  const qc = useQueryClient();
-
-  return (
-    <div className="w-full px-4 pb-6 pt-0">
-      <div className="warp-breadcrumbs">
-        <div className="track">
-          <button
-            type="button"
-            className="warp-breadcrumbs-back"
-            aria-label="Back"
-            onClick={onBack}
-          >
-            <ArrowLeft size={20} strokeWidth={1.9} aria-hidden />
-          </button>
-          <span className="warp-breadcrumbs-divider" />
-          <div className="links">
-            <button type="button" className="crumb" onClick={onBack}>
-              Users
-            </button>
-            <ChevronRight size={20} strokeWidth={2} className="crumb-sep" aria-hidden />
-            <span className="crumb active">{user.username}</span>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button type="button" className="warp-tb-button" onClick={() => setEditing(true)}>
-              <Pencil size={14} aria-hidden /> Edit
-            </button>
-            <button type="button" className="warp-tb-button" onClick={onReset}>
-              <RotateCcw size={14} aria-hidden /> Reset usage
-            </button>
-            <button type="button" className="warp-tb-button" onClick={onToggle}>
-              <Power size={14} aria-hidden /> {user.is_active ? "Disable" : "Enable"}
-            </button>
-          </div>
-        </div>
-      </div>
-      <div className="warp-pd-tabs warp-profile-tabs">
-        {USER_TABS.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={cn("warp-pd-tab", tab === key && "is-active")}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "info" ? (
-        <div className="warp-settings-card">
-          <SettingsSection icon={CircleUser} title="General" description="Account details and usage limits for this user.">
-            <div className="warp-pd-form">
-              <PdRow label="Username" value={user.username} />
-              <PdRow label="Name" value={user.full_name || "—"} />
-              <PdRow label="Email" value={user.email || "—"} />
-              <PdRow label="Status" value={
-                !user.is_active ? <Badge variant="critical">Disabled</Badge>
-                  : user.on_hold ? <Badge variant="warning">On-hold</Badge>
-                  : (user.expire_at && Date.parse(user.expire_at) < Date.now()) ? <Badge variant="critical">Expired</Badge>
-                  : <Badge variant="success">Active</Badge>
-              } />
-              <PdRow label="Expiration" value={
-                user.expire_at ? new Date(user.expire_at).toLocaleDateString() : "Never"
-              } />
-              <PdRow label="Data limit" value={
-                user.data_limit_bytes ? bytes(user.data_limit_bytes) : "Unlimited"
-              } />
-              <PdRow label="Used traffic" value={bytes(user.users_data_usage ?? 0)} />
-              <PdRow label="Device limit" value={
-                user.device_limit != null ? String(user.device_limit) : "Unlimited"
-              } />
-              <PdRow label="Owner" value={user.owner_id ? user.owner_id.slice(0, 8) : "—"} />
-              <PdRow label="Created" value={
-                user.created_at ? new Date(user.created_at).toLocaleString() : "—"
-              } />
-            </div>
-          </SettingsSection>
-          <SettingsSection divider icon={Smartphone} title="Devices" description="Devices currently bound to this user.">
-            <UserDevicesTable userId={user.id} deviceLimit={user.device_limit} />
-          </SettingsSection>
-        </div>
-      ) : null}
-
-      {tab === "services" ? (
-        <div className="warp-settings-card">
-          <SettingsSection icon={Layers} title="Services" description="Services and inbounds granted to this user.">
-            <AccessManager userId={user.id} />
-          </SettingsSection>
-        </div>
-      ) : null}
-      {tab === "subscription" ? (
-        <div className="warp-settings-card">
-          <SettingsSection icon={LinkIcon} title="Subscription" description="Subscription link and client configuration for this user.">
-            <UserSubscriptionPanel userId={user.id} />
-          </SettingsSection>
-        </div>
-      ) : null}
-      {tab === "nodes" ? (
-        <div className="warp-settings-card">
-          <SettingsSection icon={Globe} title="Nodes usage" description="Per-node traffic usage for this user.">
-            <UserNodesUsagePanel userId={user.id} />
-          </SettingsSection>
-        </div>
-      ) : null}
-
-      {editing ? (
-        <EditUserDialog
-          user={user}
-          onClose={() => setEditing(false)}
-          onSaved={() => {
-            setEditing(false);
-            qc.invalidateQueries({ queryKey: ["users"] });
-          }}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function UserDevicesTable({ userId, deviceLimit }: { userId: string; deviceLimit: number | null }) {
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["user-devices", userId], queryFn: () => listUserDevices(userId) });
-  const devices = q.data ?? [];
-  const reset = async () => {
-    if (!(await confirmDialog({ title: "Reset this user's devices?", message: "All device bindings are removed; the user can re-bind up to the limit.", confirmLabel: "Reset", danger: true }))) return;
-    try {
-      await resetUserDevices(userId);
-      toast("success", "Devices reset.");
-      qc.invalidateQueries({ queryKey: ["user-devices", userId] });
-    } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Reset failed.");
-    }
-  };
-  return (
-    <>
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm text-fg-muted">
-          {devices.length}{deviceLimit != null ? ` / ${deviceLimit}` : ""} bound
-        </span>
-        <button type="button" className="warp-dg-btn secondary" onClick={reset} disabled={devices.length === 0}>
-          Reset devices
-        </button>
-      </div>
-      <WarpTableCard className="warp-users-table warp-devices-table">
-        <WarpHead cols={["Device", "User agent", "Last seen"]} />
-        {q.isLoading ? (
-          <WarpSkeleton />
-        ) : devices.length === 0 ? (
-          <WarpEmpty icon="fa-mobile">No devices bound.</WarpEmpty>
-        ) : (
-          devices.map((d) => (
-            <WarpRow
-              key={d.id}
-              cells={[
-                <span className="warp-tb-mono">{d.device_hash.slice(0, 12)}</span>,
-                <span className="text-fg-muted" title={d.user_agent}>{d.user_agent || "—"}</span>,
-                <span className="text-fg-muted">{relTimeShort(d.last_seen_at)}</span>,
-              ]}
-            />
-          ))
-        )}
-      </WarpTableCard>
-    </>
-  );
-}
-
-function PdRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="warp-pd-row">
-      <span className="warp-pd-row-label">{label}</span>
-      <span className="warp-pd-row-value">{value}</span>
-    </div>
-  );
-}
-
-function FactorRow({
-  icon,
-  title,
-  availability,
-  badge,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  availability: string;
-  badge: React.ReactNode;
-}) {
-  return (
-    <div className="warp-pd-factor">
-      <div className="track">
-        <div className="info">
-          {icon}
-          <p className="factor-name">{title}</p>
-          <div className="badges">{badge}</div>
-        </div>
-        <div className="avail-line">
-          <div className="fill" />
-          <p className="availability">{availability}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function BulkEditModal({
-  kind,
-  count,
-  onClose,
-  onApply,
-}: {
-  kind: "limit" | "expiry" | "reset";
-  count: number;
-  onClose: () => void;
-  onApply: (
-    action: BulkAction,
-    params: Parameters<typeof bulkUserAction>[2],
-    ok: string,
-  ) => void;
-}) {
-  const [limitGb, setLimitGb] = useState("");
-  const [expMode, setExpMode] = useState<"date" | "extend">("date");
-  const [expDate, setExpDate] = useState("");
-  const [extendDays, setExtendDays] = useState("30");
-  const [strategy, setStrategy] = useState("no_reset");
-
-  const title =
-    kind === "limit" ? "Set data limit" : kind === "expiry" ? "Set expiry" : "Auto-reset usage";
-
-  const apply = () => {
-    if (kind === "limit") {
-      const gb = Number(limitGb);
-      onApply(
-        "set_data_limit",
-        { data_limit_bytes: limitGb.trim() === "" ? null : Math.round(gb * 1024 ** 3) },
-        "Data limit set",
-      );
-    } else if (kind === "expiry") {
-      if (expMode === "extend") {
-        onApply("extend_expiry", { extend_days: Number(extendDays) || 0 }, "Expiry extended");
-      } else {
-        onApply(
-          "set_expiry",
-          { expire_at: expDate ? new Date(expDate + "T23:59:59").toISOString() : null },
-          "Expiry set",
-        );
-      }
-    } else {
-      onApply("set_reset_strategy", { data_reset_strategy: strategy }, "Auto-reset set");
-    }
-  };
-
-  return (
-    <Modal
-      title={`${title} · ${count} user${count === 1 ? "" : "s"}`}
-      width="w-[min(460px,95vw)]"
-      onClose={onClose}
-      footer={
-        <>
-          <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="button" variant="primary" onClick={apply}>Apply</Button>
-        </>
-      }
-    >
-      {kind === "limit" ? (
-        <label className="warp-field-row">
-          <span className="warp-field-label">Data limit (GiB)</span>
-          <Input
-            type="number"
-            min="0"
-            value={limitGb}
-            onChange={(e) => setLimitGb(e.target.value)}
-            placeholder="Leave empty for unlimited"
-            autoFocus
-          />
-          <span className="warp-field-helper">Applies the same cap to every selected user. Empty = unlimited.</span>
-        </label>
-      ) : null}
-
-      {kind === "expiry" ? (
-        <>
-          <label className="warp-field-row">
-            <span className="warp-field-label">Mode</span>
-            <Select value={expMode} onChange={(e) => setExpMode(e.target.value as "date" | "extend")}>
-              <option value="date">Set a fixed date</option>
-              <option value="extend">Extend by days</option>
-            </Select>
-          </label>
-          {expMode === "date" ? (
-            <label className="warp-field-row" style={{ marginTop: 12 }}>
-              <span className="warp-field-label">Expiry date</span>
-              <Input type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} />
-              <span className="warp-field-helper">Empty clears the expiry (never expires).</span>
-            </label>
-          ) : (
-            <label className="warp-field-row" style={{ marginTop: 12 }}>
-              <span className="warp-field-label">Extend by (days)</span>
-              <Input type="number" min="1" value={extendDays} onChange={(e) => setExtendDays(e.target.value)} />
-              <span className="warp-field-helper">Adds to each user&apos;s current expiry (or from now if none).</span>
-            </label>
-          )}
-        </>
-      ) : null}
-
-      {kind === "reset" ? (
-        <label className="warp-field-row">
-          <span className="warp-field-label">Auto-reset usage</span>
-          <Select value={strategy} onChange={(e) => setStrategy(e.target.value)}>
-            <option value="no_reset">No reset</option>
-            <option value="day">Daily</option>
-            <option value="week">Weekly</option>
-            <option value="month">Monthly</option>
-            <option value="year">Yearly</option>
-          </Select>
-          <span className="warp-field-helper">Usage auto-zeroes each period for all selected users.</span>
-        </label>
-      ) : null}
-    </Modal>
   );
 }
