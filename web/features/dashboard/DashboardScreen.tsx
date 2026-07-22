@@ -7,8 +7,8 @@ import dynamic from "next/dynamic";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, listNodes, type NodeRead, restartPanel, systemStats, trafficSummary } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
-import { isNodeOnline, relativeTime } from "./nodes/util";
-import { baseAreaOptions, CHART_COLORS } from "./usage-chart";
+import { isNodeOnline, relativeTime } from "@/components/console/screens/nodes/util";
+import { baseAreaOptions, CHART_COLORS } from "@/components/console/screens/usage-chart";
 import { useTheme } from "@/lib/theme";
 
 const OS_LOGOS: Record<string, string> = {

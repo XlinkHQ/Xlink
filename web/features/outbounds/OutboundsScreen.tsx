@@ -21,7 +21,7 @@ import {
   updateOutbound,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { WarpButton, WarpEmpty, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard } from "./warp-table";
+import { WarpButton, WarpEmpty, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard } from "@/components/console/screens/warp-table";
 
 const TYPES = [
   { v: "vless", label: "VLESS" },

@@ -6,7 +6,7 @@ import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
-import { Field } from "./parts";
+import { Field } from "@/components/console/screens/parts";
 import {
   ApiError,
   type ApiKey,
@@ -25,8 +25,8 @@ import {
   WarpRow,
   WarpSkeleton,
   WarpTableCard,
-} from "./warp-table";
-import { DgAddUser } from "../dg-icons";
+} from "@/components/console/screens/warp-table";
+import { DgAddUser } from "@/components/console/dg-icons";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "Never";

@@ -12,18 +12,18 @@ import { CommandPalette } from "./command-palette";
 import { NAV_ITEMS } from "./nav";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./topbar";
-import { DashboardScreen } from "./screens/dashboard";
+import { DashboardScreen } from "@/features/dashboard";
 import { LoginScreen } from "./screens/login";
 import { AdminsScreen } from "./screens/admins";
-import { AuditLogScreen } from "./screens/audit-log";
+import { AuditLogScreen } from "@/features/auditlog";
 import { GroupsScreen } from "./screens/groups";
 import { NodesScreen } from "./screens/nodes";
 import { ProfilesScreen } from "./screens/profiles";
 import { RoutingScreen } from "@/features/routing";
-import { OutboundsScreen } from "./screens/outbounds";
+import { OutboundsScreen } from "@/features/outbounds";
 import { SettingsScreen } from "./screens/settings";
 import { UsersScreen } from "./screens/users";
-import { ApiKeysScreen } from "./screens/api-keys";
+import { ApiKeysScreen } from "@/features/apikeys";
 
 const SCREEN_KEYS = NAV_ITEMS.map((i) => i.key);
 
