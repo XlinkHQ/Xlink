@@ -24,7 +24,7 @@ import { bytes } from "@/lib/format";
 import { MetricsAreaChart, UsageAreaChart } from "@/shared/usage-chart";
 import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 import { SettingsSection } from "@/shared/settings-kit";
-import { isNodeOnline } from "./util";
+import { isNodeOnline } from "@/lib/status";
 import { CORE_LABELS, CopyField, INSTALLABLE_CORES, installCommand } from "./detail-parts";
 import { protoBadge } from "@/lib/proto";
 

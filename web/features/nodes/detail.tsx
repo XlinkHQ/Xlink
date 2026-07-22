@@ -4,7 +4,7 @@ import { type ReactNode, useState } from "react";
 import { type NodeRead } from "@/lib/api";
 import { ArrowLeft, ChevronRight, Pencil } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { isNodeOnline } from "./util";
+import { isNodeOnline } from "@/lib/status";
 import { XrayBackendCard } from "./detail-config";
 import { NodeInboundsCard, NodeInfo } from "./detail-info";
 

@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, listNodes, type NodeRead, restartPanel, systemStats, trafficSummary } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
-import { isNodeOnline, relativeTime } from "@/features/nodes/util";
+import { isNodeOnline, relativeTime } from "@/lib/status";
 import { baseAreaOptions, CHART_COLORS } from "@/shared/usage-chart";
 import { toGiB } from "@/lib/format";
 import { useTheme } from "@/lib/theme";

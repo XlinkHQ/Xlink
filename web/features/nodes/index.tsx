@@ -19,7 +19,7 @@ import {
 } from "@/lib/api";
 import { NodeDetail } from "./detail";
 import { NodeDialog } from "./dialog";
-import { relativeTime } from "./util";
+import { relativeTime } from "@/lib/status";
 import {
   WarpButton,
   WarpEmpty,
