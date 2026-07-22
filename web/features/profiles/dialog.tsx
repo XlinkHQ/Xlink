@@ -19,7 +19,7 @@ import {
 import { Field } from "@/shared/parts";
 import { InlineEditPanel } from "@/shared/settings-kit";
 import { PROTOCOLS, PROVIDERS, protocolsFor } from "./util";
-import { BOOL_KEYS, NUMERIC_KEYS, type TField, TRANSPORT_KEYS, transportFields } from "@/shared/transport";
+import { BOOL_KEYS, NUMERIC_KEYS, type TField, TRANSPORT_KEYS, transportFields } from "./transport";
 
 const TOP_KEYS = ["remark", "host", "port"];
 const SECURITY_KEYS = new Set([

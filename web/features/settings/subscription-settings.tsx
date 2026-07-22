@@ -23,7 +23,7 @@ import {
   type SubscriptionRuleResult,
   updateSubscriptionSettings,
 } from "@/lib/api";
-import { CodeEditor } from "@/shared/code-editor";
+import { CodeEditor } from "./code-editor";
 import { Modal } from "@/components/ui/modal";
 import { SettingsRow, useRegisterSave } from "./settings";
 import { SettingsSection } from "@/shared/settings-kit";

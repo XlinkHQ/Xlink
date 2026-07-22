@@ -16,7 +16,7 @@ import {
 } from "@/lib/api";
 import { ChevronDown, RotateCw, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { JsonEditor } from "@/shared/json-editor";
+import { JsonEditor } from "./json-editor";
 import { Spinner } from "@/components/ui/spinner";
 import { SettingsSection } from "@/shared/settings-kit";
 import { CORE_DEFAULTS, CORE_LABELS, CORE_PLACEHOLDERS } from "./detail-parts";
