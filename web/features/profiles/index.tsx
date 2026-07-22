@@ -21,7 +21,7 @@ import {
   type ProfileRead,
 } from "@/lib/api";
 import { bytes } from "@/lib/format";
-import { UsageAreaChart } from "../usage-chart";
+import { UsageAreaChart } from "@/components/console/screens/usage-chart";
 import {
   WarpBadge,
   WarpButton,
@@ -30,11 +30,11 @@ import {
   WarpRow,
   WarpSkeleton,
   WarpTableCard,
-} from "../warp-table";
+} from "@/components/console/screens/warp-table";
 import { ProfileDialog } from "./dialog";
 import { HostDialog } from "./host-dialog";
-import { DgSearch } from "../../dg-icons";
-import { SettingsSection } from "../settings-kit";
+import { DgSearch } from "@/components/console/dg-icons";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
 import { cn } from "@/lib/cn";
 
 function protoBadge(p: string): string {

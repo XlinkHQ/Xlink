@@ -25,7 +25,7 @@ import {
 } from "@/lib/api";
 import { bytes } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "../warp-table";
+import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/components/console/screens/warp-table";
 
 const PAGE_SIZE = 10;
 

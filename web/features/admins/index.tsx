@@ -21,9 +21,9 @@ import {
   WarpRow,
   WarpSkeleton,
   WarpTableCard,
-} from "../warp-table";
+} from "@/components/console/screens/warp-table";
 import { AdminDialog } from "./dialog";
-import { DgAddUser } from "../../dg-icons";
+import { DgAddUser } from "@/components/console/dg-icons";
 import { SearchBox } from "@/components/ui/search-box";
 
 export function AdminsScreen() {

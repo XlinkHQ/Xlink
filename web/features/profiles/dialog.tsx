@@ -16,10 +16,10 @@ import {
   type ProfileRead,
   updateProfile,
 } from "@/lib/api";
-import { Field } from "../parts";
-import { InlineEditPanel } from "../settings-kit";
+import { Field } from "@/components/console/screens/parts";
+import { InlineEditPanel } from "@/components/console/screens/settings-kit";
 import { PROTOCOLS, PROVIDERS, protocolsFor } from "./util";
-import { BOOL_KEYS, NUMERIC_KEYS, type TField, TRANSPORT_KEYS, transportFields } from "../transport";
+import { BOOL_KEYS, NUMERIC_KEYS, type TField, TRANSPORT_KEYS, transportFields } from "@/components/console/screens/transport";
 
 const TOP_KEYS = ["remark", "host", "port"];
 const SECURITY_KEYS = new Set([

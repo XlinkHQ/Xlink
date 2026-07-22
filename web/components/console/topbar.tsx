@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { listNodes, onlineUsers, usersTotal } from "@/lib/api";
 import { setTheme, useTheme } from "@/lib/theme";
 import { DgDarkTheme, DgGlobe, DgLightTheme, DgUsers } from "./dg-icons";
-import { isNodeOnline } from "./screens/nodes/util";
+import { isNodeOnline } from "@/features/nodes/util";
 
 function StatChip({
   icon,

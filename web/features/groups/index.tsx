@@ -23,9 +23,9 @@ import {
   WarpRow,
   WarpSkeleton,
   WarpTableCard,
-} from "../warp-table";
+} from "@/components/console/screens/warp-table";
 import { Plus } from "lucide-react";
-import { DgSearch } from "../../dg-icons";
+import { DgSearch } from "@/components/console/dg-icons";
 import { GroupDialog } from "./dialog";
 import { ServiceSettings } from "./settings";
 

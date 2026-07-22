@@ -18,7 +18,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { bytes } from "@/lib/format";
-import { Field } from "../parts";
+import { Field } from "@/components/console/screens/parts";
 
 const PW_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const PW_LOWER = "abcdefghijkmnopqrstuvwxyz";

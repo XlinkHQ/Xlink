@@ -29,11 +29,11 @@ import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
 import { bytes } from "@/lib/format";
-import { JsonEditor } from "../json-editor";
-import { MetricsAreaChart, UsageAreaChart } from "../usage-chart";
+import { JsonEditor } from "@/components/console/screens/json-editor";
+import { MetricsAreaChart, UsageAreaChart } from "@/components/console/screens/usage-chart";
 import { Spinner } from "@/components/ui/spinner";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "../warp-table";
-import { SettingsSection } from "../settings-kit";
+import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/components/console/screens/warp-table";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
 import { isNodeOnline } from "./util";
 
 function protoBadge(p: string): string {

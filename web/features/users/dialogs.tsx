@@ -20,7 +20,7 @@ import {
   updateUser,
   type UserRead,
 } from "@/lib/api";
-import { Field } from "../parts";
+import { Field } from "@/components/console/screens/parts";
 
 export function EditUserDialog({
   user,

@@ -28,7 +28,7 @@ import {
   WarpRow,
   WarpSkeleton,
   WarpTableCard,
-} from "../warp-table";
+} from "@/components/console/screens/warp-table";
 import { SearchBox } from "@/components/ui/search-box";
 
 type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";
