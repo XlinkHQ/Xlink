@@ -77,7 +77,7 @@ export function AdminsScreen() {
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
-          <WarpEmpty icon="fa-user-shield">
+          <WarpEmpty>
             {search ? "No matches." : "No admins yet."}
           </WarpEmpty>
         ) : (

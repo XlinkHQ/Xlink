@@ -127,7 +127,7 @@ export function ApiKeysScreen() {
         {q.isLoading ? (
           <WarpSkeleton />
         ) : keys.length === 0 ? (
-          <WarpEmpty icon="fa-key">
+          <WarpEmpty>
             No API keys yet. Create one to automate the panel.
           </WarpEmpty>
         ) : (

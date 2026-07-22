@@ -36,7 +36,7 @@ export function UserDevicesTable({ userId, deviceLimit }: { userId: string; devi
         {q.isLoading ? (
           <WarpSkeleton />
         ) : devices.length === 0 ? (
-          <WarpEmpty icon="fa-mobile">No devices bound.</WarpEmpty>
+          <WarpEmpty>No devices bound.</WarpEmpty>
         ) : (
           devices.map((d) => (
             <WarpRow

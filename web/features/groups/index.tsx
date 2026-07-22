@@ -128,7 +128,7 @@ export function GroupsScreen() {
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
-          <WarpEmpty icon="fa-layer-group">
+          <WarpEmpty>
             {search ? "No matches." : "No services yet."}
           </WarpEmpty>
         ) : (

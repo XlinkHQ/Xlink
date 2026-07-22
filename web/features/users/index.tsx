@@ -33,6 +33,7 @@ import {
   WarpSkeleton,
   WarpTableCard,
   WarpRadial,
+  type WarpMenuItem,
 } from "@/shared/warp-table";
 import { copyText } from "@/lib/clipboard";
 import { EditUserDialog, UserDialog } from "./dialogs";
@@ -399,7 +400,7 @@ export function UsersScreen() {
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
-          <WarpEmpty icon="fa-user">
+          <WarpEmpty>
             {needle || statusFilter !== "all" ? "No matches." : "No users yet."}
           </WarpEmpty>
         ) : (
@@ -467,7 +468,7 @@ export function UsersScreen() {
                 <span className="warp-tb-cell warp-tb-cell-actions" onClick={(e) => e.stopPropagation()}>
                   <WarpMenu
                     items={[
-                      ...(u.removed ? [{ label: "Restore", icon: "restore", onClick: () => restore(u.id) }] : []),
+                      ...(u.removed ? [{ label: "Restore", icon: "restore", onClick: () => restore(u.id) } as WarpMenuItem] : []),
                       { label: "Edit", icon: "edit", onClick: () => setEditing(u) },
                       { label: "Copy ID", icon: "copy-id", onClick: () => copyId(u.id) },
                       { label: "Copy subscription", icon: "copy-link", onClick: () => copySub(u.id) },

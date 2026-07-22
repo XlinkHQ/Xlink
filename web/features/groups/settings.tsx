@@ -172,7 +172,7 @@ function InboundsTab({
           ]}
         />
         {rows.length === 0 ? (
-          <WarpEmpty icon="fa-globe">No inbounds available.</WarpEmpty>
+          <WarpEmpty>No inbounds available.</WarpEmpty>
         ) : (
           rows.map((p) => (
             <WarpRow
@@ -246,7 +246,7 @@ function UsersTab({
       {usersQuery.isLoading ? (
         <WarpSkeleton />
       ) : members.length === 0 ? (
-        <WarpEmpty icon="fa-user">No users in this service yet.</WarpEmpty>
+        <WarpEmpty>No users in this service yet.</WarpEmpty>
       ) : (
         members.map((u) => {
           const s = userStatus(u);

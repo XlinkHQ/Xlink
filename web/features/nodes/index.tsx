@@ -149,7 +149,7 @@ export function NodesScreen() {
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
-          <WarpEmpty icon="fa-server">
+          <WarpEmpty>
             {search ? "No matches." : "No nodes yet."}
           </WarpEmpty>
         ) : (

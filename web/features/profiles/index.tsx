@@ -156,7 +156,7 @@ export function ProfilesScreen() {
         {query.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
-          <WarpEmpty icon="fa-globe">
+          <WarpEmpty>
             {search ? "No matches." : "No inbounds yet."}
           </WarpEmpty>
         ) : (
@@ -333,7 +333,7 @@ function HostsDrawer({
           <WarpTableCard className="warp-users-table">
             <WarpHead cols={["Remark", "Address", "Port"]} actions />
             {hosts.length === 0 ? (
-              <WarpEmpty icon="fa-globe">No extra addresses — the inbound already works on the node address.</WarpEmpty>
+              <WarpEmpty>No extra addresses — the inbound already works on the node address.</WarpEmpty>
             ) : (
               hosts.map((h) => (
                 <WarpRow

@@ -99,7 +99,7 @@ export function RoutingScreen() {
         {q.isLoading ? (
           <WarpSkeleton />
         ) : filtered.length === 0 ? (
-          <WarpEmpty icon="fa-route">
+          <WarpEmpty>
             {search.trim()
               ? "No rules match your search."
               : "No routing rules yet — traffic uses the default outbound."}

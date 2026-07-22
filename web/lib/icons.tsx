@@ -15,7 +15,7 @@ import {
   Wifi,
 } from "lucide-react";
 
-const ICONS: Record<string, LucideIcon> = {
+const ICONS = {
   check: Check,
   "copy-id": Hash,
   "copy-link": SquareCode,
@@ -30,13 +30,15 @@ const ICONS: Record<string, LucideIcon> = {
   restore: ArchiveRestore,
   revoke: Unlink,
   trash: Trash,
-};
+} satisfies Record<string, LucideIcon>;
 
-function resolveIcon(name: string): LucideIcon | null {
+export type IconName = keyof typeof ICONS;
+
+function resolveIcon(name: IconName): LucideIcon | null {
   return ICONS[name] ?? null;
 }
 
-export function Icon({ name, size = 14 }: { name?: string; size?: number }) {
+export function Icon({ name, size = 14 }: { name?: IconName; size?: number }) {
   if (!name) return null;
   const Cmp = resolveIcon(name);
   return Cmp ? <Cmp size={size} /> : null;

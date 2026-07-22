@@ -4,7 +4,7 @@ import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Menu, Plus, Trash } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { Icon } from "@/lib/icons";
+import { Icon, type IconName } from "@/lib/icons";
 import { useTheme } from "@/lib/theme";
 
 // exact DefGuard "menu" (3 horizontal dots) icon
@@ -19,9 +19,9 @@ function DotsMenu({ size = 20 }: { size?: number }) {
   );
 }
 
-type WarpMenuItem = {
+export type WarpMenuItem = {
   label: string;
-  icon?: string;  onClick: () => void;
+  icon?: IconName;  onClick: () => void;
   danger?: boolean;
   disabled?: boolean;
 };
@@ -257,7 +257,7 @@ export function WarpEmpty({
   cta,
 }: {
   children: ReactNode;
-  icon?: string;  cta?: { label: string; onClick: () => void };
+  icon?: IconName;  cta?: { label: string; onClick: () => void };
 }) {
   return (
     <div className="warp-tb-empty">

@@ -56,7 +56,7 @@ export function GitOpsSettingsScreen() {
           {q.isLoading ? (
             <WarpSkeleton />
           ) : records.length === 0 ? (
-            <WarpEmpty icon="fa-code-branch">No config changes recorded yet.</WarpEmpty>
+            <WarpEmpty>No config changes recorded yet.</WarpEmpty>
           ) : (
             records.map((r) => (
               <WarpRow

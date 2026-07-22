@@ -53,7 +53,7 @@ export function MetricsSettingsScreen() {
           {q.isLoading ? (
             <WarpSkeleton />
           ) : metrics.length === 0 ? (
-            <WarpEmpty icon="fa-chart-line">No metrics reported yet.</WarpEmpty>
+            <WarpEmpty>No metrics reported yet.</WarpEmpty>
           ) : (
             metrics.map((m, i) => (
               <WarpRow

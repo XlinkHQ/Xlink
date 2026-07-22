@@ -173,7 +173,7 @@ export function NodeInfo({ node }: { node: NodeRead }) {
           {coresQuery.isLoading ? (
             <WarpSkeleton />
           ) : (coresQuery.data ?? []).length === 0 ? (
-            <WarpEmpty icon="fa-server">No core health reported yet.</WarpEmpty>
+            <WarpEmpty>No core health reported yet.</WarpEmpty>
           ) : (
             (coresQuery.data ?? []).map((c) => (
               <WarpRow
@@ -264,7 +264,7 @@ export function NodeInboundsCard({ node }: { node: NodeRead }) {
         {loading ? (
           <WarpSkeleton />
         ) : profiles.length === 0 ? (
-          <WarpEmpty icon="fa-plug">No inbounds on this node yet.</WarpEmpty>
+          <WarpEmpty>No inbounds on this node yet.</WarpEmpty>
         ) : (
           profiles.map((p) => (
             <WarpRow

@@ -108,7 +108,7 @@ export function AuditLogScreen() {
         {q.isLoading ? (
           <WarpSkeleton />
         ) : entries.length === 0 ? (
-          <WarpEmpty icon="shield-halved">
+          <WarpEmpty>
             {actor.trim() ? "No entries for this admin." : "No audit entries yet."}
           </WarpEmpty>
         ) : (
