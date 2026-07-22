@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { ApiError, createGroup, type GroupRead, type ProfileRead, updateGroup } from "@/lib/api";
-import { Field } from "@/components/console/screens/parts";
-import { InlineEditPanel } from "@/components/console/screens/settings-kit";
+import { Field } from "@/shared/parts";
+import { InlineEditPanel } from "@/shared/settings-kit";
 
 export function GroupDialog({
   group,

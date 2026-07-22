@@ -29,7 +29,7 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { bytes } from "@/lib/format";
-import { CopyValue } from "@/components/console/screens/table-kit";
+import { CopyValue } from "@/shared/table-kit";
 import {
   WarpButton,
   WarpEmpty,
@@ -39,7 +39,7 @@ import {
   WarpTableCard,
   WarpRadial,
   WarpRow,
-} from "@/components/console/screens/warp-table";
+} from "@/shared/warp-table";
 import { copyText } from "@/lib/clipboard";
 import {
   AccessManager,
@@ -49,7 +49,7 @@ import {
 import { EditUserDialog, UserDialog } from "./dialogs";
 import { DgAddUser } from "@/components/console/dg-icons";
 import { SearchBox } from "@/components/ui/search-box";
-import { SettingsSection } from "@/components/console/screens/settings-kit";
+import { SettingsSection } from "@/shared/settings-kit";
 
 function readPref(k: string): string | null {
   if (typeof window === "undefined") return null;

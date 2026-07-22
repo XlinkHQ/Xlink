@@ -23,7 +23,7 @@ import {
   WarpRow,
   WarpSkeleton,
   WarpTableCard,
-} from "@/components/console/screens/warp-table";
+} from "@/shared/warp-table";
 import { Plus } from "lucide-react";
 import { DgSearch } from "@/components/console/dg-icons";
 import { GroupDialog } from "./dialog";

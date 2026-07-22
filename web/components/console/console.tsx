@@ -13,7 +13,7 @@ import { NAV_ITEMS } from "./nav";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./topbar";
 import { DashboardScreen } from "@/features/dashboard";
-import { LoginScreen } from "./screens/login";
+import { LoginScreen } from "@/features/login";
 import { AdminsScreen } from "@/features/admins";
 import { AuditLogScreen } from "@/features/auditlog";
 import { GroupsScreen } from "@/features/groups";

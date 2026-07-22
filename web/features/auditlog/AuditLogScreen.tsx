@@ -6,7 +6,7 @@ import { useState } from "react";
 import { ApiError, type AuditEntry, downloadAuditCsv, listAudit } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
 import { DatePicker } from "@/components/ui/calendar";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/components/console/screens/warp-table";
+import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 import { DgSearch } from "@/components/console/dg-icons";
 
 type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";

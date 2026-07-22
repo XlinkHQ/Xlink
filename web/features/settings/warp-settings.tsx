@@ -11,7 +11,7 @@ import {
   type WarpSettingsRead,
 } from "@/lib/api";
 import { SettingsRow, useRegisterSave } from "./settings";
-import { SettingsSection } from "@/components/console/screens/settings-kit";
+import { SettingsSection } from "@/shared/settings-kit";
 
 const EMPTY: WarpSettingsRead = {
   warp_enabled: false,

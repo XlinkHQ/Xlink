@@ -21,7 +21,7 @@ import {
   WarpRow,
   WarpSkeleton,
   WarpTableCard,
-} from "@/components/console/screens/warp-table";
+} from "@/shared/warp-table";
 import { AdminDialog } from "./dialog";
 import { DgAddUser } from "@/components/console/dg-icons";
 import { SearchBox } from "@/components/ui/search-box";

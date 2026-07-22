@@ -6,8 +6,8 @@ import { Input, Select } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { ApiError, createNode, type NodeRead, setNodeStatus, updateNode } from "@/lib/api";
-import { Field } from "@/components/console/screens/parts";
-import { InlineEditPanel } from "@/components/console/screens/settings-kit";
+import { Field } from "@/shared/parts";
+import { InlineEditPanel } from "@/shared/settings-kit";
 import { STATUSES } from "./util";
 
 export function NodeDialog({

@@ -5,8 +5,8 @@ import { GitCommitVertical } from "lucide-react";
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { type GitOpsRecordRead, gitopsRecords } from "@/lib/api";
-import { SettingsSection } from "@/components/console/screens/settings-kit";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/components/console/screens/warp-table";
+import { SettingsSection } from "@/shared/settings-kit";
+import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 
 function relTime(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));

@@ -15,7 +15,7 @@ import {
   type SchedulerDecisionRead,
 } from "@/lib/api";
 import { SettingsRow } from "./settings";
-import { SettingsSection } from "@/components/console/screens/settings-kit";
+import { SettingsSection } from "@/shared/settings-kit";
 
 export function SchedulerSettingsScreen() {
   const profilesQ = useQuery({ queryKey: ["profiles"], queryFn: () => listProfiles() });

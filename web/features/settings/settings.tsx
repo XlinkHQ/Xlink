@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { BrandingSettingsScreen } from "./branding-settings";
-import { BackupScreen } from "@/components/console/screens/panels";
+import { BackupScreen } from "./panels";
 import { RetentionSettingsScreen } from "./retention-settings";
 import { MetricsSettingsScreen } from "./metrics-settings";
 import { GitOpsSettingsScreen } from "./gitops-settings";

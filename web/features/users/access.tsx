@@ -29,7 +29,7 @@ import {
 } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/cn";
-import { UsageAreaChart } from "@/components/console/screens/usage-chart";
+import { UsageAreaChart } from "@/shared/usage-chart";
 import { bytes } from "@/lib/format";
 
 const TAG_TONE: Record<string, string> = {

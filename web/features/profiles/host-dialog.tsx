@@ -13,8 +13,8 @@ import {
   updateInboundHost,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { Field } from "@/components/console/screens/parts";
-import { InlineEditPanel } from "@/components/console/screens/settings-kit";
+import { Field } from "@/shared/parts";
+import { InlineEditPanel } from "@/shared/settings-kit";
 
 const NETWORKS = ["", "tcp", "ws", "grpc", "httpupgrade", "xhttp", "splithttp", "kcp"];
 const SECURITIES = ["", "none", "tls", "reality", "inbound_default"];

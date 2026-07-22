@@ -19,7 +19,7 @@ import {
   type RoutingRuleRead,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { WarpButton, WarpEmpty, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard } from "@/components/console/screens/warp-table";
+import { WarpButton, WarpEmpty, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 
 const OUTBOUND_META: Record<string, { label: string; tone: "danger" | "success" | "neutral" | "muted" }> = {
   block: { label: "Block", tone: "danger" },
