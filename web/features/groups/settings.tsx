@@ -25,6 +25,7 @@ import {
   updateGroup,
 } from "@/lib/api";
 import { bytes } from "@/lib/format";
+import { userStatus } from "@/lib/status";
 import { cn } from "@/lib/cn";
 import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 
@@ -239,8 +240,6 @@ function UsersTab({
     return users.filter((u) => ids.has(u.id));
   }, [group.profile_ids, assignments, users]);
 
-  const now = Date.now();
-
   return (
     <WarpTableCard className="warp-users-table">
       <WarpHead cols={["Username", "Online", "Status", "Used Traffic", "Expiration"]} />
@@ -250,7 +249,19 @@ function UsersTab({
         <WarpEmpty icon="fa-user">No users in this service yet.</WarpEmpty>
       ) : (
         members.map((u) => {
-          const expired = u.expire_at != null && Date.parse(u.expire_at) < now;
+          const s = userStatus(u);
+          const statusClass =
+            s === "disabled" ? "critical"
+              : s === "onhold" ? "warning"
+              : s === "expired" ? "critical"
+              : s === "limited" ? "critical"
+              : "success";
+          const statusText =
+            s === "disabled" ? "Disabled"
+              : s === "onhold" ? "On-hold"
+              : s === "expired" ? "Expired"
+              : s === "limited" ? "Limited"
+              : "Active";
           return (
             <WarpRow
               key={u.id}
@@ -259,8 +270,8 @@ function UsersTab({
                 <span className={`warp-badge ${onlineSet.has(u.id) ? "success" : "neutral"}`}>
                   {onlineSet.has(u.id) ? "Online" : "Offline"}
                 </span>,
-                <span className={`warp-badge ${!u.is_active ? "critical" : expired ? "critical" : "success"}`}>
-                  {!u.is_active ? "Disabled" : expired ? "Expired" : "Active"}
+                <span className={`warp-badge ${statusClass}`}>
+                  {statusText}
                 </span>,
                 <span className="text-fg-muted">{bytes(u.users_data_usage ?? 0)}</span>,
                 <span className="text-fg-muted">{u.expire_at ? u.expire_at.slice(0, 10) : "Never"}</span>,

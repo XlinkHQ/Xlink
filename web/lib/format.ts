@@ -1,10 +1,6 @@
 
 const BYTES_PER_GIB = 1024 ** 3;
 
-// GiB <-> bytes for data-limit form fields. toGiB returns the raw number so each
-// call site keeps its own formatting (.toFixed(0)/.toString()/.toFixed(1)) —
-// behavior-identical to the inline `/ 1024 ** 3`. fromGiB matches the inline
-// `Math.round(x * 1024 ** 3)` used on submit.
 export function toGiB(bytesValue: number): number {
   return bytesValue / BYTES_PER_GIB;
 }

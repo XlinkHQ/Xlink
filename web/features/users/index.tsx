@@ -24,6 +24,7 @@ import {
   userSubscriptionUrl,
 } from "@/lib/api";
 import { bytes } from "@/lib/format";
+import { userStatus } from "@/lib/status";
 import {
   WarpButton,
   WarpEmpty,
@@ -245,10 +246,11 @@ export function UsersScreen() {
       const used = usageMap.get(u.id)?.used_bytes ?? 0;
       const reached = u.data_limit_bytes != null && used >= u.data_limit_bytes;
       const expired = u.expire_at != null && Date.parse(u.expire_at) < now;
+      const s = userStatus(u, used);
       switch (statusFilter) {
         case "online": return onlineSet.has(u.id);
         case "active": return u.is_active && !expired && !reached;
-        case "disabled": return !u.is_active;
+        case "disabled": return s === "disabled";
         case "expired": return expired;
         case "limited": return reached;
         default: return false;

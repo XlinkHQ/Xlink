@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ChevronRight, CircleUser, Globe, Layers, Link as LinkIcon, Pencil, Power, RotateCcw, Smartphone } from "lucide-react";
 import { useState } from "react";
 import { type UserRead } from "@/lib/api";
+import { userStatus } from "@/lib/status";
 import { cn } from "@/lib/cn";
 import { bytes } from "@/lib/format";
 import { SettingsSection } from "@/shared/settings-kit";
@@ -37,6 +38,7 @@ export function UserProfileView({
   const [tab, setTab] = useState<string>("info");
   const [editing, setEditing] = useState(false);
   const qc = useQueryClient();
+  const s = userStatus(user);
 
   return (
     <div className="w-full px-4 pb-6 pt-0">
@@ -92,9 +94,10 @@ export function UserProfileView({
               <PdRow label="Name" value={user.full_name || "—"} />
               <PdRow label="Email" value={user.email || "—"} />
               <PdRow label="Status" value={
-                !user.is_active ? <Badge variant="critical">Disabled</Badge>
-                  : user.on_hold ? <Badge variant="warning">On-hold</Badge>
-                  : (user.expire_at && Date.parse(user.expire_at) < Date.now()) ? <Badge variant="critical">Expired</Badge>
+                s === "disabled" ? <Badge variant="critical">Disabled</Badge>
+                  : s === "onhold" ? <Badge variant="warning">On-hold</Badge>
+                  : s === "expired" ? <Badge variant="critical">Expired</Badge>
+                  : s === "limited" ? <Badge variant="critical">Limited</Badge>
                   : <Badge variant="success">Active</Badge>
               } />
               <PdRow label="Expiration" value={
