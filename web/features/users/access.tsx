@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Plus, QrCode as QrIcon, Trash } from "lucide-react";
+import { Copy, Plus, Trash } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { toneForStatus } from "@/components/ui/badge";
@@ -22,7 +22,6 @@ import {
   type NodeRead,
   type ProfileRead,
   revokeSubscription,
-  subscriptionFeed,
   userNodeUsage,
   userSubscriptionUrl,
   userUsageSeries,
@@ -32,22 +31,6 @@ import { cn } from "@/lib/cn";
 import { UsageAreaChart } from "@/shared/usage-chart";
 import { bytes } from "@/lib/format";
 
-const TAG_TONE: Record<string, string> = {
-  sub: "bg-teal-500/15 text-teal-600 dark:text-teal-400",
-  vless: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-  vmess: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-  trojan: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
-  shadowsocks: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  ss: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  hysteria2: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400",
-  hy2: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400",
-  tuic: "bg-pink-500/15 text-pink-600 dark:text-pink-400",
-  wireguard: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-};
-
-function tagTone(name: string): string {
-  return TAG_TONE[name.toLowerCase()] ?? "bg-muted text-fg-muted";
-}
 
 /** Map a status string to a .warp-badge variant class. */
 function badgeClassForStatus(status: string): string {
@@ -64,14 +47,22 @@ function QrImage({ value, size = 180 }: { value: string; size?: number }) {
   const [src, setSrc] = useState("");
   useEffect(() => {
     if (!value) return;
+    let active = true;
     QRCode.toDataURL(value, {
       width: size,
       margin: 1,
       errorCorrectionLevel: "M",
       color: { light: "#ffffff", dark: "#161616" },
     })
-      .then(setSrc)
-      .catch(() => setSrc(""));
+      .then((url) => {
+        if (active) setSrc(url);
+      })
+      .catch(() => {
+        if (active) setSrc("");
+      });
+    return () => {
+      active = false;
+    };
   }, [value, size]);
   if (!src) return null;
   return (
@@ -329,130 +320,6 @@ export function AccessManager({ userId }: { userId: string }) {
     </div>
   );
 }
-
-export function UserSubscription({ userId }: { userId: string }) {
-  const urlQ = useQuery({ queryKey: ["sub-url", userId], queryFn: () => userSubscriptionUrl(userId) });
-  const linksQ = useQuery({
-    queryKey: ["sub-links", userId],
-    queryFn: () => subscriptionFeed("users", userId, "text"),
-  });
-  const subUrl = urlQ.data?.subscription_url ?? "";
-  const links = (linksQ.data?.content ?? "")
-    .split("\n")
-    .map((s) => s.trim())
-    .filter((s) => s.includes("://"));
-
-  return (
-    <div className="flex flex-col gap-1 pt-2">
-      {subUrl ? <LinkRow tag="sub" value={subUrl} /> : null}
-      {links.map((link, i) => (
-        <LinkRow key={`${link}-${i}`} tag={link.split("://")[0]} value={link} />
-      ))}
-    </div>
-  );
-}
-
-export function UserQrButton({ userId }: { userId: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        aria-label="QR codes"
-        title="QR codes"
-        onClick={() => setOpen(true)}
-        className="grid h-7 w-7 place-items-center rounded text-fg-muted hover:bg-muted hover:text-fg"
-      >
-        <QrIcon className="h-4 w-4" />
-      </button>
-      {open ? <UserQrModal userId={userId} onClose={() => setOpen(false)} /> : null}
-    </>
-  );
-}
-
-function UserQrModal({ userId, onClose }: { userId: string; onClose: () => void }) {
-  const urlQ = useQuery({ queryKey: ["sub-url", userId], queryFn: () => userSubscriptionUrl(userId) });
-  const linksQ = useQuery({
-    queryKey: ["sub-links", userId],
-    queryFn: () => subscriptionFeed("users", userId, "text"),
-  });
-  const subUrl = urlQ.data?.subscription_url ?? "";
-  const links = (linksQ.data?.content ?? "")
-    .split("\n")
-    .map((s) => s.trim())
-    .filter((s) => s.includes("://"));
-  const qrItems = [
-    ...(subUrl ? [{ label: "sub", value: subUrl }] : []),
-    ...links.map((l) => ({ label: l.split("://")[0], value: l })),
-  ];
-  return <QrModal items={qrItems} onClose={onClose} />;
-}
-
-function LinkRow({ tag, value }: { tag: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      title="Click to copy"
-      onClick={async () => {
-        await copyText(value);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1200);
-      }}
-      className="flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left"
-    >
-      <span className={`flex-none rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${tagTone(tag)}`}>
-        {tag}
-      </span>
-      <span className={`truncate font-mono text-[11px] ${copied ? "font-medium text-success" : "text-fg-muted"}`}>
-        {copied ? "Copied to clipboard" : value}
-      </span>
-    </button>
-  );
-}
-
-function QrModal({ items, onClose }: { items: { label: string; value: string }[]; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4"
-      onMouseDown={onClose}
-    >
-      <div
-        onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-w-[90vw] flex-wrap items-start justify-center gap-6 rounded-xl bg-canvas p-6 shadow-pop"
-      >
-        {items.map((it) => (
-          <QrItem key={`${it.label}-${it.value}`} label={it.label} value={it.value} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function QrItem({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <button
-      type="button"
-      title="Click to copy config"
-      onClick={async () => {
-        await copyText(value);
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1500);
-      }}
-      className="flex flex-col items-center gap-2.5"
-    >
-      <QrImage value={value} size={200} />
-      <span className={`rounded px-2 py-0.5 text-[11px] font-medium uppercase ${tagTone(label)}`}>
-        {label}
-      </span>
-      <span className={`text-[10px] ${copied ? "font-medium text-success" : "text-fg-muted"}`}>
-        {copied ? "Copied ✓" : "Click to copy"}
-      </span>
-    </button>
-  );
-}
-
 
 export function UserSubscriptionPanel({ userId }: { userId: string }) {
   const qc = useQueryClient();

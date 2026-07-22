@@ -19,7 +19,7 @@ function DotsMenu({ size = 20 }: { size?: number }) {
   );
 }
 
-export type WarpMenuItem = {
+type WarpMenuItem = {
   label: string;
   icon?: string;  onClick: () => void;
   danger?: boolean;

@@ -90,13 +90,6 @@ const PAGE_TITLES: Record<string, string> = {
   Settings: "Settings",
 };
 
-function initials(name: string): string {
-  const parts = name.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
-  const a = parts[0]?.[0] ?? name[0] ?? "?";
-  const b = parts[1]?.[0] ?? "";
-  return (a + b).toUpperCase();
-}
-
 export function TopBar({
   active,
   identity,

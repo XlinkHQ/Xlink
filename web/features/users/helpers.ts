@@ -16,11 +16,3 @@ export function relTimeShort(iso: string | null | undefined): string {
   if (s < 2592000) return `${Math.floor(s / 86400)}d ago`;
   return new Date(iso).toLocaleDateString();
 }
-
-export function initialsOf(name: string): string {
-  const s = name.trim();
-  if (!s) return "?";
-  const parts = s.split(/[\s._-]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return s.slice(0, 2).toUpperCase();
-}

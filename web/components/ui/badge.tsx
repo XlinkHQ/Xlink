@@ -1,9 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-export type Variant = "online" | "offline" | "warning" | "error" | "success" | "info";
-export type Tone = "neutral" | "success" | "warning" | "danger" | "muted";
-export type ShadVariant = "default" | "secondary" | "destructive" | "outline";
+type Variant = "online" | "offline" | "warning" | "error" | "success" | "info";
+type Tone = "neutral" | "success" | "warning" | "danger" | "muted";
+type ShadVariant = "default" | "secondary" | "destructive" | "outline";
 
 const VARIANT_VAR: Record<Variant, string | null> = {
   online: "var(--green)",
@@ -30,10 +30,6 @@ export function toneForStatus(status: string): Tone {
     return "danger";
   if (["disabled", "offline", "no", "suspended"].includes(s)) return "muted";
   return "neutral";
-}
-
-export function variantForStatus(status: string): Variant {
-  return TONE_TO_VARIANT[toneForStatus(status)];
 }
 
 const SHAD_CLASS: Record<ShadVariant, string> = {

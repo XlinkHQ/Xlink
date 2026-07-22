@@ -17,7 +17,7 @@ function sameDay(a: Date, b: Date): boolean {
   );
 }
 
-export function Calendar({
+function Calendar({
   selected,
   onSelect,
 }: {

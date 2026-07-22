@@ -307,7 +307,7 @@ export function SubscriptionSettingsScreen() {
   );
 }
 
-export function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
       type="button"

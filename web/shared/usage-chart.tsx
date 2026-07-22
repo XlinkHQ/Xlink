@@ -17,7 +17,7 @@ export const CHART_COLORS = {
 // Theme-aware chart chrome: apex defaults to dark axis text + near-black grid
 // lines, which vanish on our dark surface (and its light-themed tooltip renders
 // as a white box on dark). Drive all of it from the active theme instead.
-export function chartTheme(dark: boolean) {
+function chartTheme(dark: boolean) {
   return {
     mode: (dark ? "dark" : "light") as "dark" | "light",
     axisText: dark ? "#9aa0aa" : "#6b7280",

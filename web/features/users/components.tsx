@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 
 export type SortCol = "name" | "username" | "email" | "online" | "status" | "traffic" | "expiration";
 export type SortDir = "asc" | "desc";
-export type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";
+type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";
 
 export function Badge({ variant, children }: { variant: BadgeVariant; children: React.ReactNode }) {
   return <span className={`warp-badge ${variant}`}>{children}</span>;
@@ -56,30 +56,3 @@ export function PdRow({ label, value }: { label: string; value: React.ReactNode 
   );
 }
 
-export function FactorRow({
-  icon,
-  title,
-  availability,
-  badge,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  availability: string;
-  badge: React.ReactNode;
-}) {
-  return (
-    <div className="warp-pd-factor">
-      <div className="track">
-        <div className="info">
-          {icon}
-          <p className="factor-name">{title}</p>
-          <div className="badges">{badge}</div>
-        </div>
-        <div className="avail-line">
-          <div className="fill" />
-          <p className="availability">{availability}</p>
-        </div>
-      </div>
-    </div>
-  );
-}

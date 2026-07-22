@@ -55,7 +55,7 @@ const ICONS: Record<string, LucideIcon> = {
   ping: Wifi,
 };
 
-export function resolveIcon(name: string): LucideIcon | null {
+function resolveIcon(name: string): LucideIcon | null {
   return ICONS[name.replace(/^fa-/, "")] ?? null;
 }
 

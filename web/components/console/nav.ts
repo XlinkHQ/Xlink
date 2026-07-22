@@ -13,7 +13,7 @@ import {
   DgWebhooks,
 } from "./dg-icons";
 
-export type NavIcon = (props: { size?: number }) => ReactElement;
+type NavIcon = (props: { size?: number }) => ReactElement;
 export type NavItem = { key: string; label: string; icon: NavIcon };
 export type NavGroup = { title?: string; items: NavItem[] };
 
