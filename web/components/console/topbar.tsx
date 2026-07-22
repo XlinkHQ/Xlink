@@ -1,12 +1,10 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, LogOut, Menu, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { listNodes, onlineUsers, usersTotal } from "@/lib/api";
 import { setTheme, useTheme } from "@/lib/theme";
 import { DgDarkTheme, DgGlobe, DgLightTheme, DgUsers } from "./dg-icons";
-import { isNodeOnline } from "@/lib/status";
+import { useConsoleStats } from "./useConsoleStats";
 
 function StatChip({
   icon,
@@ -34,33 +32,7 @@ function StatChip({
 }
 
 function TopBarStats() {
-  const onlineQuery = useQuery({
-    queryKey: ["topbar-online-users"],
-    queryFn: () => onlineUsers(),
-    refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-  });
-  const usersQuery = useQuery({
-    queryKey: ["topbar-users-total"],
-    queryFn: () => usersTotal("user"),
-    refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-  });
-  const nodesQuery = useQuery({
-    queryKey: ["nodes"],
-    queryFn: () => listNodes(),
-    refetchInterval: 30000,
-    refetchIntervalInBackground: false,
-  });
-
-  const totalUsers = usersQuery.data ? usersQuery.data.meta.total : null;
-  const onlineUsersCount = onlineQuery.data ? onlineQuery.data.user_ids.length : null;
-
-  const nodeItems = nodesQuery.data?.items ?? null;
-  const totalNodes = nodeItems ? nodeItems.length : null;
-  const onlineNodes = nodeItems
-    ? nodeItems.filter((n) => isNodeOnline(n.status)).length
-    : null;
+  const { totalUsers, onlineUsersCount, totalNodes, onlineNodes } = useConsoleStats();
 
   return (
     <div className="warp-topbar-license">
