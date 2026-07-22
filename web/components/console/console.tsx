@@ -19,7 +19,7 @@ import { AuditLogScreen } from "./screens/audit-log";
 import { GroupsScreen } from "./screens/groups";
 import { NodesScreen } from "./screens/nodes";
 import { ProfilesScreen } from "./screens/profiles";
-import { RoutingScreen } from "./screens/routing";
+import { RoutingScreen } from "@/features/routing";
 import { OutboundsScreen } from "./screens/outbounds";
 import { SettingsScreen } from "./screens/settings";
 import { UsersScreen } from "./screens/users";

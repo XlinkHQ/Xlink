@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
-import { DgSearch } from "../dg-icons";
+import { DgSearch } from "@/components/console/dg-icons";
 import { confirmDialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
 import {
@@ -19,7 +19,7 @@ import {
   type RoutingRuleRead,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { WarpButton, WarpEmpty, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard } from "./warp-table";
+import { WarpButton, WarpEmpty, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard } from "@/components/console/screens/warp-table";
 
 const OUTBOUND_META: Record<string, { label: string; tone: "danger" | "success" | "neutral" | "muted" }> = {
   block: { label: "Block", tone: "danger" },
