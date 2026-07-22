@@ -350,11 +350,17 @@ def _build_singbox_outbound(tag: str, type_: str, settings: dict[str, Any]) -> d
     if type_ == "wireguard":
         if not settings.get("secretKey"):
             return None
+        endpoint = settings.get("endpoint", "")
+        # Parse host+port together so a bracketed IPv6 endpoint ([2001:db8::1]:2408)
+        # yields the bare host, not the naive rsplit(":",1)[0] that would keep
+        # "[2001:db8" and break the tunnel. Fall back to the raw endpoint only when
+        # there is no parseable port (host-only endpoints).
+        wg_host, _wg_port = _parse_host_port(endpoint)
         return {
             "type": "wireguard",
             "tag": tag,
-            "server": settings.get("endpoint", "").rsplit(":", 1)[0] or settings.get("endpoint", ""),
-            "server_port": _wg_endpoint_port(settings.get("endpoint", "")),
+            "server": wg_host or endpoint,
+            "server_port": _wg_endpoint_port(endpoint),
             "local_address": [
                 a.strip()
                 for a in str(settings.get("address", "172.16.0.2/32")).split(",")
@@ -589,30 +595,36 @@ class ConfigSyncService:
         rules = list(routing.get("rules") or [])
         changed = False
 
-        if row is not None and row.warp_enabled and row.warp_private_key and row.warp_address:
-            if not any(o.get("tag") == "warp" for o in outbounds):
-                outbounds.append(
-                    {
-                        "tag": "warp",
-                        "protocol": "wireguard",
-                        "settings": {
-                            "secretKey": row.warp_private_key,
-                            "address": [a.strip() for a in row.warp_address.split(",") if a.strip()],
-                            "peers": [
-                                {
-                                    "publicKey": row.warp_public_key,
-                                    "endpoint": row.warp_endpoint,
-                                }
-                            ],
-                            **(
-                                {"reserved": [int(x) for x in row.warp_reserved.split(",") if x.strip().isdigit()]}
-                                if row.warp_reserved
-                                else {}
-                            ),
-                        },
-                    }
-                )
-                changed = True
+        if (
+            row is not None
+            and row.warp_enabled
+            and row.warp_private_key
+            and row.warp_public_key
+            and row.warp_address
+            and not any(o.get("tag") == "warp" for o in outbounds)
+        ):
+            outbounds.append(
+                {
+                    "tag": "warp",
+                    "protocol": "wireguard",
+                    "settings": {
+                        "secretKey": row.warp_private_key,
+                        "address": [a.strip() for a in row.warp_address.split(",") if a.strip()],
+                        "peers": [
+                            {
+                                "publicKey": row.warp_public_key,
+                                "endpoint": row.warp_endpoint,
+                            }
+                        ],
+                        **(
+                            {"reserved": [int(x) for x in row.warp_reserved.split(",") if x.strip().isdigit()]}
+                            if row.warp_reserved
+                            else {}
+                        ),
+                    },
+                }
+            )
+            changed = True
 
         db_rules = (
             (

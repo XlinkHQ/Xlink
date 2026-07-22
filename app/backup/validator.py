@@ -48,10 +48,18 @@ class BackupValidator:
         data = document.get("data")
         if not isinstance(data, dict):
             raise ValidationError("Backup data is corrupted.", code="backup_corrupted")
+        # A missing checksum must be rejected, not merely warned about: the
+        # exporter always writes one, so its absence means a hand-edited or
+        # truncated document — accepting it would let a tampered backup restore
+        # unverified. (Integrity is mandatory; there is no legitimate
+        # checksum-less document from this system.)
         checksum = document.get("checksum")
         if checksum is None:
-            logger.warning("Backup document has no checksum — integrity cannot be verified.")
-        elif checksum != checksum_payload(data):
+            raise ValidationError(
+                "Backup document has no checksum — integrity cannot be verified.",
+                code="backup_checksum_missing",
+            )
+        if checksum != checksum_payload(data):
             raise ValidationError("Backup checksum mismatch.", code="backup_corrupted")
         await self._validate_foreign_keys(data)
 

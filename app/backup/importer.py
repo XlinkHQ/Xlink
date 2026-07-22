@@ -101,9 +101,10 @@ class BackupImporter:
             self._session.add(model(**values))
             return
         for key, value in values.items():
-            if key == "id":
-                continue
-            if key == "version":
+            if key in ("id", "version", "created_at", "updated_at"):
+                # Never let a backup rewrite the row's identity, optimistic-lock
+                # version, or lifecycle timestamps on an UPDATE — created_at is
+                # immutable history and updated_at is managed by the DB onupdate.
                 continue
             if model is User and key == "hashed_password" and value == _REDACTED:
                 continue

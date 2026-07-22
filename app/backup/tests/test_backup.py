@@ -140,12 +140,17 @@ async def test_corrupted_backup_rejected(db: Database) -> None:
 async def test_missing_dependency_rejected(db: Database) -> None:
     await _seed(db)
     document = dataclasses.asdict(await _service_export_full(db))
-    document["checksum"] = None
 
     document["data"]["nodes"] = []
     orphan_node = str(uuid.uuid4())
     for profile in document["data"]["profiles"]:
         profile["node_id"] = orphan_node
+    # Re-checksum the mutated data so it passes the integrity gate and the FK
+    # dependency check is what actually rejects it (a null checksum is now
+    # rejected earlier, so leaving it null would test the wrong guard).
+    from app.backup.validator import checksum_payload
+
+    document["checksum"] = checksum_payload(document["data"])
 
     with pytest.raises(ValidationError) as exc_info:
         await _service_restore(db, document, dry_run=True)

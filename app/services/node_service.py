@@ -74,8 +74,44 @@ class NodeService:
         return await self.set_status(node_id, NodeStatus.DISABLED)
 
     async def delete(self, node_id: uuid.UUID) -> None:
+        from sqlalchemy import func, select, update
+
+        from app.domain.client_assignment import ClientAssignment
+        from app.domain.user import User
+
         node = await self.get(node_id)
+        session = self._repo.session
+        # Capture the users whose assignments live on this node BEFORE the delete
+        # cascades those assignment rows away — then recompute each one's
+        # users_data_usage (the maintained SUM of their assignments' used_bytes).
+        # Without this, deleting a node leaves every affected user's aggregate
+        # usage permanently inflated by the now-gone assignments' bytes.
+        affected = set(
+            (
+                await session.execute(
+                    select(ClientAssignment.user_id).where(
+                        ClientAssignment.node_id == node_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         await self._repo.delete(node)
+        if affected:
+            await session.flush()
+            total = (
+                select(func.coalesce(func.sum(ClientAssignment.used_bytes), 0))
+                .where(ClientAssignment.user_id == User.id)
+                .scalar_subquery()
+            )
+            await session.execute(
+                update(User)
+                .where(User.id.in_(affected))
+                .values(users_data_usage=total)
+                .execution_options(synchronize_session=False)
+            )
+            await session.flush()
 
     async def heartbeat(
         self,

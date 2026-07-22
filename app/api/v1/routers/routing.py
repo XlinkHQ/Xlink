@@ -62,7 +62,7 @@ def _validate_match_values(match_type: str, match_values: str) -> None:
     if match_type == "port":
         for v in values:
             parts = v.split("-")
-            if not all(p.isdigit() and 0 <= int(p) <= 65535 for p in parts) or len(parts) > 2:
+            if not all(p.isdigit() and 1 <= int(p) <= 65535 for p in parts) or len(parts) > 2:
                 raise ValidationError(
                     f"Invalid port value '{v}' — use a number or range like 8000-9000.",
                     code="invalid_match_values",
