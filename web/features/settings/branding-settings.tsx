@@ -5,7 +5,7 @@ import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { getBranding, setBranding } from "@/lib/branding";
 import { SettingsRow, useRegisterSave } from "./settings";
-import { SettingsSection } from "./settings-kit";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
 
 export function BrandingSettingsScreen() {
   const initial = getBranding();

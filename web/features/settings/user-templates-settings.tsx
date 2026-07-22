@@ -15,7 +15,7 @@ import {
   listUserTemplates,
   type UserTemplateRead,
 } from "@/lib/api";
-import { SettingsSection } from "./settings-kit";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
 
 export function UserTemplatesSettingsScreen() {
   const qc = useQueryClient();

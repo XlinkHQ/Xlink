@@ -23,11 +23,11 @@ import {
   type SubscriptionRuleResult,
   updateSubscriptionSettings,
 } from "@/lib/api";
-import { CodeEditor } from "./code-editor";
+import { CodeEditor } from "@/components/console/screens/code-editor";
 import { Modal } from "@/components/ui/modal";
 import { SettingsRow, useRegisterSave } from "./settings";
-import { SettingsSection } from "./settings-kit";
-import { WarpBadge } from "./warp-table";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
+import { WarpBadge } from "@/components/console/screens/warp-table";
 
 const PREVIEW_VALUES: Record<string, string> = {
   title: "Excore",

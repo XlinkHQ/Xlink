@@ -6,8 +6,8 @@ import { toast } from "@/components/ui/toast";
 import { monitoringMetrics } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { SettingsRow } from "./settings";
-import { SettingsSection } from "./settings-kit";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "./warp-table";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
+import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/components/console/screens/warp-table";
 
 function prometheusUrl(): string {
   if (typeof window === "undefined") return "";

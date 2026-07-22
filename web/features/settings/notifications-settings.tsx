@@ -12,7 +12,7 @@ import {
   type NotificationSettingsRead,
 } from "@/lib/api";
 import { SettingsRow, useRegisterSave } from "./settings";
-import { SettingsSection } from "./settings-kit";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
 
 const EMPTY: NotificationSettingsRead = {
   notify_enabled: true,

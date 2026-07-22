@@ -15,7 +15,7 @@ import {
   requestAcmeCertificate,
   ApiError,
 } from "@/lib/api";
-import { SettingsSection } from "./settings-kit";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";

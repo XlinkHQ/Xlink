@@ -7,7 +7,7 @@ import { confirmDialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
 import { trafficCleanup, trafficRetention } from "@/lib/api";
 import { SettingsRow } from "./settings";
-import { SettingsSection } from "./settings-kit";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
 
 function intervalText(seconds: number): string {
   if (!seconds || seconds <= 0) return "never";

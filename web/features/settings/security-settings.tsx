@@ -10,7 +10,7 @@ import { confirmDialog, promptDialog } from "@/components/ui/dialog";
 import { copyText } from "@/lib/clipboard";
 import { Modal } from "@/components/ui/modal";
 import { SettingsRow } from "./settings";
-import { SettingsSection } from "./settings-kit";
+import { SettingsSection } from "@/components/console/screens/settings-kit";
 
 function TotpQr({ value }: { value: string }) {
   const [src, setSrc] = useState<string | null>(null);
