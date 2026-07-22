@@ -130,6 +130,42 @@ class CertificateService:
         cert = await self.get(cert_id)
         await self._repo.delete(cert)
 
+    async def renew_due(
+        self,
+        cache: CacheProtocol,
+        *,
+        email: str,
+        staging: bool = False,
+        window_days: int = 30,
+        now: datetime | None = None,
+    ) -> int:
+        # Re-issue every ACME cert whose expiry is within window_days. On failure
+        # the currently-served cert is left UNTOUCHED (only last_error is noted),
+        # so a transient ACME outage never takes a still-valid cert out of
+        # service — it just retries next cycle. Returns how many were renewed.
+        from datetime import timedelta
+
+        from app.services.acme_issuer import AcmeError, issue_certificate
+
+        reference = now or datetime.now(UTC)
+        before = reference + timedelta(days=window_days)
+        due = await self._repo.list_acme_due(before=before)
+        renewed = 0
+        for cert in due:
+            try:
+                fullchain_pem, key_pem = await issue_certificate(
+                    cache, cert.domain, email=email, staging=staging
+                )
+            except AcmeError as exc:
+                cert.last_error = str(exc)[:500]
+                await self._repo.session.flush()
+                continue
+            result = await self.import_manual(cert.domain, fullchain_pem, key_pem)
+            result.source = CertificateSource.ACME
+            await self._repo.session.flush()
+            renewed += 1
+        return renewed
+
     async def request_acme(
         self, domain: str, cache: CacheProtocol, email: str = "", staging: bool = False
     ) -> Certificate:
@@ -150,7 +186,13 @@ class CertificateService:
         existing.source = CertificateSource.ACME
         existing.status = CertificateStatus.PENDING
         existing.last_error = ""
-        await self._repo.session.flush()
+        # Commit the PENDING state BEFORE the multi-minute blocking ACME flow so
+        # it is durable: if the client disconnects or the worker restarts mid-
+        # issuance, the row shows PENDING (visibly in-progress) instead of being
+        # rolled back to its prior state with no trace that issuance was ever
+        # attempted. The request session otherwise commits only when the handler
+        # returns, which never happens on a mid-flight disconnect.
+        await self._repo.session.commit()
 
         try:
             fullchain_pem, key_pem = await issue_certificate(

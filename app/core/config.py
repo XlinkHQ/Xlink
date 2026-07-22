@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     # and Host-header hardening applies. Empty = plain-port / IP-only deployment.
     domain: str = ""
     acme_email: str = ""
+    acme_staging: bool = False
+    # Auto-renew ACME certs whose expiry falls within this window. Let's Encrypt
+    # certs live ~90 days; renewing at 30 days out leaves ample retry room.
+    acme_renew_window_days: int = 30
+    acme_renew_interval_seconds: int = 12 * 3600
     # The panel usually runs in a container, where auto-detected IP/MAC are the
     # Docker bridge address (172.x) and a virtual NIC — meaningless to the
     # operator. Set these to the real server's public IP/MAC to show them in the

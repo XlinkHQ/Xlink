@@ -65,28 +65,31 @@ def _issue_blocking(
     csr_pem = crypto_util.make_csr(domain_key_pem, [domain])
     order = acme_client.new_order(csr_pem)
 
-    for authz in order.authorizations:
-        http_challenge = None
-        for ch in authz.body.challenges:
-            if isinstance(ch.chall, challenges.HTTP01):
-                http_challenge = ch
-                break
-        if http_challenge is None:
-            raise AcmeError("No HTTP-01 challenge offered.")
-        response, validation = http_challenge.response_and_validation(jwk_key)
-        token = http_challenge.chall.encode("token")
-        set_challenge(token, validation)
-        try:
+    # Track every challenge token we publish so it is removed from Redis on ANY
+    # exit path — a poll_and_finalize timeout/failure previously left the
+    # validation values dangling in the cache because cleanup ran only on the
+    # success path.
+    published_tokens: list[str] = []
+    try:
+        for authz in order.authorizations:
+            http_challenge = None
+            for ch in authz.body.challenges:
+                if isinstance(ch.chall, challenges.HTTP01):
+                    http_challenge = ch
+                    break
+            if http_challenge is None:
+                raise AcmeError("No HTTP-01 challenge offered.")
+            response, validation = http_challenge.response_and_validation(jwk_key)
+            token = http_challenge.chall.encode("token")
+            set_challenge(token, validation)
+            published_tokens.append(token)
             acme_client.answer_challenge(http_challenge, response)
-        finally:
-            pass
 
-    finalized = acme_client.poll_and_finalize(order)
-    for authz in order.authorizations:
-        for ch in authz.body.challenges:
-            if isinstance(ch.chall, challenges.HTTP01):
-                del_challenge(ch.chall.encode("token"))
-    return finalized.fullchain_pem, domain_key_pem.decode()
+        finalized = acme_client.poll_and_finalize(order)
+        return finalized.fullchain_pem, domain_key_pem.decode()
+    finally:
+        for token in published_tokens:
+            del_challenge(token)
 
 
 async def issue_certificate(

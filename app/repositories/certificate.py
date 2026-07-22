@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.certificate import Certificate
+from app.domain.certificate import Certificate, CertificateSource
 
 
 class CertificateRepository:
@@ -14,6 +15,15 @@ class CertificateRepository:
 
     async def list_all(self) -> list[Certificate]:
         stmt = select(Certificate).order_by(Certificate.domain)
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def list_acme_due(self, *, before: datetime) -> list[Certificate]:
+        # ACME certs whose expiry is within the renewal window (or unknown).
+        # MANUAL certs are never auto-renewed — the operator owns them.
+        stmt = select(Certificate).where(
+            Certificate.source == CertificateSource.ACME,
+            or_(Certificate.not_after.is_(None), Certificate.not_after < before),
+        )
         return list((await self.session.execute(stmt)).scalars().all())
 
     async def get(self, cert_id: uuid.UUID) -> Certificate | None:

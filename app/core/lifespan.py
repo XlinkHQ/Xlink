@@ -34,6 +34,7 @@ from app.notifications.job import NotificationJob
 from app.observability.collector import DomainMetricsCollector
 from app.providers.base.registry import ProviderRegistry
 from app.providers.discovery import build_registry
+from app.services.cert_renewal import CertRenewalJob
 from app.traffic.scheduler import TrafficRetentionJob, TrafficRollupJob
 from app.webhooks.dispatcher import WebhookDispatcher
 
@@ -57,6 +58,7 @@ class AppState:
     notification_job: NotificationJob | None = None
     node_agent_scheduler: NodeAgentScheduler | None = None
     backup_job: BackupJob | None = None
+    cert_renewal_job: CertRenewalJob | None = None
     audit_writer: AuditWriter | None = None
     domain_metrics_collector: DomainMetricsCollector | None = None
 
@@ -211,6 +213,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         backup_job.start()
 
+    cert_renewal_job: CertRenewalJob | None = None
+    if settings.acme_email:
+        cert_renewal_job = CertRenewalJob(
+            db,
+            cache,
+            email=settings.acme_email,
+            interval_seconds=settings.acme_renew_interval_seconds,
+            window_days=settings.acme_renew_window_days,
+            staging=settings.acme_staging,
+            leader=leader,
+        )
+        cert_renewal_job.start()
+
     audit_writer: AuditWriter | None = AuditWriter(db)
     audit_writer.start()
 
@@ -276,6 +291,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         notification_job=notification_job,
         node_agent_scheduler=node_agent_scheduler,
         backup_job=backup_job,
+        cert_renewal_job=cert_renewal_job,
         audit_writer=audit_writer,
         domain_metrics_collector=domain_metrics_collector,
     )
@@ -305,6 +321,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await node_agent_scheduler.stop()
         if backup_job is not None:
             await backup_job.stop()
+        if cert_renewal_job is not None:
+            await cert_renewal_job.stop()
         if domain_metrics_collector is not None:
             await domain_metrics_collector.stop()
         if audit_writer is not None:
