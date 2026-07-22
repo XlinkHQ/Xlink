@@ -5,7 +5,7 @@ import { Activity } from "lucide-react";
 import { toast } from "@/components/ui/toast";
 import { monitoringMetrics } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
-import { SettingsRow } from "./settings";
+import { SettingsRow } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 

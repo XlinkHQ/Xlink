@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { confirmDialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
 import { trafficCleanup, trafficRetention } from "@/lib/api";
-import { SettingsRow } from "./settings";
+import { SettingsRow } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 function intervalText(seconds: number): string {

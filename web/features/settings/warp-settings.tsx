@@ -10,7 +10,7 @@ import {
   updateWarpSettings,
   type WarpSettingsRead,
 } from "@/lib/api";
-import { SettingsRow, useRegisterSave } from "./settings";
+import { SettingsRow, useRegisterSave } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 const EMPTY: WarpSettingsRead = {

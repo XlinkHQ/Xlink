@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
 import { ApiError, downloadBackupDb, downloadUsersCsv, importBackupDb } from "@/lib/api";
-import { SettingsRow } from "@/features/settings/settings";
+import { SettingsRow } from "@/features/settings/save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 export function BackupScreen() {

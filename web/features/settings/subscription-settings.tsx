@@ -25,7 +25,7 @@ import {
 } from "@/lib/api";
 import { CodeEditor } from "./code-editor";
 import { Modal } from "@/components/ui/modal";
-import { SettingsRow, useRegisterSave } from "./settings";
+import { SettingsRow, useRegisterSave } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 import { WarpBadge } from "@/shared/warp-table";
 

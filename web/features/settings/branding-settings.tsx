@@ -4,7 +4,7 @@ import { Palette } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { getBranding, setBranding } from "@/lib/branding";
-import { SettingsRow, useRegisterSave } from "./settings";
+import { SettingsRow, useRegisterSave } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 export function BrandingSettingsScreen() {

@@ -9,7 +9,7 @@ import { ApiError, clearTokens, currentUser, logoutAll, totpConfirm, totpDisable
 import { confirmDialog, promptDialog } from "@/components/ui/dialog";
 import { copyText } from "@/lib/clipboard";
 import { Modal } from "@/components/ui/modal";
-import { SettingsRow } from "./settings";
+import { SettingsRow } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 function TotpQr({ value }: { value: string }) {

@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { type SaveReg, SettingsSaveContext } from "./save-context";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { BrandingSettingsScreen } from "./branding-settings";
 import { BackupScreen } from "./panels";
@@ -15,19 +16,6 @@ import { WarpSettingsScreen } from "./warp-settings";
 import { NotificationsSettingsScreen } from "./notifications-settings";
 import { SchedulerSettingsScreen } from "./scheduler-settings";
 import { SubscriptionSettingsScreen } from "./subscription-settings";
-
-type SaveReg = { fn: () => Promise<void> | void; busy: boolean } | null;
-const SettingsSaveContext = createContext<(reg: SaveReg) => void>(() => {});
-
-export function useRegisterSave(fn: () => Promise<void> | void, busy = false): void {
-  const register = useContext(SettingsSaveContext);
-  const fnRef = useRef(fn);
-  fnRef.current = fn;
-  useEffect(() => {
-    register({ fn: () => fnRef.current(), busy });
-    return () => register(null);
-  }, [register, busy]);
-}
 
 const TAB_LIST = ["General", "Security", "Backup", "Monitoring"] as const;
 
@@ -139,26 +127,6 @@ const SECTIONS: Section[] = [
     Comp: GitOpsSettingsScreen,
   },
 ];
-
-export function SettingsRow({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="warp-set-row">
-      <div className="warp-set-row-label">
-        <h4>{label}</h4>
-        {hint ? <p>{hint}</p> : null}
-      </div>
-      <div className="warp-set-row-control">{children}</div>
-    </div>
-  );
-}
 
 export function SettingsScreen() {
   const [section, setSection] = useState<string | null>(null);

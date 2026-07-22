@@ -11,7 +11,7 @@ import {
   ApiError,
   type NotificationSettingsRead,
 } from "@/lib/api";
-import { SettingsRow, useRegisterSave } from "./settings";
+import { SettingsRow, useRegisterSave } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 const EMPTY: NotificationSettingsRead = {

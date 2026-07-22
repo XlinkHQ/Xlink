@@ -14,7 +14,7 @@ import {
   type ProfileRead,
   type SchedulerDecisionRead,
 } from "@/lib/api";
-import { SettingsRow } from "./settings";
+import { SettingsRow } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 export function SchedulerSettingsScreen() {
