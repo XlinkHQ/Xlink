@@ -177,6 +177,33 @@ async def test_invalid_node(client: AsyncClient, ctx: Ctx) -> None:
     assert resp.json()["error"]["code"] == "invalid_node"
 
 
+async def _set_node_status(app_state: AppState, node_id: uuid.UUID, status: NodeStatus) -> None:
+    async with app_state.db.session() as session:
+        node = await session.get(Node, node_id)
+        node.status = status
+        await session.flush()
+
+
+async def test_assign_to_offline_node_is_allowed(
+    client: AsyncClient, ctx: Ctx, app_state: AppState
+) -> None:
+    # A node offline (temporary, or freshly added before its first heartbeat)
+    # must still be assignable — config sync delivers the config when it returns.
+    await _set_node_status(app_state, ctx.node_id, NodeStatus.OFFLINE)
+    resp = await _create(client, ctx)
+    assert resp.status_code == 201, resp.text
+
+
+async def test_assign_to_disabled_node_is_blocked(
+    client: AsyncClient, ctx: Ctx, app_state: AppState
+) -> None:
+    # A DISABLED node was deliberately taken out of service by an admin — reject.
+    await _set_node_status(app_state, ctx.node_id, NodeStatus.DISABLED)
+    resp = await _create(client, ctx)
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "node_disabled"
+
+
 async def test_profile_node_mismatch(client: AsyncClient, ctx: Ctx) -> None:
     resp = await _create(client, ctx, node_id=str(ctx.other_node_id))
     assert resp.status_code == 422

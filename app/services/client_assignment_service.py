@@ -323,10 +323,17 @@ class ClientAssignmentService:
                 code="invalid_node",
                 details={"node_id": str(node_id)},
             )
-        if node.status != NodeStatus.ACTIVE:
+        # Only a DISABLED node (an admin deliberately took it out of service)
+        # blocks assignment. OFFLINE is temporary — a freshly-added node defaults
+        # to OFFLINE until its first heartbeat, and a live node can drop offline
+        # briefly; assigning to it is fine because config sync delivers the config
+        # once it comes back. Blocking OFFLINE made new nodes un-assignable until
+        # they checked in, and dropped a node out of the assign flow whenever it
+        # blipped.
+        if node.status is NodeStatus.DISABLED:
             raise ValidationError(
-                "Node is not active.",
-                code="node_not_active",
+                "Node is disabled.",
+                code="node_disabled",
                 details={"node_id": str(node_id), "status": node.status.value},
             )
         return node
