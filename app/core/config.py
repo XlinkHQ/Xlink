@@ -327,10 +327,6 @@ class Settings(BaseSettings):
         return self.env is Environment.PRODUCTION
 
     @property
-    def is_testing(self) -> bool:
-        return self.env is Environment.TESTING
-
-    @property
     def database_url(self) -> str:
         if self.database_url_override:
             return self.database_url_override

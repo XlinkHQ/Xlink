@@ -225,15 +225,7 @@ def _frozenset_arg(call: ast.expr) -> set[str]:
 
 def _parse_web_provider_protocols() -> dict[str, frozenset[str]]:
     """Read PROVIDER_PROTOCOLS out of the web util.ts by regex (no JS runtime)."""
-    path = (
-        _REPO_ROOT
-        / "web"
-        / "components"
-        / "console"
-        / "screens"
-        / "profiles"
-        / "util.ts"
-    )
+    path = _REPO_ROOT / "web" / "features" / "profiles" / "util.ts"
     src = path.read_text()
     block = re.search(
         r"const PROVIDER_PROTOCOLS[^=]*=\s*\{(.*?)\n\};",
