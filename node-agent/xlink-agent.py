@@ -54,6 +54,11 @@ def _v2ray_enabled() -> bool:
             _v2ray_cache = "with_v2ray_api" in out
         except (OSError, subprocess.SubprocessError):
             _v2ray_cache = False
+        if not _v2ray_cache:
+            _log(
+                "sing-box built without v2ray_api tag — per-user traffic stats "
+                "unavailable; usage will report as zero for sing-box users"
+            )
     return _v2ray_cache
 
 
@@ -83,6 +88,7 @@ _log_offset: int = 0
 WAL_PATH = os.environ.get("XLINK_TRAFFIC_WAL", "/var/lib/xlink/traffic.wal")
 _WAL_MAX = 5000
 _wal_lock = threading.Lock()
+_wal_carryover: list[dict] = []
 
 _WAL_MAX_AGE_DAYS = max(1, min(60, int(os.environ.get("XLINK_WAL_MAX_AGE_DAYS", "30"))))
 _WAL_MAX_AGE_SECONDS = _WAL_MAX_AGE_DAYS * 86400
@@ -133,18 +139,22 @@ def _drop_stale_wal(samples: list[dict]) -> list[dict]:
 
 
 def _wal_append(samples: list[dict]) -> None:
-    if not samples:
-        return
     with _wal_lock:
+        global _wal_carryover
+        batch = _wal_carryover + list(samples)
+        if not batch:
+            return
         try:
             os.makedirs(os.path.dirname(WAL_PATH) or ".", exist_ok=True)
             with open(WAL_PATH, "a") as fh:
-                for s in samples:
+                for s in batch:
                     fh.write(json.dumps(s) + "\n")
                 fh.flush()
                 os.fsync(fh.fileno())
+            _wal_carryover = []
         except OSError as exc:
-            _log(f"wal append failed: {exc}")
+            _wal_carryover = batch[-_WAL_MAX:]
+            _log(f"wal append failed, {len(_wal_carryover)} samples held in memory: {exc}")
 
 
 _WAL_INFLIGHT = WAL_PATH + ".inflight"
@@ -241,7 +251,7 @@ def read_core_logs() -> list[str]:
             _log_offset = fh.tell()
     except OSError:
         return []
-    return [ln for ln in chunk.splitlines() if ln.strip()][-50:]
+    return [ln for ln in chunk.splitlines() if ln.strip()][-500:]
 
 
 def _journal_level(line: str) -> str:
@@ -1182,7 +1192,8 @@ def _wireguard_traffic(clients: list[dict]) -> list[dict]:
 
 
 def _write(path: str, built, fmt: str) -> None:
-    with open(path, "w") as fh:
+    tmp = path + ".tmp"
+    with open(tmp, "w") as fh:
         if fmt == "json":
             json.dump(built, fh, indent=2)
         else:
@@ -1190,6 +1201,7 @@ def _write(path: str, built, fmt: str) -> None:
         fh.flush()
         with contextlib.suppress(OSError):
             os.fsync(fh.fileno())
+    os.replace(tmp, path)
 
 
 def _run(cmd: str) -> tuple[int, str]:

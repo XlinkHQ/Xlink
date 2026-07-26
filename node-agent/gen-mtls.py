@@ -12,9 +12,12 @@ Panel: point XLINK_GRPC_TLS_CERT=server.crt, XLINK_GRPC_TLS_KEY=server.key,
 Agent: XLINK_GRPC_TLS=1, XLINK_GRPC_TLS_CA=ca.crt,
        XLINK_GRPC_TLS_CERT=<node>.crt, XLINK_GRPC_TLS_KEY=<node>.key
 """
+
 from __future__ import annotations
 
 import datetime
+import ipaddress
+import os
 import sys
 
 from cryptography import x509
@@ -30,7 +33,9 @@ def _key():
 
 
 def _write(name: str, cert: x509.Certificate, key) -> None:
-    with open(f"{name}.key", "wb") as fh:
+    key_path = f"{name}.key"
+    fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as fh:
         fh.write(
             key.private_bytes(
                 serialization.Encoding.PEM,
@@ -86,9 +91,11 @@ def make_leaf(name: str, cn: str, san_dns: str | None) -> None:
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
     )
     if san_dns:
-        builder = builder.add_extension(
-            x509.SubjectAlternativeName([x509.DNSName(san_dns)]), critical=False
-        )
+        try:
+            san = x509.IPAddress(ipaddress.ip_address(san_dns))
+        except ValueError:
+            san = x509.DNSName(san_dns)
+        builder = builder.add_extension(x509.SubjectAlternativeName([san]), critical=False)
     cert = builder.sign(ca_key, hashes.SHA256())
     _write(name, cert, key)
 
