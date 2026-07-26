@@ -116,6 +116,15 @@ def setting(config: ProviderConfig, key: str, default: Any = "") -> Any:
     return value if value is not None else default
 
 
+def normalize_alpn(config: ProviderConfig, key: str = "alpn") -> list[str]:
+    value = config.settings.get(key)
+    if value in (None, ""):
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [part.strip() for part in str(value).split(",") if part.strip()]
+
+
 def setting_int(config: ProviderConfig, key: str, default: int = 0) -> int:
     """Coerce a numeric setting, turning bad data into a per-config skip.
 

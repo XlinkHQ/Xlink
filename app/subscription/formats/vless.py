@@ -4,6 +4,7 @@ from urllib.parse import quote
 
 from app.subscription.formats.base import (
     label,
+    normalize_alpn,
     query,
     require_fields,
     require_protocol,
@@ -35,13 +36,13 @@ def transport_params(config: ProviderConfig) -> dict[str, str]:
     if security == "tls":
         params["sni"] = str(setting(config, "sni", setting(config, "host", "")))
         params["fp"] = str(setting(config, "fingerprint", "") or "chrome")
-        params["alpn"] = str(setting(config, "alpn", ""))
+        params["alpn"] = ",".join(normalize_alpn(config))
     elif security == "reality":
         params["sni"] = str(setting(config, "sni", ""))
         params["fp"] = str(setting(config, "fingerprint", "") or "chrome")
         params["pbk"] = str(setting(config, "publicKey", setting(config, "pbk", "")))
         params["sid"] = str(setting(config, "shortId", setting(config, "sid", "")))
-        params["alpn"] = str(setting(config, "alpn", ""))
+        params["alpn"] = ",".join(normalize_alpn(config))
         params["spx"] = str(setting(config, "spiderX", ""))
     if security in ("tls", "reality") and setting(config, "allowInsecure"):
         params["allowInsecure"] = "1"

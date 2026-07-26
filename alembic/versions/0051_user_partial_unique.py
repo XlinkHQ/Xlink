@@ -11,15 +11,6 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # Soft-deleted users (removed = true) keep their row, so a PLAIN unique
-    # constraint on username/email permanently reserves those values against a
-    # tombstone. Replace the plain constraints with PARTIAL unique indexes that
-    # only cover live rows (WHERE removed = false): a deleted user's
-    # username/email becomes reusable, while two LIVE users still can't collide.
-    #
-    # The partial indexes reuse the old constraint names so the IntegrityError
-    # detail still contains "uq_users_username" / "uq_users_email" and the
-    # conflict-message mapping in repositories/user.py keeps working.
     bind = op.get_bind()
     dialect = bind.dialect.name
 
@@ -41,12 +32,6 @@ def upgrade() -> None:
             postgresql_where="removed = false",
         )
     else:
-        # SQLite (test DB). SQLite cannot ALTER TABLE ... DROP CONSTRAINT, but it
-        # DOES support partial indexes. Drop the old unique constraints/indexes
-        # by name if present (they may be table-level constraints created by
-        # create_all rather than the migration), then create the partial ones.
-        # Both statements are IF EXISTS so this path is safe whether the base
-        # schema came from this migration chain or from Base.metadata.create_all.
         op.execute("DROP INDEX IF EXISTS uq_users_username")
         op.execute("DROP INDEX IF EXISTS uq_users_email")
         op.create_index(
@@ -69,7 +54,14 @@ def downgrade() -> None:
     bind = op.get_bind()
     dialect = bind.dialect.name
 
+    dedup = (
+        "UPDATE users SET {col} = {col} || '#deleted-' || id::text "
+        "WHERE removed = true AND {col} IN "
+        "(SELECT {col} FROM users WHERE removed = false)"
+    )
     if dialect == "postgresql":
+        op.execute(dedup.format(col="username"))
+        op.execute(dedup.format(col="email"))
         op.drop_index("uq_users_username", table_name="users")
         op.drop_index("uq_users_email", table_name="users")
         op.create_unique_constraint("uq_users_username", "users", ["username"])
@@ -77,6 +69,5 @@ def downgrade() -> None:
     else:
         op.execute("DROP INDEX IF EXISTS uq_users_username")
         op.execute("DROP INDEX IF EXISTS uq_users_email")
-        # Restore plain (full) unique indexes under the same names on SQLite.
         op.create_index("uq_users_username", "users", ["username"], unique=True)
         op.create_index("uq_users_email", "users", ["email"], unique=True)

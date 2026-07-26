@@ -3,7 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 
-from app.subscription.formats.base import FormatRenderError, label, setting, setting_int
+from app.subscription.formats.base import (
+    FormatRenderError,
+    label,
+    normalize_alpn,
+    setting,
+    setting_int,
+)
 from app.subscription.formats.capabilities import supported_protocols
 from app.subscription.models import ProviderConfig
 from app.subscription.schemas import SubscriptionFormat
@@ -54,8 +60,9 @@ def _stream(config: ProviderConfig) -> dict:
 
     if security == "tls":
         tls: dict = {"serverName": str(setting(config, "sni", host))}
-        if setting(config, "alpn", ""):
-            tls["alpn"] = [a for a in str(setting(config, "alpn", "")).split(",") if a]
+        alpn = normalize_alpn(config)
+        if alpn:
+            tls["alpn"] = alpn
         if setting(config, "fingerprint", ""):
             tls["fingerprint"] = str(setting(config, "fingerprint", ""))
 

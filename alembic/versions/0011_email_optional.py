@@ -16,4 +16,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("UPDATE users SET email = '' WHERE email IS NULL")
     op.alter_column("users", "email", existing_type=sa.String(320), nullable=False)

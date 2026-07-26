@@ -57,6 +57,16 @@ async def test_fixed_date_strategy(client: AsyncClient, admin_headers: dict) -> 
     assert user["on_hold"] is False
 
 
+async def test_patch_accepts_naive_expire_at(client: AsyncClient, admin_headers: dict) -> None:
+    user = await _create_user(client, admin_headers)
+    resp = await client.patch(
+        f"{USERS}/{user['id']}",
+        headers=admin_headers,
+        json={"expire_strategy": "fixed_date", "expire_at": "2099-01-01T00:00:00"},
+    )
+    assert resp.status_code == 200, resp.text
+
+
 async def test_start_on_first_use_sets_on_hold(client: AsyncClient, admin_headers: dict) -> None:
     deadline = (datetime.now(UTC) + timedelta(days=7)).isoformat()
     user = await _create_user(

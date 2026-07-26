@@ -3,7 +3,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.subscription.formats.base import FormatRenderError, setting, setting_int, validate_node
+from app.subscription.formats.base import (
+    FormatRenderError,
+    normalize_alpn,
+    setting,
+    setting_int,
+    validate_node,
+)
 from app.subscription.models import ProviderConfig
 
 
@@ -34,9 +40,9 @@ def _tls_block(config: ProviderConfig) -> dict[str, Any] | None:
             "public_key": public_key,
             "short_id": short_id,
         }
-    alpn = str(setting(config, "alpn", "") or "").strip()
+    alpn = normalize_alpn(config)
     if alpn:
-        block["alpn"] = [a.strip() for a in alpn.split(",") if a.strip()]
+        block["alpn"] = alpn
     if setting(config, "allowInsecure"):
         block["insecure"] = True
     return block
@@ -155,6 +161,16 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
             details={"protocol": protocol},
         )
     tls = _tls_block(config)
+    if tls is None and protocol in ("hysteria2", "tuic"):
+        tls = {
+            "enabled": True,
+            "server_name": str(setting(config, "sni", "") or config.host),
+        }
+        alpn = normalize_alpn(config)
+        if alpn:
+            tls["alpn"] = alpn
+        if setting(config, "allowInsecure"):
+            tls["insecure"] = True
     if tls is not None:
         base["tls"] = tls
     transport = _transport_block(config)

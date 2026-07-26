@@ -169,10 +169,13 @@ class UserServiceBase:
         if not user.is_active or user.removed:
             return
         now = datetime.now(UTC)
+        expire_at = user.expire_at
+        if expire_at is not None and expire_at.tzinfo is None:
+            expire_at = expire_at.replace(tzinfo=UTC)
         under_limit = (
             user.data_limit_bytes is None or (user.users_data_usage or 0) < user.data_limit_bytes
         )
-        not_expired = user.expire_at is None or user.expire_at > now
+        not_expired = expire_at is None or expire_at > now
         recover = []
         if under_limit:
             recover.append(AssignmentStatus.LIMITED)
