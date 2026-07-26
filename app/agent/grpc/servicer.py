@@ -177,7 +177,7 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
             for s in request.samples
             if (aid := _maybe_uuid(s.assignment_id)) is not None
         ]
-        await service.report(iter(pairs))
+        await service.report(iter(pairs), node_id=nid)
         return pb.Ack(accepted=len(pairs), dropped=len(request.samples) - len(pairs))
 
     async def ReportProviderHealth(self, request: pb.ProviderHealthBatch, context) -> pb.Ack:
