@@ -29,10 +29,11 @@ import {
 } from "@/shared/warp-table";
 import { DgAddUser } from "@/components/console/dg-icons";
 import { type TranslateFn, useT } from "@/lib/i18n";
+import { formatDate } from "@/lib/format";
 
 function fmtDate(iso: string | null, t: TranslateFn): string {
   if (!iso) return t("common.never");
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 function relTime(iso: string | null, t: TranslateFn): string {
@@ -41,7 +42,7 @@ function relTime(iso: string | null, t: TranslateFn): string {
   if (s < 60) return t("common.secondsAgo", { n: s });
   if (s < 3600) return t("common.minutesAgo", { n: Math.floor(s / 60) });
   if (s < 86400) return t("common.hoursAgo", { n: Math.floor(s / 3600) });
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 export function ApiKeysScreen() {

@@ -9,6 +9,7 @@ import { useT } from "@/lib/i18n";
 import { SettingsRow } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { formatDateTime } from "@/lib/format";
 
 function prometheusUrl(): string {
   if (typeof window === "undefined") return "";
@@ -49,7 +50,7 @@ export function MetricsSettingsScreen() {
         </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection divider icon={Activity} title={t("metrics.currentValues")} description={q.data?.collected_at ? t("metrics.collectedAt", { time: new Date(q.data.collected_at).toLocaleString() }) : t("metrics.currentValuesDescription")}>
+      <SettingsSection divider icon={Activity} title={t("metrics.currentValues")} description={q.data?.collected_at ? t("metrics.collectedAt", { time: formatDateTime(q.data.collected_at) }) : t("metrics.currentValuesDescription")}>
         <WarpTableCard className="warp-users-table warp-edge-table">
           <WarpHead cols={[t("metrics.col.metric"), t("metrics.col.labels"), t("metrics.col.value")]} />
           {q.isLoading ? (

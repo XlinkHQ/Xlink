@@ -9,6 +9,7 @@ import { DatePicker } from "@/components/ui/calendar";
 import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 import { DgSearch } from "@/components/console/dg-icons";
 import { type TranslateFn, useT } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/format";
 
 type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";
 
@@ -26,7 +27,7 @@ function relTime(iso: string, t: TranslateFn): string {
   if (s < 60) return t("common.secondsAgo", { n: s });
   if (s < 3600) return t("common.minutesAgo", { n: Math.floor(s / 60) });
   if (s < 86400) return t("common.hoursAgo", { n: Math.floor(s / 3600) });
-  return new Date(d).toLocaleString();
+  return formatDateTime(d);
 }
 
 function cap(s: string): string {
@@ -121,7 +122,7 @@ export function AuditLogScreen() {
               <WarpRow
                 key={e.id}
                 cells={[
-                  <span key="date" title={new Date(e.created_at).toLocaleString()}>
+                  <span key="date" title={formatDateTime(e.created_at)}>
                     {relTime(e.created_at, t)}
                   </span>,
                   e.actor_username || "—",

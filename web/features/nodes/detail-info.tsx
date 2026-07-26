@@ -20,7 +20,7 @@ import {
 import { Activity, ArrowRightLeft, Cpu, Info, KeyRound } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
-import { bytes } from "@/lib/format";
+import { bytes, formatDateTime } from "@/lib/format";
 import { MetricsAreaChart, UsageAreaChart } from "@/shared/usage-chart";
 import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 import { SettingsSection } from "@/shared/settings-kit";
@@ -184,7 +184,7 @@ export function NodeInfo({ node }: { node: NodeRead }) {
                   <span className="font-medium">{c.provider_name}</span>,
                   <span className={`warp-badge ${coreOk(c.status) ? "success" : "critical"}`}>{c.status}</span>,
                   <span className="text-fg-muted">{c.latency_ms != null ? `${Math.round(c.latency_ms)} ms` : "—"}</span>,
-                  <span className="text-fg-muted">{c.checked_at ? new Date(c.checked_at).toLocaleString() : "—"}</span>,
+                  <span className="text-fg-muted">{c.checked_at ? formatDateTime(c.checked_at) : "—"}</span>,
                 ]}
               />
             ))

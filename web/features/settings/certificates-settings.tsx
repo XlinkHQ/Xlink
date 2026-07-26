@@ -18,10 +18,11 @@ import {
 import { useT } from "@/lib/i18n";
 import { SettingsSection } from "@/shared/settings-kit";
 import { WarpError } from "@/shared/warp-table";
+import { formatDate } from "@/lib/format";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 function daysLeft(iso: string | null): number | null {

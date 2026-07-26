@@ -117,7 +117,7 @@ export function DatePicker({
   }, [open]);
 
   const label = selected
-    ? selected.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+    ? selected.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
     : placeholder;
 
   return (

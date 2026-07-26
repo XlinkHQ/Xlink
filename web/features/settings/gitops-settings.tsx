@@ -8,6 +8,7 @@ import { type GitOpsRecordRead, gitopsRecords } from "@/lib/api";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { SettingsSection } from "@/shared/settings-kit";
 import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { formatDate, formatDateTime } from "@/lib/format";
 
 function relTime(iso: string, t: TranslateFn): string {
   const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
@@ -15,7 +16,7 @@ function relTime(iso: string, t: TranslateFn): string {
   if (s < 3600) return t("common.relTime.minutes", { n: Math.floor(s / 60) });
   if (s < 86400) return t("common.relTime.hours", { n: Math.floor(s / 3600) });
   if (s < 2592000) return t("common.relTime.days", { n: Math.floor(s / 86400) });
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 function actionVariant(a: string): string {
@@ -67,7 +68,7 @@ export function GitOpsSettingsScreen() {
                 key={r.id}
                 onClick={() => setDetail(r)}
                 cells={[
-                  <span className="text-fg-muted" title={new Date(r.created_at).toLocaleString()}>{relTime(r.created_at, t)}</span>,
+                  <span className="text-fg-muted" title={formatDateTime(r.created_at)}>{relTime(r.created_at, t)}</span>,
                   <span className="font-medium">{r.entity_type}</span>,
                   <span className={`warp-badge ${actionVariant(r.action)}`}>{r.action}</span>,
                   <span className="text-fg-muted">{r.actor || "—"}</span>,
@@ -91,7 +92,7 @@ export function GitOpsSettingsScreen() {
           }
         >
           <p className="text-sm text-fg-muted" style={{ marginBottom: 12 }}>
-            {detail.actor ? `${t("gitops.by", { actor: detail.actor })} · ` : ""}{new Date(detail.created_at).toLocaleString()}
+            {detail.actor ? `${t("gitops.by", { actor: detail.actor })} · ` : ""}{formatDateTime(detail.created_at)}
             {detail.message ? ` · ${detail.message}` : ""}
           </p>
           <DiffBlock title={t("gitops.diff.added")} tone="success" obj={detail.diff.added} />

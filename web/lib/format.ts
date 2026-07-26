@@ -22,3 +22,13 @@ export function bytes(v: number): string {
   return `${size.toFixed(1)} ${units[i]}`;
 }
 
+const DATE_LOCALE = "en-US";
+
+export function formatDate(iso: string | number | Date): string {
+  return new Date(iso).toLocaleDateString(DATE_LOCALE);
+}
+
+export function formatDateTime(iso: string | number | Date): string {
+  return new Date(iso).toLocaleString(DATE_LOCALE);
+}
+

@@ -7,7 +7,7 @@ import { type UserRead } from "@/lib/api";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { userStatus } from "@/lib/status";
 import { cn } from "@/lib/cn";
-import { bytes } from "@/lib/format";
+import { bytes, formatDate, formatDateTime } from "@/lib/format";
 import { SettingsSection } from "@/shared/settings-kit";
 import {
   AccessManager,
@@ -104,7 +104,7 @@ export function UserProfileView({
                   : <Badge variant="success">{t("users.status.active")}</Badge>
               } />
               <PdRow label={t("users.field.expiration")} value={
-                user.expire_at ? new Date(user.expire_at).toLocaleDateString() : t("users.value.never")
+                user.expire_at ? formatDate(user.expire_at) : t("users.value.never")
               } />
               <PdRow label={t("users.field.dataLimit")} value={
                 user.data_limit_bytes ? bytes(user.data_limit_bytes) : t("users.value.unlimited")
@@ -115,7 +115,7 @@ export function UserProfileView({
               } />
               <PdRow label={t("users.field.owner")} value={user.owner_id ? user.owner_id.slice(0, 8) : "—"} />
               <PdRow label={t("users.field.created")} value={
-                user.created_at ? new Date(user.created_at).toLocaleString() : "—"
+                user.created_at ? formatDateTime(user.created_at) : "—"
               } />
             </div>
           </SettingsSection>
