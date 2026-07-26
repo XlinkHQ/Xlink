@@ -21,28 +21,31 @@ import { AlertTriangle, Copy } from "lucide-react";
 import {
   WarpButton,
   WarpEmpty,
+  WarpError,
   WarpHead,
   WarpRow,
   WarpSkeleton,
   WarpTableCard,
 } from "@/shared/warp-table";
 import { DgAddUser } from "@/components/console/dg-icons";
+import { type TranslateFn, useT } from "@/lib/i18n";
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return "Never";
+function fmtDate(iso: string | null, t: TranslateFn): string {
+  if (!iso) return t("common.never");
   return new Date(iso).toLocaleDateString();
 }
 
-function relTime(iso: string | null): string {
-  if (!iso) return "Never";
+function relTime(iso: string | null, t: TranslateFn): string {
+  if (!iso) return t("common.never");
   const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 60) return t("common.secondsAgo", { n: s });
+  if (s < 3600) return t("common.minutesAgo", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("common.hoursAgo", { n: Math.floor(s / 3600) });
   return new Date(iso).toLocaleDateString();
 }
 
 export function ApiKeysScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const q = useInfiniteQuery({
     queryKey: ["api-keys"],
@@ -73,62 +76,64 @@ export function ApiKeysScreen() {
       setFresh(res.token);
       reload();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Could not create key.");
+      toast("error", e instanceof ApiError ? e.message : t("apikeys.createFailed"));
     } finally {
       setBusy(false);
     }
   };
 
   const revoke = async (k: ApiKey) => {
-    if (!(await confirmDialog({ title: `Disable key "${k.name || k.prefix}"?`, message: "Any automation using it stops working.", confirmLabel: "Disable", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("apikeys.disableConfirmTitle", { name: k.name || k.prefix }), message: t("apikeys.disableConfirmMessage"), confirmLabel: t("apikeys.disable"), danger: true }))) return;
     try {
       await revokeApiKey(k.id);
-      toast("success", "Key disabled.");
+      toast("success", t("apikeys.keyDisabled"));
       reload();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Disable failed.");
+      toast("error", e instanceof ApiError ? e.message : t("apikeys.disableFailed"));
     }
   };
 
   const enable = async (k: ApiKey) => {
     try {
       await enableApiKey(k.id);
-      toast("success", "Key enabled.");
+      toast("success", t("apikeys.keyEnabled"));
       reload();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Enable failed.");
+      toast("error", e instanceof ApiError ? e.message : t("apikeys.enableFailed"));
     }
   };
 
   const purge = async (k: ApiKey) => {
-    if (!(await confirmDialog({ title: `Delete key "${k.name || k.prefix}"?`, message: "This permanently removes the key and cannot be undone.", confirmLabel: "Delete", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("apikeys.deleteConfirmTitle", { name: k.name || k.prefix }), message: t("apikeys.deleteConfirmMessage"), confirmLabel: t("action.delete"), danger: true }))) return;
     try {
       await purgeApiKey(k.id);
-      toast("success", "Key deleted.");
+      toast("success", t("apikeys.keyDeleted"));
       reload();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Delete failed.");
+      toast("error", e instanceof ApiError ? e.message : t("apikeys.deleteFailed"));
     }
   };
 
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="warp-table-top">
-        <span className="title">API keys</span>
+        <span className="title">{t("apikeys.title")}</span>
         <div className="right">
           <WarpButton primary onClick={openAdd}>
-            <DgAddUser size={16} /> Add key
+            <DgAddUser size={16} /> {t("apikeys.addKey")}
           </WarpButton>
         </div>
       </div>
 
       <WarpTableCard className="warp-users-table">
-        <WarpHead cols={["Name", "Last used", "Created"]} actions />
+        <WarpHead cols={[t("common.name"), t("apikeys.lastUsed"), t("common.created")]} actions />
         {q.isLoading ? (
           <WarpSkeleton />
+        ) : q.isError ? (
+          <WarpError onRetry={() => q.refetch()} />
         ) : keys.length === 0 ? (
           <WarpEmpty>
-            No API keys yet. Create one to automate the panel.
+            {t("apikeys.noKeys")}
           </WarpEmpty>
         ) : (
           keys.map((k) => (
@@ -136,14 +141,14 @@ export function ApiKeysScreen() {
               key={k.id}
               menu={[
                 k.revoked_at
-                  ? { label: "Enable", icon: "enable", onClick: () => enable(k) }
-                  : { label: "Disable", icon: "disable", onClick: () => revoke(k) },
-                { label: "Delete", icon: "trash", danger: true, onClick: () => purge(k) },
+                  ? { label: t("action.enable"), icon: "enable", onClick: () => enable(k) }
+                  : { label: t("action.disable"), icon: "disable", onClick: () => revoke(k) },
+                { label: t("action.delete"), icon: "trash", danger: true, onClick: () => purge(k) },
               ]}
               cells={[
                 <span className="font-medium">{k.name || `xlk_${k.prefix}…`}</span>,
-                <span className="text-fg-muted">{relTime(k.last_used_at)}</span>,
-                <span className="text-fg-muted">{fmtDate(k.created_at)}</span>,
+                <span className="text-fg-muted">{relTime(k.last_used_at, t)}</span>,
+                <span className="text-fg-muted">{fmtDate(k.created_at, t)}</span>,
               ]}
             />
           ))
@@ -158,14 +163,14 @@ export function ApiKeysScreen() {
             onClick={() => q.fetchNextPage()}
             disabled={q.isFetchingNextPage}
           >
-            {q.isFetchingNextPage ? "Loading…" : "Load more"}
+            {q.isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
           </button>
         </div>
       ) : null}
 
       {adding ? (
         <Modal
-          title="Add API key"
+          title={t("apikeys.addKeyTitle")}
           onClose={() => setAdding(false)}
           onSubmit={(e) => {
             e.preventDefault();
@@ -174,43 +179,43 @@ export function ApiKeysScreen() {
           footer={
             <>
               <button type="button" className="warp-tb-button" onClick={() => setAdding(false)} disabled={busy}>
-                Cancel
+                {t("action.cancel")}
               </button>
               <button type="submit" className="warp-tb-button warp-tb-button-primary" disabled={busy}>
-                {busy ? "Creating…" : "Create"}
+                {busy ? t("common.creating") : t("action.create")}
               </button>
             </>
           }
         >
-          <Field label="Name" hint="A label to recognise this key later.">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CI deploy" autoFocus autoComplete="off" />
+          <Field label={t("common.name")} hint={t("apikeys.nameHint")}>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("apikeys.namePlaceholder")} autoFocus autoComplete="off" />
           </Field>
         </Modal>
       ) : null}
 
       {fresh ? (
         <Modal
-          title="API key created"
+          title={t("apikeys.createdTitle")}
           onClose={() => setFresh(null)}
           footer={
             <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={() => setFresh(null)}>
-              Close
+              {t("action.close")}
             </button>
           }
         >
           <div className="warp-totp-banner">
             <AlertTriangle size={16} strokeWidth={1.9} aria-hidden />
-            <span>Copy this key now — for security it is shown only once and can’t be retrieved later.</span>
+            <span>{t("apikeys.copyOnceWarning")}</span>
           </div>
           <label className="warp-totp-field">
-            <span className="warp-totp-label">API key</span>
+            <span className="warp-totp-label">{t("apikeys.apiKey")}</span>
             <button
               type="button"
               className="warp-totp-copy"
-              title="Copy API key"
+              title={t("apikeys.copyApiKey")}
               onClick={() => {
                 void copyText(fresh);
-                toast("success", "API key copied.");
+                toast("success", t("apikeys.apiKeyCopied"));
               }}
             >
               <code>{fresh}</code>

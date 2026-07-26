@@ -11,6 +11,7 @@ import { isNodeOnline, relativeTime } from "@/lib/status";
 import { baseAreaOptions, CHART_COLORS } from "@/shared/usage-chart";
 import { toGiB } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
+import { useT } from "@/lib/i18n";
 
 const OS_LOGOS: Record<string, string> = {
   ubuntu: "/warp/os/ubuntu.png",
@@ -138,6 +139,7 @@ function ResourceCard({
 }
 
 export function DashboardScreen() {
+  const t = useT();
   const dark = useTheme() === "dark";
   const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 1000, refetchIntervalInBackground: false });
   const nodesQ = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes(), refetchInterval: 10000, refetchIntervalInBackground: false });
@@ -145,7 +147,7 @@ export function DashboardScreen() {
 
   const s = q.data;
   const nodes = (nodesQ.data?.items ?? []) as NodeRead[];
-  const t = trafficQ.data;
+  const traffic = trafficQ.data;
 
   const ramPct = s && s.ram_total_bytes > 0 ? Math.round((s.ram_used_bytes / s.ram_total_bytes) * 100) : 0;
   const diskPct = s && s.disk_total_bytes > 0 ? Math.round((s.disk_used_bytes / s.disk_total_bytes) * 100) : 0;
@@ -156,10 +158,10 @@ export function DashboardScreen() {
   const [up, setUp] = useState<{ x: number; y: number }[]>([]);
   const prevTotals = useRef<{ d: number; u: number; at: number } | null>(null);
   useEffect(() => {
-    if (!t) return;
+    if (!traffic) return;
     const now = trafficQ.dataUpdatedAt || Date.now();
-    const dBytes = t.download_bytes;
-    const uBytes = t.upload_bytes;
+    const dBytes = traffic.download_bytes;
+    const uBytes = traffic.upload_bytes;
     const prev = prevTotals.current;
     prevTotals.current = { d: dBytes, u: uBytes, at: now };
     if (!prev) return;
@@ -188,9 +190,9 @@ export function DashboardScreen() {
   const onRestart = async () => {
     try {
       await restartPanel();
-      toast("success", "Panel is restarting…");
+      toast("success", t("dashboard.restarting"));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Restart failed.");
+      toast("error", e instanceof ApiError ? e.message : t("dashboard.restartFailed"));
     }
   };
 
@@ -218,49 +220,49 @@ export function DashboardScreen() {
     },
   };
   const chartSeries = [
-    { name: "Download", data: down },
-    { name: "Upload", data: up },
+    { name: t("dashboard.download"), data: down },
+    { name: t("dashboard.upload"), data: up },
   ];
 
   return (
     <div className="warp-panel">
-      <OverviewCard title="Overview">
+      <OverviewCard title={t("dashboard.overview")}>
         <div className="warp-stats-summary">
           <div className="warp-stats-track">
             <Stat
               icon={<Radio size={20} strokeWidth={ICON_STROKE} />}
-              label="Nodes online"
+              label={t("dashboard.nodesOnline")}
               count={onlineNodes}
-              sub={{ label: "Total nodes", value: `${nodes.length}` }}
+              sub={{ label: t("dashboard.totalNodes"), value: `${nodes.length}` }}
             />
             <Stat
               icon={<Users size={20} strokeWidth={ICON_STROKE} />}
-              label="Recent activity"
+              label={t("dashboard.recentActivity")}
               count={activity.length}
             />
-            <Stat icon={<ArrowUp size={20} strokeWidth={ICON_STROKE} />} label="Network usage">
+            <Stat icon={<ArrowUp size={20} strokeWidth={ICON_STROKE} />} label={t("dashboard.networkUsage")}>
               <div className="warp-transfer-bar download">
                 <div className="left">
                   <ArrowDown size={20} strokeWidth={ICON_STROKE} />
-                  <p>In</p>
+                  <p>{t("dashboard.in")}</p>
                 </div>
-                <div className="right">{gb(t?.download_bytes ?? 0)} GiB</div>
+                <div className="right">{gb(traffic?.download_bytes ?? 0)} GiB</div>
               </div>
               <div className="warp-transfer-bar upload">
                 <div className="left">
                   <ArrowUp size={20} strokeWidth={ICON_STROKE} />
-                  <p>Out</p>
+                  <p>{t("dashboard.out")}</p>
                 </div>
-                <div className="right">{gb(t?.upload_bytes ?? 0)} GiB</div>
+                <div className="right">{gb(traffic?.upload_bytes ?? 0)} GiB</div>
               </div>
             </Stat>
           </div>
 
           <div className="warp-transfer-section">
             <div className="warp-transfer-top">
-              <p>Network Traffic</p>
+              <p>{t("dashboard.networkTraffic")}</p>
               <div className="right">
-                <span className="peak">Peak</span>
+                <span className="peak">{t("dashboard.peak")}</span>
                 <span className="warp-peak-down">{fmtRate(peakDown)}</span>
                 <span className="sep">/</span>
                 <span className="warp-peak-up">{fmtRate(peakUp)}</span>
@@ -273,7 +275,7 @@ export function DashboardScreen() {
                 className="grid place-items-center text-sm text-fg-muted"
                 style={{ height: 250 }}
               >
-                Waiting for live traffic…
+                {t("dashboard.waitingForTraffic")}
               </div>
             )}
           </div>
@@ -283,29 +285,29 @@ export function DashboardScreen() {
       <div className="warp-grid-3">
         <ResourceCard
           icon={<Cpu size={16} strokeWidth={ICON_STROKE} />}
-          title="CPU"
-          status={s ? "Running" : "…"}
+          title={t("dashboard.cpu")}
+          status={s ? t("dashboard.running") : "…"}
           pct={cpuPct}
-          rows={[["Cores", `${s?.cpu_cores ?? 0}`], ["Processes", `${s?.process_count ?? 0}`], ["Load", `${(s?.load_avg_1 ?? 0).toFixed(2)}`]]}
+          rows={[[t("dashboard.cores"), `${s?.cpu_cores ?? 0}`], [t("dashboard.processes"), `${s?.process_count ?? 0}`], [t("dashboard.load"), `${(s?.load_avg_1 ?? 0).toFixed(2)}`]]}
         />
         <ResourceCard
           icon={<MemoryStick size={16} strokeWidth={ICON_STROKE} />}
-          title="RAM"
-          status={s ? "Running" : "…"}
+          title={t("dashboard.ram")}
+          status={s ? t("dashboard.running") : "…"}
           pct={ramPct}
-          rows={[["Used", `${gb(s?.ram_used_bytes ?? 0)} GiB`], ["Total", `${gb(s?.ram_total_bytes ?? 0)} GiB`], ["Free", `${gb(Math.max(0, (s?.ram_total_bytes ?? 0) - (s?.ram_used_bytes ?? 0)))} GiB`]]}
+          rows={[[t("dashboard.used"), `${gb(s?.ram_used_bytes ?? 0)} GiB`], [t("dashboard.total"), `${gb(s?.ram_total_bytes ?? 0)} GiB`], [t("dashboard.free"), `${gb(Math.max(0, (s?.ram_total_bytes ?? 0) - (s?.ram_used_bytes ?? 0)))} GiB`]]}
         />
         <ResourceCard
           icon={<HardDrive size={16} strokeWidth={ICON_STROKE} />}
-          title="Disk"
-          status={s ? "Running" : "…"}
+          title={t("dashboard.disk")}
+          status={s ? t("dashboard.running") : "…"}
           pct={diskPct}
-          rows={[["Used", `${gb(s?.disk_used_bytes ?? 0)} GiB`], ["Total", `${gb(s?.disk_total_bytes ?? 0)} GiB`], ["Swap", `${gb(s?.swap_used_bytes ?? 0)} GiB`]]}
+          rows={[[t("dashboard.used"), `${gb(s?.disk_used_bytes ?? 0)} GiB`], [t("dashboard.total"), `${gb(s?.disk_total_bytes ?? 0)} GiB`], [t("dashboard.swap"), `${gb(s?.swap_used_bytes ?? 0)} GiB`]]}
         />
       </div>
 
       <div className="warp-grid-2">
-        <OverviewCard title="System Info">
+        <OverviewCard title={t("dashboard.systemInfo")}>
           <div className="warp-si-grid">
             <div className="warp-si-box">
               <Podcast className="warp-si-rowicon" size={15} aria-hidden />
@@ -317,7 +319,7 @@ export function DashboardScreen() {
 
             <div className="warp-si-box">
               <Monitor className="warp-si-rowicon" size={15} aria-hidden />
-              <h5>OS</h5>
+              <h5>{t("dashboard.os")}</h5>
               <span className="warp-si-badge">
                 {osLogo(s?.os_slug) ? <img src={osLogo(s?.os_slug) as string} alt="" /> : null}
                 <span>{s?.os_name || "—"}</span>
@@ -326,7 +328,7 @@ export function DashboardScreen() {
 
             <div className="warp-si-box">
               <Cpu className="warp-si-rowicon" size={15} aria-hidden />
-              <h5>Kernel</h5>
+              <h5>{t("dashboard.kernel")}</h5>
               <span className="warp-si-badge">
                 {s?.kernel ? `${s.kernel} (${s.arch})` : "—"}
               </span>
@@ -334,7 +336,7 @@ export function DashboardScreen() {
 
             <div className="warp-si-box">
               <Package className="warp-si-rowicon" size={15} aria-hidden />
-              <h5>Panel Version</h5>
+              <h5>{t("dashboard.panelVersion")}</h5>
               <span className="warp-si-badge">
                 <span>{s?.app_version ? `v${s.app_version}` : "—"}</span>
               </span>
@@ -342,26 +344,26 @@ export function DashboardScreen() {
 
             <div className="warp-si-box">
               <Zap className="warp-si-rowicon" size={15} aria-hidden />
-              <h5>Status</h5>
+              <h5>{t("dashboard.status")}</h5>
               <span className={`warp-si-status ${s ? "is-on" : "is-off"}`}>
-                {s ? "Running" : "Offline"}
+                {s ? t("dashboard.running") : t("dashboard.offline")}
               </span>
               <button type="button" className="warp-si-restart" onClick={onRestart}>
-                <RotateCw size={13} aria-hidden /> Restart
+                <RotateCw size={13} aria-hidden /> {t("dashboard.restart")}
               </button>
             </div>
 
             <div className="warp-si-box">
               <Clock className="warp-si-rowicon" size={15} aria-hidden />
-              <h5>Uptime</h5>
+              <h5>{t("dashboard.uptime")}</h5>
               <span className="warp-si-badge">{fmtUptime(s?.uptime_seconds ?? 0)}</span>
             </div>
           </div>
         </OverviewCard>
 
-        <OverviewCard title="Node Activity">
+        <OverviewCard title={t("dashboard.nodeActivity")}>
           {activity.length === 0 ? (
-            <p className="warp-log-empty">No recent node activity.</p>
+            <p className="warp-log-empty">{t("dashboard.noRecentActivity")}</p>
           ) : (
             <div className="warp-si-grid">
               {activity.map((n) => {

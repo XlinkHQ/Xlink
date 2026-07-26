@@ -25,6 +25,7 @@ import {
 } from "@/lib/api";
 import { CodeEditor } from "./code-editor";
 import { Modal } from "@/components/ui/modal";
+import { useT } from "@/lib/i18n";
 import { SettingsRow, useRegisterSave } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 import { WarpBadge } from "@/shared/warp-table";
@@ -86,6 +87,7 @@ const RULE_RESULTS: SubscriptionRuleResult[] = [
 ];
 
 export function SubscriptionSettingsScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["sub-settings"], queryFn: () => getSubscriptionSettings() });
   const [title, setTitle] = useState("");
@@ -149,10 +151,10 @@ export function SubscriptionSettingsScreen() {
         custom_page_html: customHtml,
         rules: rules.filter((r) => r.pattern.trim() !== ""),
       });
-      toast("success", "Subscription settings saved.");
+      toast("success", t("subscription.saved"));
       qc.setQueryData(["sub-settings"], saved);
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Save failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -163,19 +165,19 @@ export function SubscriptionSettingsScreen() {
     <div className="w-full">
       <SettingsSection
         icon={Settings2}
-        title="General"
-        description="Core subscription details shown to clients when they load the profile."
+        title={t("subscription.generalTitle")}
+        description={t("subscription.generalDesc")}
       >
-        <SettingsRow label="Profile title" hint="Shown as the subscription profile name in client apps.">
+        <SettingsRow label={t("subscription.profileTitle")} hint={t("subscription.profileTitleHint")}>
           <input className="warp-set-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="XLink" />
         </SettingsRow>
-        <SettingsRow label="Update interval" hint="How often clients refresh (hours).">
+        <SettingsRow label={t("subscription.updateInterval")} hint={t("subscription.updateIntervalHint")}>
           <input className="warp-set-input" type="number" min="1" max="168" value={interval} onChange={(e) => setIntervalH(e.target.value)} />
         </SettingsRow>
-        <SettingsRow label="Support link" hint="Shown to users on the subscription page.">
+        <SettingsRow label={t("subscription.supportLink")} hint={t("subscription.supportLinkHint")}>
           <input className="warp-set-input" value={support} onChange={(e) => setSupport(e.target.value)} placeholder="https://t.me/yoursupport" />
         </SettingsRow>
-        <SettingsRow label="Config name" hint="Template for each config's display name.">
+        <SettingsRow label={t("subscription.configName")} hint={t("subscription.configNameHint")}>
           <input className="warp-set-input font-mono" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="{PROTOCOL} | {USERNAME}" />
         </SettingsRow>
       </SettingsSection>
@@ -183,20 +185,20 @@ export function SubscriptionSettingsScreen() {
       <SettingsSection
         divider
         icon={Tags}
-        title="Status labels"
-        description="Rename the label appended to each config for the user's current account state."
+        title={t("subscription.statusLabelsTitle")}
+        description={t("subscription.statusLabelsDesc")}
       >
         {(
           [
-            ["active", "Active config label"],
-            ["expired", "Expired config label"],
-            ["limited", "Limited config label"],
-            ["disabled", "Disabled config label"],
-            ["onhold", "On-hold config label"],
+            ["active", t("subscription.activeLabel")],
+            ["expired", t("subscription.expiredLabel")],
+            ["limited", t("subscription.limitedLabel")],
+            ["disabled", t("subscription.disabledLabel")],
+            ["onhold", t("subscription.onholdLabel")],
           ] as Array<[keyof typeof texts, string]>
         ).map(([key, label]) => (
           <SettingsRow key={key} label={label}>
-            <input className="warp-set-input" value={texts[key]} onChange={(e) => setTexts((t) => ({ ...t, [key]: e.target.value }))} placeholder={label} />
+            <input className="warp-set-input" value={texts[key]} onChange={(e) => setTexts((prev) => ({ ...prev, [key]: e.target.value }))} placeholder={label} />
           </SettingsRow>
         ))}
       </SettingsSection>
@@ -204,18 +206,18 @@ export function SubscriptionSettingsScreen() {
       <SettingsSection
         divider
         icon={SlidersHorizontal}
-        title="Delivery behavior"
-        description="Control how configs are ordered and what inactive users receive."
+        title={t("subscription.deliveryTitle")}
+        description={t("subscription.deliveryDesc")}
       >
-        <SettingsRow label="Shuffle configs" hint="Randomise config order on every fetch to spread client load.">
+        <SettingsRow label={t("subscription.shuffle")} hint={t("subscription.shuffleHint")}>
           <Switch checked={shuffle} onChange={setShuffle} />
         </SettingsRow>
-        <SettingsRow label="Placeholder when disabled" hint="Serve one dummy config to expired/limited/disabled users.">
+        <SettingsRow label={t("subscription.placeholderWhenDisabled")} hint={t("subscription.placeholderWhenDisabledHint")}>
           <Switch checked={placeholderOn} onChange={setPlaceholderOn} />
         </SettingsRow>
         {placeholderOn ? (
-          <SettingsRow label="Placeholder config name" hint="The dummy config name shown to inactive users.">
-            <input className="warp-set-input" value={placeholderRemark} onChange={(e) => setPlaceholderRemark(e.target.value)} placeholder="Subscription expired — contact support" />
+          <SettingsRow label={t("subscription.placeholderConfigName")} hint={t("subscription.placeholderConfigNameHint")}>
+            <input className="warp-set-input" value={placeholderRemark} onChange={(e) => setPlaceholderRemark(e.target.value)} placeholder={t("subscription.placeholderConfigPlaceholder")} />
           </SettingsRow>
         ) : null}
       </SettingsSection>
@@ -223,17 +225,17 @@ export function SubscriptionSettingsScreen() {
       <SettingsSection
         divider
         icon={FileCode}
-        title="Custom subscription page"
+        title={t("subscription.customPageTitle")}
         description={
           customHtml.trim()
-            ? "A custom HTML page is set — shown when the link opens in a browser."
-            : "Leave empty to use the built-in page."
+            ? t("subscription.customPageSetDesc")
+            : t("subscription.customPageEmptyDesc")
         }
       >
         <div className="flex items-center justify-end gap-1.5">
-          {customHtml.trim() ? <WarpBadge tone="green">Custom</WarpBadge> : <WarpBadge tone="gray">Default</WarpBadge>}
+          {customHtml.trim() ? <WarpBadge tone="green">{t("subscription.customBadge")}</WarpBadge> : <WarpBadge tone="gray">{t("subscription.defaultBadge")}</WarpBadge>}
           <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={() => setEditorOpen(true)}>
-            <Pencil size={14} aria-hidden /> Edit
+            <Pencil size={14} aria-hidden /> {t("action.edit")}
           </button>
         </div>
       </SettingsSection>
@@ -249,8 +251,8 @@ export function SubscriptionSettingsScreen() {
       <SettingsSection
         divider
         icon={ListFilter}
-        title="User-Agent rules"
-        description="First match wins; regex on the client User-Agent maps to a format (or block)."
+        title={t("subscription.uaRulesTitle")}
+        description={t("subscription.uaRulesDesc")}
       >
           <div className="mb-2 flex items-center justify-end">
             <button
@@ -258,7 +260,7 @@ export function SubscriptionSettingsScreen() {
               className="warp-tb-button"
               onClick={() => setRules((r) => [...r, { pattern: "", result: "links" }])}
             >
-              <Plus size={14} aria-hidden /> Add rule
+              <Plus size={14} aria-hidden /> {t("subscription.addRule")}
             </button>
           </div>
           <div className="flex flex-col gap-2">
@@ -293,7 +295,7 @@ export function SubscriptionSettingsScreen() {
                   type="button"
                   onClick={() => setRules((r) => r.filter((_, j) => j !== i))}
                   className="grid h-9 w-9 flex-none place-items-center rounded-md text-fg-muted hover:bg-muted hover:text-danger"
-                  aria-label="Remove rule"
+                  aria-label={t("subscription.removeRule")}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -363,6 +365,7 @@ function CustomPageEditor({
   onChange: (v: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [mode, setMode] = useState<"code" | "preview">("code");
   const [draft, setDraft] = useState(value);
   useEffect(() => {
@@ -371,13 +374,13 @@ function CustomPageEditor({
 
   return (
     <Modal
-      title="Custom subscription page"
+      title={t("subscription.customPageTitle")}
       width="w-[min(960px,95vw)]"
       onClose={onClose}
       footer={
         <>
           <button type="button" className="warp-tb-button" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </button>
           <button
             type="button"
@@ -387,7 +390,7 @@ function CustomPageEditor({
               onClose();
             }}
           >
-            Apply
+            {t("action.apply")}
           </button>
         </>
       }
@@ -395,19 +398,19 @@ function CustomPageEditor({
       <div className="flex items-center justify-between gap-2">
         <div className="warp-cpe-tabs">
           <button type="button" onClick={() => setMode("code")} className={`warp-cpe-tab ${mode === "code" ? "is-active" : ""}`}>
-            Editor
+            {t("subscription.editorTab")}
           </button>
           <button type="button" onClick={() => setMode("preview")} className={`warp-cpe-tab ${mode === "preview" ? "is-active" : ""}`}>
-            Preview
+            {t("subscription.previewTab")}
           </button>
         </div>
         {draft.trim() ? (
           <button type="button" className="warp-tb-button" onClick={() => setDraft("")}>
-            <RotateCcw size={14} aria-hidden /> Clear
+            <RotateCcw size={14} aria-hidden /> {t("action.clear")}
           </button>
         ) : (
           <button type="button" className="warp-tb-button" onClick={() => setDraft(CUSTOM_PAGE_STARTER)}>
-            <Sparkles size={14} aria-hidden /> Starter
+            <Sparkles size={14} aria-hidden /> {t("subscription.starter")}
           </button>
         )}
       </div>
@@ -418,11 +421,11 @@ function CustomPageEditor({
           onChange={setDraft}
           rows={20}
           light
-          placeholder="<!DOCTYPE html> … use {{configs}} to inject the config list"
+          placeholder={t("subscription.editorPlaceholder")}
         />
       ) : (
         <iframe
-          title="Custom page preview"
+          title={t("subscription.previewIframeTitle")}
           className="warp-code-preview"
           sandbox="allow-scripts"
           srcDoc={previewHtml(draft)}

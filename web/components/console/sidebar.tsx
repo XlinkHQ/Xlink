@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { type Branding, getBranding, onBrandingChange } from "@/lib/branding";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 import { NAV_GROUPS, type NavGroup } from "./nav";
 
 export function Sidebar({
@@ -17,6 +18,7 @@ export function Sidebar({
   onClose?: () => void;
   open?: boolean;
 }) {
+  const t = useT();
   const [brand, setBrand] = useState<Branding>(getBranding);
   useEffect(() => onBrandingChange(() => setBrand(getBranding())), []);
 
@@ -29,8 +31,8 @@ export function Sidebar({
             <button
               type="button"
               className="warp-sb-collapse"
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
+              aria-label={t("sidebar.collapse")}
+              title={t("sidebar.collapse")}
               onClick={onClose}
             >
               <Menu size={20} strokeWidth={2} aria-hidden />

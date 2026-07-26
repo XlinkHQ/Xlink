@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { DialogHost } from "@/components/ui/dialog";
 import { Toaster } from "@/components/ui/toast";
 import { clearTokens, currentUser, getToken, logout, setAuthLostHandler } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 import { CommandPalette } from "./command-palette";
 import { NAV_ITEMS } from "./nav";
@@ -63,6 +64,7 @@ export function ConsoleV2() {
   const [navCollapsed, setNavCollapsed] = useState(false);
   const theme = useTheme();
   const qc = useQueryClient();
+  const t = useT();
 
   useEffect(() => {
     setAuthLostHandler(() => {
@@ -124,7 +126,7 @@ export function ConsoleV2() {
       {navOpen ? (
         <button
           type="button"
-          aria-label="Close menu"
+          aria-label={t("console.closeMenu")}
           className="warp-sb-scrim"
           onClick={() => setNavOpen(false)}
         />
@@ -144,7 +146,7 @@ export function ConsoleV2() {
         <header className="warp-mobilebar">
           <button
             type="button"
-            aria-label="Menu"
+            aria-label={t("console.menu")}
             className="warp-mobilebar-btn"
             onClick={() => setNavOpen(true)}
           >

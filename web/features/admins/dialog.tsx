@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/cn";
 import { bytes, fromGiB, toGiB } from "@/lib/format";
 import { Field } from "@/shared/parts";
+import { type TranslateFn, useT } from "@/lib/i18n";
 
 const PW_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const PW_LOWER = "abcdefghijkmnopqrstuvwxyz";
@@ -66,6 +67,7 @@ export function AdminDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const editing = !!admin;
   const groupsQ = useQuery({ queryKey: ["groups"], queryFn: () => listGroups() });
   const groups = (groupsQ.data ?? []) as GroupRead[];
@@ -109,14 +111,14 @@ export function AdminDialog({
       };
       if (editing && admin) {
         await updateAdmin(admin.id, { ...(password ? { password } : {}), ...shared });
-        toast("success", `Admin “${admin.username}” updated.`);
+        toast("success", t("admins.updatedToast", { username: admin.username }));
       } else {
         await createAdmin({ username: username.trim(), password, ...shared });
-        toast("success", `Admin “${username.trim()}” created.`);
+        toast("success", t("admins.createdToast", { username: username.trim() }));
       }
       onSaved();
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.message : "Save failed.");
+      toast("error", err instanceof ApiError ? err.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -127,26 +129,26 @@ export function AdminDialog({
 
   return (
     <Modal
-      title={editing ? "Edit Admin" : "Create Admin"}
+      title={editing ? t("admins.editAdmin") : t("admins.createAdmin")}
       onClose={onClose}
       onSubmit={submit}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button
             type="submit"
             variant="primary"
             disabled={busy || !usernameValid || !passwordValid}
           >
-            {busy ? "Saving…" : editing ? "Save" : "Create"}
+            {busy ? t("common.saving") : editing ? t("action.save") : t("action.create")}
           </Button>
         </>
       }
     >
-      <p className="warp-dlg-section-title">Login information</p>
-      <Field label="Username" hint="3–64 chars · letters, numbers, _">
+      <p className="warp-dlg-section-title">{t("admins.loginInformation")}</p>
+      <Field label={t("admins.username")} hint={t("admins.usernameHint")}>
         <Input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
@@ -155,28 +157,28 @@ export function AdminDialog({
           autoComplete="off"
         />
       </Field>
-      <Field label="Password" hint={editing ? "Leave blank to keep" : "12+ characters"}>
+      <Field label={t("admins.password")} hint={editing ? t("admins.leaveBlankToKeep") : t("admins.passwordHint")}>
         <div className="warp-dlg-pw">
           <input
             type={show ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
-            placeholder={editing ? "Leave blank to keep" : ""}
+            placeholder={editing ? t("admins.leaveBlankToKeep") : ""}
           />
           <button
             type="button"
             onClick={() => setShow((s) => !s)}
-            title={show ? "Hide" : "Show"}
-            aria-label={show ? "Hide password" : "Show password"}
+            title={show ? t("admins.hide") : t("admins.show")}
+            aria-label={show ? t("admins.hidePassword") : t("admins.showPassword")}
             className="warp-dlg-pw-icon"
           >
             {show ? <EyeOff className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
           </button>
           <button
             type="button"
-            title="Generate password"
-            aria-label="Generate password"
+            title={t("admins.generatePassword")}
+            aria-label={t("admins.generatePassword")}
             className="warp-dlg-pw-icon"
             onClick={() => {
               setPassword(randomPassword());
@@ -189,8 +191,8 @@ export function AdminDialog({
       </Field>
 
       <div className="warp-dlg-divider" />
-      <p className="warp-dlg-section-title">Account details</p>
-      <Field label="Subscription URL prefix" hint="Optional">
+      <p className="warp-dlg-section-title">{t("admins.accountDetails")}</p>
+      <Field label={t("admins.subscriptionUrlPrefix")} hint={t("common.optional")}>
         <Input
           value={subPrefix}
           onChange={(e) => setSubPrefix(e.target.value)}
@@ -200,23 +202,23 @@ export function AdminDialog({
       </Field>
       {!sudo ? (
         <div className="warp-dlg-2col">
-          <Field label="Max users" hint="Reseller cap · blank = unlimited">
+          <Field label={t("admins.maxUsers")} hint={t("admins.maxUsersHint")}>
             <Input
               type="number"
               min="0"
               value={userLimit}
               onChange={(e) => setUserLimit(e.target.value)}
-              placeholder="unlimited"
+              placeholder={t("admins.unlimited")}
             />
           </Field>
-          <Field label="Traffic budget (GiB)" hint="Total across their users">
+          <Field label={t("admins.trafficBudget")} hint={t("admins.trafficBudgetHint")}>
             <Input
               type="number"
               min="0"
               step="0.1"
               value={trafficLimitGib}
               onChange={(e) => setTrafficLimitGib(e.target.value)}
-              placeholder="unlimited"
+              placeholder={t("admins.unlimited")}
             />
           </Field>
         </div>
@@ -224,53 +226,53 @@ export function AdminDialog({
       {!sudo && editing && usage ? (
         <div className="warp-reseller-usage">
           <div className="warp-ru-row">
-            <span className="warp-ru-label">Users</span>
+            <span className="warp-ru-label">{t("admins.users")}</span>
             <span className="warp-ru-value">
               {usage.users_count}
               {usage.users_limit != null ? ` / ${usage.users_limit}` : " / ∞"}
             </span>
           </div>
           <div className="warp-ru-row">
-            <span className="warp-ru-label">Traffic allocated</span>
+            <span className="warp-ru-label">{t("admins.trafficAllocated")}</span>
             <span className="warp-ru-value">
               {bytes(usage.traffic_allocated_bytes)}
               {usage.traffic_budget_bytes != null ? ` / ${bytes(usage.traffic_budget_bytes)}` : " / ∞"}
             </span>
           </div>
           <div className="warp-ru-row">
-            <span className="warp-ru-label">Traffic used</span>
+            <span className="warp-ru-label">{t("admins.trafficUsed")}</span>
             <span className="warp-ru-value">{bytes(usage.traffic_used_bytes)}</span>
           </div>
         </div>
       ) : null}
 
       <div className="warp-dlg-divider" />
-      <p className="warp-dlg-section-title">Permissions</p>
+      <p className="warp-dlg-section-title">{t("admins.permissions")}</p>
       <SwitchRow
-        label="Enabled"
-        hint="Admin can sign in."
+        label={t("common.enabled")}
+        hint={t("admins.enabledHint")}
         checked={enabled}
         onChange={setEnabled}
       />
       <SwitchRow
-        label="Sudo privilege"
-        hint="Full panel access."
+        label={t("admins.sudoPrivilege")}
+        hint={t("admins.sudoPrivilegeHint")}
         checked={sudo}
         onChange={setSudo}
       />
       {!sudo ? (
-        <SwitchRow label="Modify users access" checked={canModify} onChange={setCanModify} />
+        <SwitchRow label={t("admins.modifyUsersAccess")} checked={canModify} onChange={setCanModify} />
       ) : null}
-      <SwitchRow label="All services access" checked={allServices} onChange={setAllServices} />
+      <SwitchRow label={t("admins.allServicesAccess")} checked={allServices} onChange={setAllServices} />
 
       {!allServices ? (
         <>
           <div className="warp-dlg-divider" />
-          <p className="warp-dlg-section-title">Access</p>
-          <Field label="Services" hint={`${groups.length} available`}>
+          <p className="warp-dlg-section-title">{t("admins.access")}</p>
+          <Field label={t("admins.services")} hint={t("admins.servicesAvailable", { count: groups.length })}>
             <div className="warp-dlg-chipbox">
               {groups.length === 0 ? (
-                <span className="text-[11px] text-fg-muted">No services yet.</span>
+                <span className="text-[11px] text-fg-muted">{t("admins.noServices")}</span>
               ) : (
                 groups.map((g) => (
                   <span key={g.id} className="warp-pin-chip">

@@ -27,7 +27,8 @@ import {
 import { bytes } from "@/lib/format";
 import { userStatus } from "@/lib/status";
 import { cn } from "@/lib/cn";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { useT } from "@/lib/i18n";
 
 const PAGE_SIZE = 10;
 
@@ -52,6 +53,7 @@ export function ServiceSettings({
   editing?: boolean;
   editForm?: React.ReactNode;
 }) {
+  const t = useT();
   const [tab, setTab] = useState<"inbounds" | "users">("inbounds");
 
   return (
@@ -61,7 +63,7 @@ export function ServiceSettings({
           <button
             type="button"
             className="warp-breadcrumbs-back"
-            aria-label="Back"
+            aria-label={t("action.back")}
             onClick={onClose}
           >
             <ArrowLeft size={20} strokeWidth={1.9} aria-hidden />
@@ -69,7 +71,7 @@ export function ServiceSettings({
           <span className="warp-breadcrumbs-divider" />
           <div className="links">
             <button type="button" className="crumb" onClick={onClose}>
-              Services
+              {t("groups.services")}
             </button>
             <ChevronRight size={20} strokeWidth={2} className="crumb-sep" aria-hidden />
             <span className="crumb active">{group.name}</span>
@@ -81,13 +83,13 @@ export function ServiceSettings({
               onClick={onEdit}
               aria-pressed={editing}
             >
-              <Pencil size={14} aria-hidden /> Edit
+              <Pencil size={14} aria-hidden /> {t("action.edit")}
             </button>
           </div>
         </div>
       </div>
       <div className="warp-pd-tabs warp-profile-tabs">
-        {([["inbounds", "Inbounds"], ["users", "Users"]] as const).map(([key, label]) => (
+        {([["inbounds", t("groups.inbounds")], ["users", t("groups.users")]] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -121,6 +123,7 @@ function InboundsTab({
   nodeName: (id: string) => string;
   onSaved: () => void;
 }) {
+  const t = useT();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(group.profile_ids));
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -139,7 +142,7 @@ function InboundsTab({
       onSaved();
     } catch (e) {
       setSelected(prev);
-      toast("error", e instanceof ApiError ? e.message : "Update failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.updateFailed"));
     } finally {
       setBusy(false);
     }
@@ -162,13 +165,13 @@ function InboundsTab({
         <WarpHead
           cols={[
             <input key="all" type="checkbox" className="warp-tb-check" checked={allOnPage} onChange={toggleAll} onClick={(e) => e.stopPropagation()} />,
-            "Tag",
-            "Protocol",
-            "Nodes",
+            t("groups.tag"),
+            t("profiles.protocol"),
+            t("groups.nodes"),
           ]}
         />
         {rows.length === 0 ? (
-          <WarpEmpty>No inbounds available.</WarpEmpty>
+          <WarpEmpty>{t("groups.noInboundsAvailable")}</WarpEmpty>
         ) : (
           rows.map((p) => (
             <WarpRow
@@ -189,26 +192,26 @@ function InboundsTab({
 
       <div className="flex items-center justify-between gap-3 text-xs text-fg-muted">
         <span>
-          {busy ? "Saving…" : `${selected.size} / ${profiles.length} selected`}
+          {busy ? t("common.saving") : t("groups.selectedCount", { n: selected.size, total: profiles.length })}
         </span>
         <div className="flex items-center gap-1">
           <span className="mr-2">
-            Page {page + 1} of {pageCount}
+            {t("common.pageOf", { page: page + 1, total: pageCount })}
           </span>
-          <PageBtn onClick={() => setPage(0)} disabled={page === 0} aria-label="First page">
+          <PageBtn onClick={() => setPage(0)} disabled={page === 0} aria-label={t("common.firstPage")}>
             <ChevronsLeft className="h-4 w-4" aria-hidden />
           </PageBtn>
-          <PageBtn onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} aria-label="Previous page">
+          <PageBtn onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} aria-label={t("common.previousPage")}>
             <ChevronLeft className="h-4 w-4" aria-hidden />
           </PageBtn>
           <PageBtn
             onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
             disabled={page >= pageCount - 1}
-            aria-label="Next page"
+            aria-label={t("common.nextPage")}
           >
             <ChevronRight className="h-4 w-4" aria-hidden />
           </PageBtn>
-          <PageBtn onClick={() => setPage(pageCount - 1)} disabled={page >= pageCount - 1} aria-label="Last page">
+          <PageBtn onClick={() => setPage(pageCount - 1)} disabled={page >= pageCount - 1} aria-label={t("common.lastPage")}>
             <ChevronsRight className="h-4 w-4" aria-hidden />
           </PageBtn>
         </div>
@@ -224,6 +227,7 @@ function UsersTab({
   group: GroupRead;
   assignments: AssignmentRead[];
 }) {
+  const t = useT();
   const usersQuery = useQuery({ queryKey: ["users", "all"], queryFn: () => listAllUsers() });
   const onlineQuery = useQuery({ queryKey: ["users-online"], queryFn: () => onlineUsers(), refetchInterval: 30000, refetchIntervalInBackground: false });
   const onlineSet = new Set(onlineQuery.data?.user_ids ?? []);
@@ -237,11 +241,13 @@ function UsersTab({
 
   return (
     <WarpTableCard className="warp-users-table">
-      <WarpHead cols={["Username", "Online", "Status", "Used Traffic", "Expiration"]} />
+      <WarpHead cols={[t("groups.username"), t("groups.online"), t("common.status"), t("groups.usedTraffic"), t("groups.expiration")]} />
       {usersQuery.isLoading ? (
         <WarpSkeleton />
+      ) : usersQuery.isError ? (
+        <WarpError onRetry={() => usersQuery.refetch()} />
       ) : members.length === 0 ? (
-        <WarpEmpty>No users in this service yet.</WarpEmpty>
+        <WarpEmpty>{t("groups.noUsersYet")}</WarpEmpty>
       ) : (
         members.map((u) => {
           const s = userStatus(u);
@@ -252,24 +258,24 @@ function UsersTab({
               : s === "limited" ? "critical"
               : "success";
           const statusText =
-            s === "disabled" ? "Disabled"
-              : s === "onhold" ? "On-hold"
-              : s === "expired" ? "Expired"
-              : s === "limited" ? "Limited"
-              : "Active";
+            s === "disabled" ? t("groups.statusDisabled")
+              : s === "onhold" ? t("groups.statusOnhold")
+              : s === "expired" ? t("groups.statusExpired")
+              : s === "limited" ? t("groups.statusLimited")
+              : t("groups.statusActive");
           return (
             <WarpRow
               key={u.id}
               cells={[
                 <span className="font-medium">{u.username}</span>,
                 <span className={`warp-badge ${onlineSet.has(u.id) ? "success" : "neutral"}`}>
-                  {onlineSet.has(u.id) ? "Online" : "Offline"}
+                  {onlineSet.has(u.id) ? t("groups.online") : t("groups.offline")}
                 </span>,
                 <span className={`warp-badge ${statusClass}`}>
                   {statusText}
                 </span>,
                 <span className="text-fg-muted">{bytes(u.users_data_usage ?? 0)}</span>,
-                <span className="text-fg-muted">{u.expire_at ? u.expire_at.slice(0, 10) : "Never"}</span>,
+                <span className="text-fg-muted">{u.expire_at ? u.expire_at.slice(0, 10) : t("groups.never")}</span>,
               ]}
             />
           );

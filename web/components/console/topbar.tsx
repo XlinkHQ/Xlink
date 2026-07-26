@@ -1,10 +1,62 @@
 "use client";
 
-import { ChevronDown, LogOut, Menu, User } from "lucide-react";
+import { Check, ChevronDown, LogOut, Menu, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import type { MessageKey } from "@/lib/i18n";
+import { LOCALE_LABELS, LOCALES, setLocale, useLocale, useT } from "@/lib/i18n";
 import { setTheme, useTheme } from "@/lib/theme";
 import { DgDarkTheme, DgGlobe, DgLightTheme, DgUsers } from "./dg-icons";
 import { useConsoleStats } from "./useConsoleStats";
+
+function LanguageMenu() {
+  const t = useT();
+  const locale = useLocale();
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  return (
+    <div className="warp-topbar-profile" ref={wrap}>
+      <button
+        type="button"
+        className="warp-topbar-theme"
+        title={t("topbar.language")}
+        aria-label={t("topbar.language")}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <DgGlobe size={20} />
+      </button>
+      {open ? (
+        <div className="warp-topbar-menu" role="menu">
+          {LOCALES.map((code) => (
+            <button
+              key={code}
+              type="button"
+              role="menuitemradio"
+              aria-checked={locale === code}
+              className="warp-topbar-menu-item"
+              onClick={() => {
+                setLocale(code);
+                setOpen(false);
+              }}
+            >
+              {LOCALE_LABELS[code]}
+              {locale === code ? <Check size={16} strokeWidth={1.8} aria-hidden /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function StatChip({
   icon,
@@ -50,16 +102,16 @@ function TopBarStats() {
   );
 }
 
-const PAGE_TITLES: Record<string, string> = {
-  Overview: "Overview",
-  Nodes: "Nodes",
-  Profiles: "Hosts",
-  Groups: "Services",
-  Users: "Users",
-  Admins: "Admins",
-  Activity: "Activity log",
-  ApiKeys: "API Keys",
-  Settings: "Settings",
+const PAGE_TITLE_KEYS: Record<string, MessageKey> = {
+  Overview: "nav.overview",
+  Nodes: "nav.nodes",
+  Profiles: "nav.hosts",
+  Groups: "nav.services",
+  Users: "nav.users",
+  Admins: "nav.admins",
+  Activity: "nav.activity",
+  ApiKeys: "nav.apiKeys",
+  Settings: "nav.settings",
 };
 
 export function TopBar({
@@ -75,10 +127,12 @@ export function TopBar({
   onReopenNav?: () => void;
   onLogout?: () => void;
 }) {
+  const t = useT();
   const theme = useTheme();
   const dark = theme === "dark";
   const [menuOpen, setMenuOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
+  const titleKey = PAGE_TITLE_KEYS[active];
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -95,14 +149,14 @@ export function TopBar({
         <button
           type="button"
           className="warp-topbar-hamburger"
-          aria-label="Open sidebar"
-          title="Open sidebar"
+          aria-label={t("topbar.openSidebar")}
+          title={t("topbar.openSidebar")}
           onClick={onReopenNav}
         >
           <Menu size={20} strokeWidth={2} aria-hidden />
         </button>
       ) : null}
-      <p className="warp-topbar-title">{PAGE_TITLES[active] ?? active}</p>
+      <p className="warp-topbar-title">{titleKey ? t(titleKey) : active}</p>
 
       <div className="warp-topbar-right">
         <TopBarStats />
@@ -131,7 +185,7 @@ export function TopBar({
                     onLogout();
                   }}
                 >
-                  <LogOut size={16} strokeWidth={1.8} aria-hidden /> Logout
+                  <LogOut size={16} strokeWidth={1.8} aria-hidden /> {t("action.logout")}
                 </button>
               ) : null}
             </div>
@@ -140,11 +194,13 @@ export function TopBar({
 
         <span className="warp-topbar-divider" />
 
+        <LanguageMenu />
+
         <button
           type="button"
           className="warp-topbar-theme"
-          title={dark ? "Light mode" : "Dark mode"}
-          aria-label="Toggle theme"
+          title={dark ? t("topbar.lightMode") : t("topbar.darkMode")}
+          aria-label={t("topbar.toggleTheme")}
           onClick={() => setTheme(dark ? "light" : "dark")}
         >
           {dark ? <DgDarkTheme size={20} /> : <DgLightTheme size={20} />}

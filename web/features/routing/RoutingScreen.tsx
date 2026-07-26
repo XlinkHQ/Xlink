@@ -19,22 +19,26 @@ import {
   type RoutingRuleRead,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { WarpButton, WarpEmpty, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { WarpButton, WarpEmpty, WarpError, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { useT, type TranslateFn } from "@/lib/i18n";
 
-const OUTBOUND_META: Record<string, { label: string; tone: "danger" | "success" | "neutral" | "muted" }> = {
-  block: { label: "Block", tone: "danger" },
-  direct: { label: "Direct", tone: "success" },
-  warp: { label: "WARP", tone: "neutral" },
-  proxy: { label: "Proxy", tone: "muted" },
-};
+const outboundMeta = (t: TranslateFn): Record<string, { label: string; tone: "danger" | "success" | "neutral" | "muted" }> => ({
+  block: { label: t("routing.outbound.block"), tone: "danger" },
+  direct: { label: t("routing.outbound.direct"), tone: "success" },
+  warp: { label: t("routing.outbound.warp"), tone: "neutral" },
+  proxy: { label: t("routing.outbound.proxy"), tone: "muted" },
+});
 
-const MATCH_LABEL: Record<string, string> = {
-  domain: "Domain",
-  ip: "IP / GeoIP",
-  port: "Port",
-};
+const matchLabel = (t: TranslateFn): Record<string, string> => ({
+  domain: t("routing.match.domain"),
+  ip: t("routing.match.ip"),
+  port: t("routing.match.port"),
+});
 
 export function RoutingScreen() {
+  const t = useT();
+  const OUTBOUND_META = outboundMeta(t);
+  const MATCH_LABEL = matchLabel(t);
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["routing-rules"], queryFn: () => listRoutingRules() });
   const rules = q.data ?? [];
@@ -59,25 +63,25 @@ export function RoutingScreen() {
       await updateRoutingRule(r.id, { enabled: !r.enabled });
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Update failed.");
+      toast("error", e instanceof ApiError ? e.message : t("routing.toast.updateFailed"));
     }
   };
 
   const remove = async (r: RoutingRuleRead) => {
-    if (!(await confirmDialog({ title: `Delete rule "${r.name || r.match_values}"?`, confirmLabel: "Delete", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("routing.confirmDelete", { name: r.name || r.match_values }), confirmLabel: t("action.delete"), danger: true }))) return;
     try {
       await deleteRoutingRule(r.id);
-      toast("success", "Rule deleted.");
+      toast("success", t("routing.toast.deleted"));
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Delete failed.");
+      toast("error", e instanceof ApiError ? e.message : t("routing.toast.deleteFailed"));
     }
   };
 
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="warp-table-top">
-        <span className="title">All rules</span>
+        <span className="title">{t("routing.allRules")}</span>
         <div className="right">
           <span className="warp-tb-search-wrap" style={{ maxWidth: 321, flex: 1 }}>
             <DgSearch size={16} />
@@ -85,24 +89,26 @@ export function RoutingScreen() {
               className="warp-tb-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Find rule"
+              placeholder={t("routing.findRule")}
             />
           </span>
           <WarpButton primary onClick={() => setDialog("new")}>
-            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Rule
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> {t("routing.addRule")}
           </WarpButton>
         </div>
       </div>
 
       <WarpTableCard className="warp-users-table">
-        <WarpHead cols={["Name", "Match", "Outbound", "Priority", "Status"]} actions />
+        <WarpHead cols={[t("common.name"), t("routing.col.match"), t("routing.col.outbound"), t("routing.col.priority"), t("common.status")]} actions />
         {q.isLoading ? (
           <WarpSkeleton />
+        ) : q.isError ? (
+          <WarpError onRetry={() => q.refetch()} />
         ) : filtered.length === 0 ? (
           <WarpEmpty>
             {search.trim()
-              ? "No rules match your search."
-              : "No routing rules yet — traffic uses the default outbound."}
+              ? t("routing.empty.search")
+              : t("routing.empty.none")}
           </WarpEmpty>
         ) : (
           <>
@@ -112,7 +118,7 @@ export function RoutingScreen() {
               return (
                 <div key={r.id} className={`warp-tb-row ${r.enabled ? "" : "warp-rt-off"}`}>
                   <span className="warp-tb-cell warp-tb-cell-name font-medium" title={r.name}>
-                    {r.name || `${MATCH_LABEL[r.match_type] ?? r.match_type} rule`}
+                    {r.name || t("routing.unnamedRule", { type: MATCH_LABEL[r.match_type] ?? r.match_type })}
                   </span>
                   <span className="warp-tb-cell warp-rt-matchcell" title={`${MATCH_LABEL[r.match_type] ?? r.match_type}: ${r.match_values}`}>
                     <span className="warp-rt-match-type">{MATCH_LABEL[r.match_type] ?? r.match_type}</span>
@@ -128,18 +134,18 @@ export function RoutingScreen() {
                       type="button"
                       className={`warp-rt-status ${r.enabled ? "is-on" : "is-off"}`}
                       onClick={() => toggle(r)}
-                      title={r.enabled ? "Enabled — click to disable" : "Disabled — click to enable"}
+                      title={r.enabled ? t("routing.status.enabledHint") : t("routing.status.disabledHint")}
                     >
                       <span className="warp-rt-dot" />
-                      {r.enabled ? "Enabled" : "Disabled"}
+                      {r.enabled ? t("common.enabled") : t("common.disabled")}
                     </button>
                   </span>
                   <span className="warp-tb-cell warp-tb-cell-actions" onClick={(e) => e.stopPropagation()}>
                     <WarpMenu
                       items={[
-                        { label: "Edit", icon: "edit", onClick: () => setDialog(r) },
-                        { label: r.enabled ? "Disable" : "Enable", icon: r.enabled ? "disable" : "enable", onClick: () => toggle(r) },
-                        { label: "Delete", icon: "delete", danger: true, onClick: () => remove(r) },
+                        { label: t("action.edit"), icon: "edit", onClick: () => setDialog(r) },
+                        { label: r.enabled ? t("action.disable") : t("action.enable"), icon: r.enabled ? "disable" : "enable", onClick: () => toggle(r) },
+                        { label: t("action.delete"), icon: "delete", danger: true, onClick: () => remove(r) },
                       ]}
                     />
                   </span>
@@ -173,6 +179,7 @@ function RuleModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const editing = rule !== null;
   const obQ = useQuery({ queryKey: ["outbounds"], queryFn: () => listOutbounds() });
   const customOutbounds = obQ.data ?? [];
@@ -197,14 +204,14 @@ function RuleModal({
       };
       if (editing && rule) {
         await updateRoutingRule(rule.id, body);
-        toast("success", "Rule updated.");
+        toast("success", t("routing.toast.updated"));
       } else {
         await createRoutingRule(body);
-        toast("success", "Rule added.");
+        toast("success", t("routing.toast.added"));
       }
       onSaved();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Save failed.");
+      toast("error", e instanceof ApiError ? e.message : t("routing.toast.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -221,14 +228,14 @@ function RuleModal({
 
   return (
     <Modal
-      title={editing ? "Edit rule" : "Add rule"}
+      title={editing ? t("routing.modal.editTitle") : t("routing.modal.addTitle")}
       width="w-[min(580px,95vw)]"
       onClose={onClose}
       footer={
         <>
-          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button type="button" variant="ghost" onClick={onClose}>{t("action.cancel")}</Button>
           <Button type="button" variant="primary" disabled={busy || !values.trim()} onClick={submit}>
-            {busy ? "Saving…" : editing ? "Save changes" : "Submit"}
+            {busy ? t("common.saving") : editing ? t("action.saveChanges") : t("action.submit")}
           </Button>
         </>
       }
@@ -236,33 +243,32 @@ function RuleModal({
       <div className="warp-rt-form-info">
         <Info size={16} />
         <span>
-          Match traffic by domain, IP or port and send it to an outbound (builtin block / direct / warp,
-          or a custom outbound tag). Rules apply in priority order — lower runs first.
+          {t("routing.modal.info")}
         </span>
       </div>
 
       <label className="warp-field-row">
-        <span className="warp-field-label">Rule name</span>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Block ads" autoFocus />
+        <span className="warp-field-label">{t("routing.field.name")}</span>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("routing.field.namePlaceholder")} autoFocus />
       </label>
       <div className="warp-dlg-2col" style={{ marginTop: 14 }}>
         <label className="warp-field-row">
-          <span className="warp-field-label">Match by</span>
+          <span className="warp-field-label">{t("routing.field.matchBy")}</span>
           <Select value={matchType} onChange={(e) => setMatchType(e.target.value)}>
-            <option value="domain">Domain</option>
-            <option value="ip">IP / GeoIP</option>
-            <option value="port">Port</option>
+            <option value="domain">{t("routing.match.domain")}</option>
+            <option value="ip">{t("routing.match.ip")}</option>
+            <option value="port">{t("routing.match.port")}</option>
           </Select>
         </label>
         <label className="warp-field-row">
-          <span className="warp-field-label">Outbound</span>
+          <span className="warp-field-label">{t("routing.col.outbound")}</span>
           <Select value={outbound} onChange={(e) => setOutbound(e.target.value)}>
-            <option value="block">Block</option>
-            <option value="direct">Direct</option>
-            <option value="warp">WARP</option>
-            <option value="proxy">Proxy</option>
+            <option value="block">{t("routing.outbound.block")}</option>
+            <option value="direct">{t("routing.outbound.direct")}</option>
+            <option value="warp">{t("routing.outbound.warp")}</option>
+            <option value="proxy">{t("routing.outbound.proxy")}</option>
             {customOutbounds.length > 0 ? (
-              <optgroup label="Custom outbounds">
+              <optgroup label={t("routing.customOutbounds")}>
                 {customOutbounds.map((o) => (
                   <option key={o.id} value={o.tag}>{o.tag} ({o.type})</option>
                 ))}
@@ -275,9 +281,9 @@ function RuleModal({
         </label>
       </div>
       <label className="warp-field-row" style={{ marginTop: 14 }}>
-        <span className="warp-field-label">Values</span>
+        <span className="warp-field-label">{t("routing.field.values")}</span>
         <textarea className="warp-cert-textarea" rows={3} value={values} onChange={(e) => setValues(e.target.value)} placeholder={hint} />
-        <span className="warp-field-helper">Comma-separated · {hint}</span>
+        <span className="warp-field-helper">{t("routing.field.valuesHelper")} · {hint}</span>
         {preview.length > 0 ? (
           <span className="warp-rt-preview">
             {preview.map((v, i) => (
@@ -288,15 +294,15 @@ function RuleModal({
       </label>
       <div className="warp-dlg-2col" style={{ marginTop: 14 }}>
         <label className="warp-field-row">
-          <span className="warp-field-label">Priority</span>
+          <span className="warp-field-label">{t("routing.col.priority")}</span>
           <Input type="number" min="0" value={priority} onChange={(e) => setPriority(e.target.value)} />
         </label>
         <label className="warp-field-row">
-          <span className="warp-field-label">Status</span>
+          <span className="warp-field-label">{t("common.status")}</span>
           <label className="warp-switch warp-switch-inline">
             <input type="checkbox" checked={enabled} onChange={() => setEnabled((v) => !v)} />
             <span className="warp-switch-track" />
-            <span className="warp-switch-label">{enabled ? "Enabled" : "Disabled"}</span>
+            <span className="warp-switch-label">{enabled ? t("common.enabled") : t("common.disabled")}</span>
           </label>
         </label>
       </div>

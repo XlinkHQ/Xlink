@@ -5,10 +5,12 @@ import { useRef, useState } from "react";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
 import { ApiError, downloadBackupDb, downloadUsersCsv, importBackupDb } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { SettingsRow } from "@/features/settings/save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 export function BackupScreen() {
+  const t = useT();
   const [dbBusy, setDbBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [csvBusy, setCsvBusy] = useState(false);
@@ -18,9 +20,9 @@ export function BackupScreen() {
     if (!file) return;
     if (
       !(await confirmDialog({
-        title: "Overwrite the database?",
-        message: `Restoring "${file.name}" replaces ALL current data. Restart the panel afterwards.`,
-        confirmLabel: "Restore",
+        title: t("backup.restoreConfirmTitle"),
+        message: t("backup.restoreConfirmMessage", { name: file.name }),
+        confirmLabel: t("backup.restore"),
         danger: true,
       }))
     )
@@ -28,9 +30,9 @@ export function BackupScreen() {
     setImportBusy(true);
     try {
       await importBackupDb(file);
-      toast("success", "Database restored — restart the panel to apply.");
+      toast("success", t("backup.restored"));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Restore failed.");
+      toast("error", e instanceof ApiError ? e.message : t("backup.restoreFailed"));
     } finally {
       setImportBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -41,12 +43,12 @@ export function BackupScreen() {
     <div className="w-full">
       <SettingsSection
         icon={DatabaseBackup}
-        title="Backup & restore"
-        description="Download database dumps, export users, or restore the panel from a previous backup."
+        title={t("backup.title")}
+        description={t("backup.description")}
       >
         <SettingsRow
-          label="Download database"
-          hint="A nightly backup runs automatically. Download the raw database now — Postgres .sql or SQLite .db (sudo only)."
+          label={t("backup.downloadDatabase")}
+          hint={t("backup.downloadDatabaseHint")}
         >
           <button
             type="button"
@@ -56,21 +58,21 @@ export function BackupScreen() {
               setDbBusy(true);
               try {
                 await downloadBackupDb();
-                toast("success", "Database dump downloaded.");
+                toast("success", t("backup.dumpDownloaded"));
               } catch (e) {
-                toast("error", e instanceof ApiError ? e.message : "Download failed.");
+                toast("error", e instanceof ApiError ? e.message : t("backup.downloadFailed"));
               } finally {
                 setDbBusy(false);
               }
             }}
           >
-            {dbBusy ? "…" : "Download"}
+            {dbBusy ? "…" : t("backup.download")}
           </button>
         </SettingsRow>
 
         <SettingsRow
-          label="Export users (CSV)"
-          hint="Download every user as a spreadsheet — username, email, status, limit, expiry."
+          label={t("backup.exportUsersCsv")}
+          hint={t("backup.exportUsersCsvHint")}
         >
           <button
             type="button"
@@ -80,21 +82,21 @@ export function BackupScreen() {
               setCsvBusy(true);
               try {
                 await downloadUsersCsv();
-                toast("success", "Users CSV exported.");
+                toast("success", t("backup.csvExported"));
               } catch (e) {
-                toast("error", e instanceof ApiError ? e.message : "Export failed.");
+                toast("error", e instanceof ApiError ? e.message : t("backup.exportFailed"));
               } finally {
                 setCsvBusy(false);
               }
             }}
           >
-            {csvBusy ? "…" : "Export"}
+            {csvBusy ? "…" : t("backup.export")}
           </button>
         </SettingsRow>
 
         <SettingsRow
-          label="Restore database"
-          hint="Upload a .db / .sql dump to overwrite the current database. Destructive — sudo only."
+          label={t("backup.restoreDatabase")}
+          hint={t("backup.restoreDatabaseHint")}
         >
           <label className={`warp-tb-button warp-tb-button-danger${importBusy ? " is-busy" : ""}`} style={{ cursor: "pointer" }}>
             <input
@@ -105,7 +107,7 @@ export function BackupScreen() {
               disabled={importBusy}
               onChange={(e) => onImport(e.target.files?.[0])}
             />
-            {importBusy ? "…" : "Upload"}
+            {importBusy ? "…" : t("backup.upload")}
           </label>
         </SettingsRow>
       </SettingsSection>

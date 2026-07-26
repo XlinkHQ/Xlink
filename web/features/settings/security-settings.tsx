@@ -9,10 +9,12 @@ import { ApiError, clearTokens, currentUser, logoutAll, totpConfirm, totpDisable
 import { confirmDialog, promptDialog } from "@/components/ui/dialog";
 import { copyText } from "@/lib/clipboard";
 import { Modal } from "@/components/ui/modal";
+import { useT } from "@/lib/i18n";
 import { SettingsRow } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
 function TotpQr({ value }: { value: string }) {
+  const t = useT();
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -30,12 +32,12 @@ function TotpQr({ value }: { value: string }) {
   if (failed) {
     return (
       <span className="warp-2fa-qrbox warp-2fa-qrbox-fallback">
-        Couldn’t render the QR — use the setup key below.
+        {t("security.qrFailed")}
       </span>
     );
   }
   if (!src) {
-    return <span className="warp-2fa-qrbox warp-2fa-qrbox-loading" aria-label="Generating QR" />;
+    return <span className="warp-2fa-qrbox warp-2fa-qrbox-loading" aria-label={t("security.generatingQr")} />;
   }
   return (
     <span className="warp-2fa-qrbox">
@@ -45,6 +47,7 @@ function TotpQr({ value }: { value: string }) {
 }
 
 export function SecuritySettingsScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const meQuery = useQuery({ queryKey: ["me"], queryFn: () => currentUser() });
   const enabled = meQuery.data?.totp_enabled ?? false;
@@ -58,7 +61,7 @@ export function SecuritySettingsScreen() {
     try {
       setEnroll(await totpEnroll());
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Could not start enrollment.");
+      toast("error", e instanceof ApiError ? e.message : t("security.enrollFailed"));
     } finally {
       setBusy(false);
     }
@@ -68,12 +71,12 @@ export function SecuritySettingsScreen() {
     setBusy(true);
     try {
       await totpConfirm(code.trim());
-      toast("success", "Two-factor authentication enabled.");
+      toast("success", t("security.enabled"));
       setEnroll(null);
       setCode("");
       qc.invalidateQueries({ queryKey: ["me"] });
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Invalid code.");
+      toast("error", e instanceof ApiError ? e.message : t("security.invalidCode"));
     } finally {
       setBusy(false);
     }
@@ -86,20 +89,20 @@ export function SecuritySettingsScreen() {
 
   const disable = async () => {
     const c = await promptDialog({
-      title: "Disable two-factor auth",
-      message: "Enter a current code from your authenticator to confirm.",
+      title: t("security.disableTitle"),
+      message: t("security.disableMessage"),
       placeholder: "123456",
-      confirmLabel: "Disable",
+      confirmLabel: t("action.disable"),
       danger: true,
     });
     if (!c) return;
     setBusy(true);
     try {
       await totpDisable(c.trim());
-      toast("success", "Two-factor authentication disabled.");
+      toast("success", t("security.disabled"));
       qc.invalidateQueries({ queryKey: ["me"] });
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Invalid code.");
+      toast("error", e instanceof ApiError ? e.message : t("security.invalidCode"));
     } finally {
       setBusy(false);
     }
@@ -109,20 +112,20 @@ export function SecuritySettingsScreen() {
     <div className="w-full">
       <SettingsSection
         icon={ShieldCheck}
-        title="Two-factor authentication"
-        description="Require a one-time code at sign-in, in addition to your password."
+        title={t("security.twoFactorTitle")}
+        description={t("security.twoFactorDesc")}
       >
         <SettingsRow
-          label="Authenticator app"
-          hint="Use Google Authenticator, Authy or 1Password."
+          label={t("security.authenticatorApp")}
+          hint={t("security.authenticatorAppHint")}
         >
           {enabled ? (
             <button type="button" className="warp-tb-button warp-tb-button-danger" onClick={disable} disabled={busy}>
-              Disable 2FA
+              {t("security.disable2fa")}
             </button>
           ) : (
             <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={start} disabled={busy}>
-              Enable 2FA
+              {t("security.enable2fa")}
             </button>
           )}
         </SettingsRow>
@@ -131,46 +134,46 @@ export function SecuritySettingsScreen() {
       <SettingsSection
         divider
         icon={LogOut}
-        title="Sessions"
-        description="Sign out of every device where this admin account is logged in."
+        title={t("security.sessionsTitle")}
+        description={t("security.sessionsDesc")}
       >
         <SettingsRow
-          label="Active sessions"
-          hint="Revoke all sessions — you and any other device will need to sign in again."
+          label={t("security.activeSessions")}
+          hint={t("security.activeSessionsHint")}
         >
           <button
             type="button"
             className="warp-tb-button warp-tb-button-danger"
             disabled={signingOut}
             onClick={async () => {
-              if (!(await confirmDialog({ title: "Sign out everywhere?", message: "All sessions for this account are revoked immediately.", confirmLabel: "Sign out", danger: true }))) return;
+              if (!(await confirmDialog({ title: t("security.signOutEverywhereConfirmTitle"), message: t("security.signOutEverywhereConfirmMsg"), confirmLabel: t("security.signOut"), danger: true }))) return;
               setSigningOut(true);
               try {
                 await logoutAll();
                 clearTokens();
-                toast("success", "Signed out of all sessions.");
+                toast("success", t("security.signedOutAll"));
                 window.location.href = "/";
               } catch (e) {
-                toast("error", e instanceof ApiError ? e.message : "Request failed.");
+                toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
               } finally {
                 setSigningOut(false);
               }
             }}
           >
-            {signingOut ? "Signing out…" : "Sign out everywhere"}
+            {signingOut ? t("security.signingOut") : t("security.signOutEverywhere")}
           </button>
         </SettingsRow>
       </SettingsSection>
 
       {enroll && !enabled ? (
         <Modal
-          title="Enable two-factor authentication"
+          title={t("security.enrollTitle")}
           width="sm:w-[460px]"
           onClose={cancelEnroll}
           footer={
             <>
               <button type="button" className="warp-tb-button" onClick={cancelEnroll} disabled={busy}>
-                Cancel
+                {t("action.cancel")}
               </button>
               <button
                 type="button"
@@ -178,7 +181,7 @@ export function SecuritySettingsScreen() {
                 onClick={confirm}
                 disabled={busy || code.trim().length < 6}
               >
-                {busy ? "Verifying…" : "Verify code"}
+                {busy ? t("security.verifying") : t("security.verifyCode")}
               </button>
             </>
           }
@@ -186,23 +189,22 @@ export function SecuritySettingsScreen() {
           <div className="warp-totp">
             <section className="warp-totp-section">
               <header className="warp-totp-head">
-                <span className="warp-badge success">Step 1</span>
-                <p className="warp-totp-title">Scan the QR code</p>
+                <span className="warp-badge success">{t("security.step1")}</span>
+                <p className="warp-totp-title">{t("security.scanQr")}</p>
               </header>
               <p className="warp-totp-desc">
-                Open your authenticator app (Google Authenticator, Authy, 1Password)
-                and scan the code below to add this account.
+                {t("security.scanQrDesc")}
               </p>
               <div className="warp-totp-qr">
                 <TotpQr value={enroll.otpauth_uri} />
-                <p className="warp-totp-qr-hint">Can’t scan the code?</p>
+                <p className="warp-totp-qr-hint">{t("security.cantScan")}</p>
                 <button
                   type="button"
                   className="warp-totp-copy"
-                  title="Copy setup key"
+                  title={t("security.copySetupKey")}
                   onClick={async () => {
                     await copyText(enroll.secret);
-                    toast("success", "Setup key copied.");
+                    toast("success", t("security.setupKeyCopied"));
                   }}
                 >
                   <code>{enroll.secret.replace(/(.{4})/g, "$1 ").trim()}</code>
@@ -215,11 +217,11 @@ export function SecuritySettingsScreen() {
 
             <section className="warp-totp-section">
               <header className="warp-totp-head">
-                <span className="warp-badge success">Step 2</span>
-                <p className="warp-totp-title">Enter the authentication code</p>
+                <span className="warp-badge success">{t("security.step2")}</span>
+                <p className="warp-totp-title">{t("security.enterCodeTitle")}</p>
               </header>
               <label className="warp-totp-field">
-                <span className="warp-totp-label">Authentication code</span>
+                <span className="warp-totp-label">{t("security.authCode")}</span>
                 <input
                   className="warp-set-input"
                   inputMode="numeric"
@@ -232,7 +234,7 @@ export function SecuritySettingsScreen() {
                     if (e.key === "Enter" && code.trim().length === 6 && !busy) confirm();
                   }}
                 />
-                <span className="warp-totp-helper">Enter the 6-digit code from your authenticator app.</span>
+                <span className="warp-totp-helper">{t("security.enterCodeHelper")}</span>
               </label>
             </section>
           </div>

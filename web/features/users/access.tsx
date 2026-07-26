@@ -28,6 +28,7 @@ import {
 } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 import { UsageAreaChart } from "@/shared/usage-chart";
 import { bytes, fromGiB } from "@/lib/format";
 
@@ -43,6 +44,7 @@ function badgeClassForStatus(status: string): string {
 }
 
 function QrImage({ value, size = 180 }: { value: string; size?: number }) {
+  const t = useT();
   const [src, setSrc] = useState("");
   useEffect(() => {
     if (!value) return;
@@ -66,12 +68,13 @@ function QrImage({ value, size = 180 }: { value: string; size?: number }) {
   if (!src) return null;
   return (
     <div className="inline-block bg-white p-2" style={{ borderRadius: 0 }}>
-      <img src={src} alt="Subscription QR code" width={size} height={size} className="block" style={{ borderRadius: 0 }} />
+      <img src={src} alt={t("users.subQrAlt")} width={size} height={size} className="block" style={{ borderRadius: 0 }} />
     </div>
   );
 }
 
 export function AccessManager({ userId }: { userId: string }) {
+  const t = useT();
   const qc = useQueryClient();
   const aq = useQuery({
     queryKey: ["assignments", userId],
@@ -122,7 +125,7 @@ export function AccessManager({ userId }: { userId: string }) {
   const grant = async () => {
     const prof = profiles.find((p) => p.id === profileId);
     if (!prof) {
-      toast("error", "Profile not found.");
+      toast("error", t("access.profileNotFound"));
       return;
     }
     try {
@@ -135,11 +138,11 @@ export function AccessManager({ userId }: { userId: string }) {
         expires_at: expiry ? new Date(`${expiry}T23:59:59Z`).toISOString() : null,
         traffic_limit_bytes: limitGiB && gib > 0 ? fromGiB(gib) : null,
       });
-      toast("success", "Access granted.");
+      toast("success", t("access.accessGranted"));
       resetForm();
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Failed to grant access.");
+      toast("error", e instanceof ApiError ? e.message : t("access.failedGrant"));
     }
   };
 
@@ -151,7 +154,7 @@ export function AccessManager({ userId }: { userId: string }) {
       .filter((p): p is ProfileRead => Boolean(p))
       .filter((p) => !mine.some((a) => a.profile_id === p.id && a.node_id === p.node_id));
     if (targets.length === 0) {
-      toast("error", "All inbounds in this group are already granted.");
+      toast("error", t("access.allInboundsGranted"));
       return;
     }
     const results = await Promise.allSettled(
@@ -175,24 +178,24 @@ export function AccessManager({ userId }: { userId: string }) {
     const reason =
       firstError && firstError.reason instanceof ApiError
         ? firstError.reason.message
-        : "Request failed.";
+        : t("common.requestFailed");
     refresh();
     if (ok > 0 && failed === 0) {
-      toast("success", `Granted ${ok} inbound(s) from "${group.name}".`);
+      toast("success", t("access.grantedFromGroup", { n: ok, group: group.name }));
     } else if (ok > 0) {
-      toast("success", `Granted ${ok} of ${results.length} — ${reason}`);
+      toast("success", t("access.grantedPartial", { ok, total: results.length, reason }));
     } else {
-      toast("error", `Could not apply "${group.name}": ${reason}`);
+      toast("error", t("access.couldNotApplyGroup", { group: group.name, reason }));
     }
   };
 
   const revoke = async (id: string) => {
     try {
       await deleteAssignment(id);
-      toast("success", "Access removed.");
+      toast("success", t("access.accessRemoved"));
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Failed to remove access.");
+      toast("error", e instanceof ApiError ? e.message : t("access.failedRemove"));
     }
   };
 
@@ -202,14 +205,14 @@ export function AccessManager({ userId }: { userId: string }) {
         {available.length > 0 ? (
           <button type="button" className="warp-dg-btn secondary" onClick={() => setAdding((v) => !v)}>
             <Plus size={14} strokeWidth={1.8} aria-hidden />
-            Add inbound
+            {t("access.addInbound")}
           </button>
         ) : null}
       </div>
 
       {groups.length > 0 ? (
         <div className="warp-svc-group">
-          <p className="warp-svc-label">Service bundles</p>
+          <p className="warp-svc-label">{t("access.serviceBundles")}</p>
           <div className="warp-svc-bundles">
             {groups.map((g) => {
               const granted =
@@ -241,7 +244,7 @@ export function AccessManager({ userId }: { userId: string }) {
       {adding ? (
         <div className="warp-svc-add">
           <Select value={profileId} onChange={(e) => setProfileId(e.target.value)} className="h-9">
-            <option value="">Select inbound…</option>
+            <option value="">{t("access.selectInbound")}</option>
             {available.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} · {p.protocol} @ {nodeName(p.node_id)}
@@ -250,18 +253,18 @@ export function AccessManager({ userId }: { userId: string }) {
           </Select>
           <div className="warp-svc-add-grid">
             <label className="warp-svc-field">
-              <span>Traffic limit (GiB)</span>
+              <span>{t("access.trafficLimitGiB")}</span>
               <input
                 type="number"
                 min="0"
                 step="0.1"
                 value={limitGiB}
                 onChange={(e) => setLimitGiB(e.target.value)}
-                placeholder="Unlimited"
+                placeholder={t("access.unlimited")}
               />
             </label>
             <label className="warp-svc-field">
-              <span>Expiry date</span>
+              <span>{t("access.expiryDate")}</span>
               <input
                 type="date"
                 value={expiry}
@@ -269,22 +272,22 @@ export function AccessManager({ userId }: { userId: string }) {
               />
             </label>
           </div>
-          <p className="warp-svc-hint">Leave blank to inherit the user-level quota and expiry.</p>
+          <p className="warp-svc-hint">{t("access.inheritHint")}</p>
           <div className="warp-svc-add-actions">
             <button type="button" className="warp-dg-btn secondary" onClick={resetForm}>
-              Cancel
+              {t("action.cancel")}
             </button>
             <button type="button" className="warp-dg-btn primary" onClick={grant} disabled={!profileId}>
-              Grant
+              {t("access.grant")}
             </button>
           </div>
         </div>
       ) : null}
 
       <div className="warp-svc-group">
-        <p className="warp-svc-label">Granted inbounds</p>
+        <p className="warp-svc-label">{t("access.grantedInbounds")}</p>
         {mine.length === 0 ? (
-          <p className="warp-svc-empty">No inbounds granted yet.</p>
+          <p className="warp-svc-empty">{t("access.noInboundsGranted")}</p>
         ) : (
           <div className="warp-svc-rows">
             {mine.map((a) => (
@@ -295,16 +298,16 @@ export function AccessManager({ userId }: { userId: string }) {
                 </div>
                 <div className="warp-svc-row-usage">
                   {bytes(usedFor(a.id))}
-                  {a.traffic_limit_bytes ? ` / ${bytes(a.traffic_limit_bytes)}` : " used"}
+                  {a.traffic_limit_bytes ? ` / ${bytes(a.traffic_limit_bytes)}` : ` ${t("access.used")}`}
                   {a.expires_at ? (
-                    <span className="warp-svc-row-exp">exp {a.expires_at.slice(0, 10)}</span>
+                    <span className="warp-svc-row-exp">{t("access.exp")} {a.expires_at.slice(0, 10)}</span>
                   ) : null}
                 </div>
                 <span className={`warp-badge ${badgeClassForStatus(a.status)}`}>{a.status}</span>
                 <button
                   type="button"
                   onClick={() => revoke(a.id)}
-                  aria-label="Remove access"
+                  aria-label={t("access.removeAccess")}
                   className="warp-svc-row-remove"
                 >
                   <Trash size={16} strokeWidth={1.8} />
@@ -319,21 +322,22 @@ export function AccessManager({ userId }: { userId: string }) {
 }
 
 export function UserSubscriptionPanel({ userId }: { userId: string }) {
+  const t = useT();
   const qc = useQueryClient();
   const urlQ = useQuery({ queryKey: ["sub-url", userId], queryFn: () => userSubscriptionUrl(userId) });
   const subUrl = urlQ.data?.subscription_url ?? "";
   const [busy, setBusy] = useState(false);
 
   const revoke = async () => {
-    if (!(await confirmDialog({ title: "Revoke subscription link?", message: "Existing clients will stop updating.", confirmLabel: "Revoke", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("users.revokeSubTitle"), message: t("access.revokeSubClientsMessage"), confirmLabel: t("action.revoke"), danger: true }))) return;
     setBusy(true);
     try {
       await revokeSubscription(userId);
-      toast("success", "Subscription revoked.");
+      toast("success", t("users.subRevoked"));
       qc.invalidateQueries({ queryKey: ["sub-url", userId] });
       qc.invalidateQueries({ queryKey: ["sub-links", userId] });
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Revoke failed.");
+      toast("error", e instanceof ApiError ? e.message : t("users.revokeFailed"));
     } finally {
       setBusy(false);
     }
@@ -345,7 +349,7 @@ export function UserSubscriptionPanel({ userId }: { userId: string }) {
         {subUrl ? (
           <QrImage value={subUrl} size={260} />
         ) : (
-          <span className="warp-sub-empty">No subscription link.</span>
+          <span className="warp-sub-empty">{t("access.noSubLink")}</span>
         )}
       </div>
 
@@ -356,15 +360,15 @@ export function UserSubscriptionPanel({ userId }: { userId: string }) {
           disabled={!subUrl}
           onClick={async () => {
             await copyText(subUrl);
-            toast("success", "Subscription link copied.");
+            toast("success", t("users.subLinkCopied"));
           }}
         >
           <Copy size={14} strokeWidth={1.8} aria-hidden />
-          Subscription Link
+          {t("access.subscriptionLink")}
         </button>
         <button type="button" className="warp-dg-btn critical" disabled={busy} onClick={revoke}>
           <Trash size={14} strokeWidth={1.8} aria-hidden />
-          Revoke Subscription
+          {t("access.revokeSubscription")}
         </button>
       </div>
     </div>
@@ -372,6 +376,7 @@ export function UserSubscriptionPanel({ userId }: { userId: string }) {
 }
 
 export function UserNodesUsagePanel({ userId }: { userId: string }) {
+  const t = useT();
   const [days, setDays] = useState(14);
   const nodesQ = useQuery({
     queryKey: ["user-node-usage", userId],
@@ -407,7 +412,7 @@ export function UserNodesUsagePanel({ userId }: { userId: string }) {
         </div>
         <div className="warp-nu-total">
           <span className="warp-nu-total-val">{bytes(total)}</span>
-          <span className="warp-nu-total-label">Total</span>
+          <span className="warp-nu-total-label">{t("access.total")}</span>
         </div>
       </div>
 
@@ -416,13 +421,13 @@ export function UserNodesUsagePanel({ userId }: { userId: string }) {
           series={series.map((p) => ({ ts: p.date, total_bytes: p.total_bytes, upload_bytes: p.upload_bytes, download_bytes: p.download_bytes }))}
           loading={seriesQ.isLoading}
           height={240}
-          empty="No measured traffic in this range."
+          empty={t("access.noMeasuredTraffic")}
         />
       </div>
 
       {rows.length > 0 ? (
         <div className="warp-nu-pernode">
-          <p className="warp-svc-label">Per node</p>
+          <p className="warp-svc-label">{t("access.perNode")}</p>
           <div className="warp-nu-rows">
             {rows.map((r) => {
               const pct = total > 0 ? Math.round((r.total_bytes / total) * 100) : 0;

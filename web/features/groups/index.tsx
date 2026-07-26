@@ -19,6 +19,7 @@ import {
 import {
   WarpButton,
   WarpEmpty,
+  WarpError,
   WarpHead,
   WarpRow,
   WarpSkeleton,
@@ -28,8 +29,10 @@ import { Plus } from "lucide-react";
 import { DgSearch } from "@/components/console/dg-icons";
 import { GroupDialog } from "./dialog";
 import { ServiceSettings } from "./settings";
+import { useT } from "@/lib/i18n";
 
 export function GroupsScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const query = useQuery({ queryKey: ["groups"], queryFn: () => listGroups() });
   const profilesQuery = useQuery({ queryKey: ["profiles"], queryFn: () => listProfiles() });
@@ -56,13 +59,13 @@ export function GroupsScreen() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["groups"] });
   const remove = async (g: GroupRead) => {
-    if (!(await confirmDialog({ title: `Delete service "${g.name}"?`, confirmLabel: "Delete", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("groups.deleteConfirm", { name: g.name }), confirmLabel: t("action.delete"), danger: true }))) return;
     try {
       await deleteGroup(g.id);
-      toast("success", "Service deleted.");
+      toast("success", t("groups.deleted"));
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Delete failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.deleteFailed"));
     }
   };
 
@@ -104,7 +107,7 @@ export function GroupsScreen() {
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="warp-table-top">
-        <span className="title">All services</span>
+        <span className="title">{t("groups.allServices")}</span>
         <div className="right">
           <span className="warp-tb-search-wrap" style={{ maxWidth: 321, flex: 1 }}>
             <DgSearch size={16} />
@@ -112,22 +115,24 @@ export function GroupsScreen() {
               className="warp-tb-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Find service"
+              placeholder={t("groups.findService")}
             />
           </span>
           <WarpButton primary onClick={() => setEditing("new")}>
-            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Service
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> {t("groups.addService")}
           </WarpButton>
         </div>
       </div>
 
       <WarpTableCard className="warp-users-table">
-        <WarpHead cols={["Name", "Users", "Inbounds"]} actions />
+        <WarpHead cols={[t("common.name"), t("groups.users"), t("groups.inbounds")]} actions />
         {query.isLoading ? (
           <WarpSkeleton />
+        ) : query.isError ? (
+          <WarpError onRetry={() => query.refetch()} />
         ) : filtered.length === 0 ? (
           <WarpEmpty>
-            {search ? "No matches." : "No services yet."}
+            {search ? t("common.noMatches") : t("groups.noServicesYet")}
           </WarpEmpty>
         ) : (
           filtered.map((g) => (
@@ -135,8 +140,8 @@ export function GroupsScreen() {
               key={g.id}
               onClick={() => setDetailId(g.id)}
               menu={[
-                { label: "Edit", icon: "edit", onClick: () => setEditing(g) },
-                { label: "Delete", icon: "delete", danger: true, onClick: () => remove(g) },
+                { label: t("action.edit"), icon: "edit", onClick: () => setEditing(g) },
+                { label: t("action.delete"), icon: "delete", danger: true, onClick: () => remove(g) },
               ]}
               cells={[
                 <span className="font-medium">{g.name}</span>,

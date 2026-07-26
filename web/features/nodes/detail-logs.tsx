@@ -3,8 +3,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode } from "react";
 import { nodeLogs } from "@/lib/api";
+import { useT } from "@/lib/i18n";
+import { WarpError } from "@/shared/warp-table";
 
 export function NodeLogs({ nodeId, source }: { nodeId: string; source?: string }) {
+  const t = useT();
   const q = useQuery({
     queryKey: ["node-logs", nodeId, source ?? "all"],
     queryFn: () => nodeLogs(nodeId, 100, source),
@@ -57,9 +60,11 @@ export function NodeLogs({ nodeId, source }: { nodeId: string; source?: string }
     <div>
       <pre className="warp-logs-pre">
         {q.isLoading ? (
-          "Loading…"
+          t("common.loading")
+        ) : q.isError ? (
+          <WarpError onRetry={() => q.refetch()} />
         ) : logs.length === 0 ? (
-          "No logs reported by this node yet."
+          t("nodes.noLogs")
         ) : (
           logs.map((l, i) => {
             const { ts, lvl, msg } = parse(l);

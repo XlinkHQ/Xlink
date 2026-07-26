@@ -9,6 +9,7 @@ import { toast } from "@/components/ui/toast";
 import { ApiError, createGroup, type GroupRead, type ProfileRead, updateGroup } from "@/lib/api";
 import { Field } from "@/shared/parts";
 import { InlineEditPanel } from "@/shared/settings-kit";
+import { useT } from "@/lib/i18n";
 
 export function GroupDialog({
   group,
@@ -25,6 +26,7 @@ export function GroupDialog({
   onSaved: () => void;
   variant?: "modal" | "inline";
 }) {
+  const t = useT();
   const [name, setName] = useState(group?.name ?? "");
   const [slug, setSlug] = useState(group?.slug ?? "");
   const [selected, setSelected] = useState<Set<string>>(() => new Set(group?.profile_ids ?? []));
@@ -52,23 +54,23 @@ export function GroupDialog({
           profile_ids,
         });
       }
-      toast("success", group ? "Service updated." : "Service created.");
+      toast("success", group ? t("groups.updated") : t("groups.created"));
       onSaved();
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.message : "Save failed.");
+      toast("error", err instanceof ApiError ? err.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
   };
 
-  const title = group ? "Edit service" : "Create service";
+  const title = group ? t("groups.editService") : t("groups.createService");
   const footer = (
     <>
       <Button type="button" variant="outline" onClick={onClose}>
-        Cancel
+        {t("action.cancel")}
       </Button>
       <Button type="submit" variant="primary" disabled={busy || !name.trim()}>
-        {busy ? "Saving…" : group ? "Save" : "Create service"}
+        {busy ? t("common.saving") : group ? t("action.save") : t("groups.createService")}
       </Button>
     </>
   );
@@ -81,24 +83,24 @@ export function GroupDialog({
       onSubmit={submit}
       footer={footer}
     >
-      <p className="warp-dlg-section-title">Details</p>
+      <p className="warp-dlg-section-title">{t("groups.details")}</p>
       <div className="warp-dlg-2col">
-        <Field label="Name" hint="Shown to admins and in user access.">
+        <Field label={t("common.name")} hint={t("groups.nameHint")}>
           <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="EU bundle" />
         </Field>
         {!group ? (
-          <Field label="Slug" hint="URL-safe id · auto from name.">
-            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="auto from name" />
+          <Field label={t("groups.slug")} hint={t("groups.slugHint")}>
+            <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder={t("groups.slugPlaceholder")} />
           </Field>
         ) : null}
       </div>
 
       <div className="warp-dlg-divider" />
-      <p className="warp-dlg-section-title">Inbounds</p>
-      <Field label="Inbounds" hint="Members of this service grant these inbounds.">
+      <p className="warp-dlg-section-title">{t("groups.inbounds")}</p>
+      <Field label={t("groups.inbounds")} hint={t("groups.inboundsHint")}>
         <div className="warp-dlg-chipbox">
           {profiles.length === 0 ? (
-            <span className="text-[11px] text-fg-muted">No inbounds available.</span>
+            <span className="text-[11px] text-fg-muted">{t("groups.noInboundsAvailable")}</span>
           ) : (
             profiles.map((p) => (
               <button

@@ -11,6 +11,7 @@ import {
   ApiError,
   type NotificationSettingsRead,
 } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { SettingsRow, useRegisterSave } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
@@ -26,6 +27,7 @@ const EMPTY: NotificationSettingsRead = {
 };
 
 export function NotificationsSettingsScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["notification-settings"], queryFn: () => getNotificationSettings() });
   const [form, setForm] = useState<NotificationSettingsRead>(EMPTY);
@@ -37,9 +39,9 @@ export function NotificationsSettingsScreen() {
     setTesting(true);
     try {
       await testNotificationSettings(form);
-      toast("success", "Test notification sent — check your channel.");
+      toast("success", t("notifications.testSent"));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Test failed.");
+      toast("error", e instanceof ApiError ? e.message : t("notifications.testFailed"));
     } finally {
       setTesting(false);
     }
@@ -61,9 +63,9 @@ export function NotificationsSettingsScreen() {
       const saved = await updateNotificationSettings(form);
       setForm(saved);
       qc.invalidateQueries({ queryKey: ["notification-settings"] });
-      toast("success", "Notification settings saved.");
+      toast("success", t("notifications.saved"));
     } catch (e) {
-      toast("error", e instanceof Error ? e.message : "Save failed.");
+      toast("error", e instanceof Error ? e.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -73,10 +75,10 @@ export function NotificationsSettingsScreen() {
     <div className="w-full">
       <SettingsSection
         icon={Bell}
-        title="Alerts"
-        description="Get notified when users approach limits or nodes go offline."
+        title={t("notifications.alertsTitle")}
+        description={t("notifications.alertsDesc")}
       >
-        <SettingsRow label="Enable notifications" hint="Master switch for all alert channels.">
+        <SettingsRow label={t("notifications.enable")} hint={t("notifications.enableHint")}>
           <label className="warp-switch">
             <input
               type="checkbox"
@@ -86,7 +88,7 @@ export function NotificationsSettingsScreen() {
             <span className="warp-switch-track" />
           </label>
         </SettingsRow>
-        <SettingsRow label="Expiry warning (days)" hint="Warn this many days before a user expires.">
+        <SettingsRow label={t("notifications.expiryWarning")} hint={t("notifications.expiryWarningHint")}>
           <input
             type="number"
             min={0}
@@ -96,7 +98,7 @@ export function NotificationsSettingsScreen() {
             onChange={(e) => set("notify_expiring_days", Math.max(0, Number(e.target.value) || 0))}
           />
         </SettingsRow>
-        <SettingsRow label="Data usage warning (%)" hint="Warn when a user reaches this % of their quota.">
+        <SettingsRow label={t("notifications.usageWarning")} hint={t("notifications.usageWarningHint")}>
           <input
             type="number"
             min={1}
@@ -108,7 +110,7 @@ export function NotificationsSettingsScreen() {
             }
           />
         </SettingsRow>
-        <SettingsRow label="Node-down alert" hint="Notify when a node goes offline or recovers.">
+        <SettingsRow label={t("notifications.nodeDown")} hint={t("notifications.nodeDownHint")}>
           <label className="warp-switch">
             <input
               type="checkbox"
@@ -123,10 +125,10 @@ export function NotificationsSettingsScreen() {
       <SettingsSection
         divider
         icon={Bell}
-        title="Channels"
-        description="Where alerts are delivered. Leave blank to fall back to server config."
+        title={t("notifications.channelsTitle")}
+        description={t("notifications.channelsDesc")}
       >
-        <SettingsRow label="Webhook URL(s)" hint="Comma-separated HTTP endpoints.">
+        <SettingsRow label={t("notifications.webhookUrls")} hint={t("notifications.webhookUrlsHint")}>
           <input
             className="warp-set-input warp-set-input-wide"
             placeholder="https://example.com/hook"
@@ -134,7 +136,7 @@ export function NotificationsSettingsScreen() {
             onChange={(e) => set("webhook_address", e.target.value)}
           />
         </SettingsRow>
-        <SettingsRow label="Discord webhook" hint="Discord channel webhook URL.">
+        <SettingsRow label={t("notifications.discordWebhook")} hint={t("notifications.discordWebhookHint")}>
           <input
             className="warp-set-input warp-set-input-wide"
             placeholder="https://discord.com/api/webhooks/…"
@@ -142,7 +144,7 @@ export function NotificationsSettingsScreen() {
             onChange={(e) => set("discord_webhook_url", e.target.value)}
           />
         </SettingsRow>
-        <SettingsRow label="Telegram bot token" hint="Token from @BotFather.">
+        <SettingsRow label={t("notifications.telegramBotToken")} hint={t("notifications.telegramBotTokenHint")}>
           <input
             className="warp-set-input warp-set-input-wide"
             placeholder="123456:ABC…"
@@ -150,7 +152,7 @@ export function NotificationsSettingsScreen() {
             onChange={(e) => set("telegram_bot_token", e.target.value)}
           />
         </SettingsRow>
-        <SettingsRow label="Telegram chat ID(s)" hint="Comma-separated chat IDs.">
+        <SettingsRow label={t("notifications.telegramChatIds")} hint={t("notifications.telegramChatIdsHint")}>
           <input
             className="warp-set-input warp-set-input-wide"
             placeholder="-1001234567890"
@@ -158,9 +160,9 @@ export function NotificationsSettingsScreen() {
             onChange={(e) => set("telegram_chat_ids", e.target.value)}
           />
         </SettingsRow>
-        <SettingsRow label="Test delivery" hint="Send a test notification to your configured channels.">
+        <SettingsRow label={t("notifications.testDelivery")} hint={t("notifications.testDeliveryHint")}>
           <button type="button" className="warp-tb-button" onClick={sendTest} disabled={testing}>
-            {testing ? "Sending…" : "Send test"}
+            {testing ? t("notifications.sending") : t("notifications.sendTest")}
           </button>
         </SettingsRow>
       </SettingsSection>

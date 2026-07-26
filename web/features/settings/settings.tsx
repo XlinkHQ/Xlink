@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { useT, type TranslateFn } from "@/lib/i18n";
 import { type SaveReg, SettingsSaveContext } from "./save-context";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { BrandingSettingsScreen } from "./branding-settings";
@@ -29,112 +30,130 @@ type Section = {
 };
 
 const IMG = "/settings-icons";
-const SECTIONS: Section[] = [
-  {
-    key: "subscription",
-    label: "Subscription",
-    description: "Manage your plan, license and billing details.",
-    tab: "General",
-    image: `${IMG}/customization.png`,
-    Comp: SubscriptionSettingsScreen,
-  },
-  {
-    key: "user-templates",
-    label: "User templates",
-    description: "Presets for fast user creation (data limit, duration, device limit).",
-    tab: "General",
-    image: `${IMG}/customization.png`,
-    Comp: UserTemplatesSettingsScreen,
-  },
-  {
-    key: "branding",
-    label: "Branding",
-    description: "Customize the panel name, logo and colors.",
-    tab: "General",
-    image: `${IMG}/custom-settings.png`,
-    Comp: BrandingSettingsScreen,
-  },
-  {
-    key: "security",
-    label: "Authentication",
-    description: "Manage two-factor authentication for admin sign-in.",
-    tab: "Security",
-    image: `${IMG}/providers.png`,
-    Comp: SecuritySettingsScreen,
-  },
-  {
-    key: "certificates",
-    label: "Certificates",
-    description: "TLS and REALITY posture of every inbound.",
-    tab: "Security",
-    image: `${IMG}/providers.png`,
-    Comp: CertificatesSettingsScreen,
-  },
-  {
-    key: "backup",
-    label: "Backup",
-    description: "Create, restore and schedule panel backups.",
-    tab: "Backup",
-    image: `${IMG}/vector.png`,
-    Comp: BackupScreen,
-  },
-  {
-    key: "retention",
-    label: "Data retention",
-    description: "Automatic cleanup of old traffic records.",
-    tab: "Backup",
-    image: `${IMG}/vector.png`,
-    Comp: RetentionSettingsScreen,
-  },
-  {
-    key: "notifications",
-    label: "Notifications",
-    description: "Expiry, usage and node-down alerts across webhook, Discord and Telegram.",
-    tab: "Monitoring",
-    image: `${IMG}/logstash.png`,
-    Comp: NotificationsSettingsScreen,
-  },
-  {
-    key: "warp",
-    label: "Cloudflare WARP",
-    description: "WARP WireGuard outbound for geo-restricted destinations.",
-    tab: "Monitoring",
-    image: `${IMG}/logstash.png`,
-    Comp: WarpSettingsScreen,
-  },
-  {
-    key: "scheduler",
-    label: "Scheduler",
-    description: "Simulate node placement and see why the scheduler picks a node.",
-    tab: "Monitoring",
-    image: `${IMG}/logstash.png`,
-    Comp: SchedulerSettingsScreen,
-  },
-  {
-    key: "metrics",
-    label: "Metrics",
-    description: "Live panel metrics and Prometheus scrape endpoint.",
-    tab: "Monitoring",
-    image: `${IMG}/logstash.png`,
-    Comp: MetricsSettingsScreen,
-  },
-  {
-    key: "gitops",
-    label: "Change history",
-    description: "Config snapshots and diffs committed across the panel.",
-    tab: "Monitoring",
-    image: `${IMG}/logstash.png`,
-    Comp: GitOpsSettingsScreen,
-  },
-];
+
+function tabLabel(t: TranslateFn, tab: (typeof TAB_LIST)[number]): string {
+  switch (tab) {
+    case "General":
+      return t("settings.tab.general");
+    case "Security":
+      return t("settings.tab.security");
+    case "Backup":
+      return t("settings.tab.backup");
+    case "Monitoring":
+      return t("settings.tab.monitoring");
+  }
+}
+
+function buildSections(t: TranslateFn): Section[] {
+  return [
+    {
+      key: "subscription",
+      label: t("settings.subscription.label"),
+      description: t("settings.subscription.desc"),
+      tab: "General",
+      image: `${IMG}/customization.png`,
+      Comp: SubscriptionSettingsScreen,
+    },
+    {
+      key: "user-templates",
+      label: t("settings.userTemplates.label"),
+      description: t("settings.userTemplates.desc"),
+      tab: "General",
+      image: `${IMG}/customization.png`,
+      Comp: UserTemplatesSettingsScreen,
+    },
+    {
+      key: "branding",
+      label: t("settings.branding.label"),
+      description: t("settings.branding.desc"),
+      tab: "General",
+      image: `${IMG}/custom-settings.png`,
+      Comp: BrandingSettingsScreen,
+    },
+    {
+      key: "security",
+      label: t("settings.security.label"),
+      description: t("settings.security.desc"),
+      tab: "Security",
+      image: `${IMG}/providers.png`,
+      Comp: SecuritySettingsScreen,
+    },
+    {
+      key: "certificates",
+      label: t("settings.certificates.label"),
+      description: t("settings.certificates.desc"),
+      tab: "Security",
+      image: `${IMG}/providers.png`,
+      Comp: CertificatesSettingsScreen,
+    },
+    {
+      key: "backup",
+      label: t("settings.backup.label"),
+      description: t("settings.backup.desc"),
+      tab: "Backup",
+      image: `${IMG}/vector.png`,
+      Comp: BackupScreen,
+    },
+    {
+      key: "retention",
+      label: t("settings.retention.label"),
+      description: t("settings.retention.desc"),
+      tab: "Backup",
+      image: `${IMG}/vector.png`,
+      Comp: RetentionSettingsScreen,
+    },
+    {
+      key: "notifications",
+      label: t("settings.notifications.label"),
+      description: t("settings.notifications.desc"),
+      tab: "Monitoring",
+      image: `${IMG}/logstash.png`,
+      Comp: NotificationsSettingsScreen,
+    },
+    {
+      key: "warp",
+      label: t("settings.warp.label"),
+      description: t("settings.warp.desc"),
+      tab: "Monitoring",
+      image: `${IMG}/logstash.png`,
+      Comp: WarpSettingsScreen,
+    },
+    {
+      key: "scheduler",
+      label: t("settings.scheduler.label"),
+      description: t("settings.scheduler.desc"),
+      tab: "Monitoring",
+      image: `${IMG}/logstash.png`,
+      Comp: SchedulerSettingsScreen,
+    },
+    {
+      key: "metrics",
+      label: t("settings.metrics.label"),
+      description: t("settings.metrics.desc"),
+      tab: "Monitoring",
+      image: `${IMG}/logstash.png`,
+      Comp: MetricsSettingsScreen,
+    },
+    {
+      key: "gitops",
+      label: t("settings.gitops.label"),
+      description: t("settings.gitops.desc"),
+      tab: "Monitoring",
+      image: `${IMG}/logstash.png`,
+      Comp: GitOpsSettingsScreen,
+    },
+  ];
+}
 
 export function SettingsScreen() {
+  const t = useT();
   const [section, setSection] = useState<string | null>(null);
   const [tab, setTab] = useState<(typeof TAB_LIST)[number]>("General");
   const [saveReg, setSaveReg] = useState<SaveReg>(null);
 
-  const active = SECTIONS.find((s) => s.key === section) ?? null;
-  const tabSections = SECTIONS.filter((s) => s.tab === tab);
+  const sections = buildSections(t);
+  const active = sections.find((s) => s.key === section) ?? null;
+  const tabSections = sections.filter((s) => s.tab === tab);
 
   return (
     <div className="w-full px-4 pb-6 pt-0">
@@ -145,7 +164,7 @@ export function SettingsScreen() {
               <button
                 type="button"
                 className="warp-breadcrumbs-back"
-                aria-label="Back"
+                aria-label={t("action.back")}
                 onClick={() => setSection(null)}
               >
                 <ArrowLeft size={20} strokeWidth={1.9} aria-hidden />
@@ -153,7 +172,7 @@ export function SettingsScreen() {
               <span className="warp-breadcrumbs-divider" />
               <div className="links">
                 <button type="button" className="crumb" onClick={() => setSection(null)}>
-                  {active.tab}
+                  {tabLabel(t, active.tab)}
                 </button>
                 <ChevronRight size={20} strokeWidth={2} className="crumb-sep" aria-hidden />
                 <span className="crumb active">{active.label}</span>
@@ -174,7 +193,7 @@ export function SettingsScreen() {
                   disabled={saveReg.busy}
                   onClick={() => saveReg.fn()}
                 >
-                  {saveReg.busy ? "Saving…" : "Save"}
+                  {saveReg.busy ? t("common.saving") : t("action.save")}
                 </button>
               </div>
             ) : null}
@@ -183,16 +202,16 @@ export function SettingsScreen() {
       ) : (
         <>
         <div className="warp-pd-tabs warp-settings-tabs" role="tablist">
-          {TAB_LIST.map((t) => (
+          {TAB_LIST.map((tabName) => (
             <button
-              key={t}
+              key={tabName}
               type="button"
               role="tab"
-              aria-selected={t === tab}
-              className={cn("warp-pd-tab", t === tab && "is-active")}
-              onClick={() => setTab(t)}
+              aria-selected={tabName === tab}
+              className={cn("warp-pd-tab", tabName === tab && "is-active")}
+              onClick={() => setTab(tabName)}
             >
-              {t}
+              {tabLabel(t, tabName)}
             </button>
           ))}
         </div>

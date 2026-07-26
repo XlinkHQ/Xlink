@@ -5,15 +5,16 @@ import { GitCommitVertical } from "lucide-react";
 import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { type GitOpsRecordRead, gitopsRecords } from "@/lib/api";
+import { useT, type TranslateFn } from "@/lib/i18n";
 import { SettingsSection } from "@/shared/settings-kit";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 
-function relTime(iso: string): string {
+function relTime(iso: string, t: TranslateFn): string {
   const s = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 2592000) return `${Math.floor(s / 86400)}d ago`;
+  if (s < 60) return t("common.relTime.seconds", { n: s });
+  if (s < 3600) return t("common.relTime.minutes", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("common.relTime.hours", { n: Math.floor(s / 3600) });
+  if (s < 2592000) return t("common.relTime.days", { n: Math.floor(s / 86400) });
   return new Date(iso).toLocaleDateString();
 }
 
@@ -40,6 +41,7 @@ function DiffBlock({ title, tone, obj }: { title: string; tone: string; obj: Rec
 }
 
 export function GitOpsSettingsScreen() {
+  const t = useT();
   const q = useQuery({ queryKey: ["gitops-records"], queryFn: () => gitopsRecords(100) });
   const records = q.data ?? [];
   const [detail, setDetail] = useState<GitOpsRecordRead | null>(null);
@@ -48,22 +50,24 @@ export function GitOpsSettingsScreen() {
     <div className="w-full">
       <SettingsSection
         icon={GitCommitVertical}
-        title="Change history"
-        description="Config snapshots and diffs committed across the panel — click a record to view its diff."
+        title={t("gitops.title")}
+        description={t("gitops.description")}
       >
         <WarpTableCard className="warp-users-table warp-edge-table warp-gitops-table">
-          <WarpHead cols={["When", "Entity", "Action", "Actor", "Message"]} />
+          <WarpHead cols={[t("gitops.col.when"), t("gitops.col.entity"), t("action.title"), t("gitops.col.actor"), t("gitops.col.message")]} />
           {q.isLoading ? (
             <WarpSkeleton />
+          ) : q.isError ? (
+            <WarpError onRetry={() => q.refetch()} />
           ) : records.length === 0 ? (
-            <WarpEmpty>No config changes recorded yet.</WarpEmpty>
+            <WarpEmpty>{t("gitops.empty")}</WarpEmpty>
           ) : (
             records.map((r) => (
               <WarpRow
                 key={r.id}
                 onClick={() => setDetail(r)}
                 cells={[
-                  <span className="text-fg-muted" title={new Date(r.created_at).toLocaleString()}>{relTime(r.created_at)}</span>,
+                  <span className="text-fg-muted" title={new Date(r.created_at).toLocaleString()}>{relTime(r.created_at, t)}</span>,
                   <span className="font-medium">{r.entity_type}</span>,
                   <span className={`warp-badge ${actionVariant(r.action)}`}>{r.action}</span>,
                   <span className="text-fg-muted">{r.actor || "—"}</span>,
@@ -82,19 +86,19 @@ export function GitOpsSettingsScreen() {
           onClose={() => setDetail(null)}
           footer={
             <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={() => setDetail(null)}>
-              Close
+              {t("action.close")}
             </button>
           }
         >
           <p className="text-sm text-fg-muted" style={{ marginBottom: 12 }}>
-            {detail.actor ? `By ${detail.actor} · ` : ""}{new Date(detail.created_at).toLocaleString()}
+            {detail.actor ? `${t("gitops.by", { actor: detail.actor })} · ` : ""}{new Date(detail.created_at).toLocaleString()}
             {detail.message ? ` · ${detail.message}` : ""}
           </p>
-          <DiffBlock title="Added" tone="success" obj={detail.diff.added} />
-          <DiffBlock title="Changed" tone="warning" obj={detail.diff.changed} />
-          <DiffBlock title="Removed" tone="critical" obj={detail.diff.removed} />
+          <DiffBlock title={t("gitops.diff.added")} tone="success" obj={detail.diff.added} />
+          <DiffBlock title={t("gitops.diff.changed")} tone="warning" obj={detail.diff.changed} />
+          <DiffBlock title={t("gitops.diff.removed")} tone="critical" obj={detail.diff.removed} />
           {!detail.diff.added && !detail.diff.changed && !detail.diff.removed ? (
-            <p className="text-sm text-fg-muted">No field-level diff recorded for this change.</p>
+            <p className="text-sm text-fg-muted">{t("gitops.noDiff")}</p>
           ) : null}
         </Modal>
       ) : null}

@@ -23,6 +23,7 @@ import { relativeTime } from "@/lib/status";
 import {
   WarpButton,
   WarpEmpty,
+  WarpError,
   WarpHead,
   WarpMenu,
   WarpRow,
@@ -30,6 +31,7 @@ import {
   WarpTableCard,
 } from "@/shared/warp-table";
 import { SearchBox } from "@/components/ui/search-box";
+import { useT } from "@/lib/i18n";
 
 type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";
 function Badge({ variant, children }: { variant: BadgeVariant; children: React.ReactNode }) {
@@ -56,6 +58,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function NodesScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const query = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes() });
   const nodes = (query.data?.items ?? []) as NodeRead[];
@@ -73,7 +76,7 @@ export function NodesScreen() {
       if (ok) toast("success", ok);
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
     }
   };
 
@@ -108,15 +111,15 @@ export function NodesScreen() {
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="warp-table-top">
-        <span className="title">All nodes</span>
+        <span className="title">{t("nodes.allNodes")}</span>
         <div className="right">
-          <SearchBox value={search} onChange={setSearch} placeholder="Find node" />
+          <SearchBox value={search} onChange={setSearch} placeholder={t("nodes.findNode")} />
           <WarpMenu
-            label="General Actions"
+            label={t("nodes.generalActions")}
             items={[
-              { label: "Refresh", icon: "refresh", onClick: () => refresh() },
+              { label: t("action.refresh"), icon: "refresh", onClick: () => refresh() },
               {
-                label: "Export Backup",
+                label: t("nodes.exportBackup"),
                 icon: "download",
                 onClick: async () => {
                   try {
@@ -128,27 +131,29 @@ export function NodesScreen() {
                     a.download = "xlink-backup.json";
                     a.click();
                     URL.revokeObjectURL(url);
-                    toast("success", "Backup exported.");
+                    toast("success", t("nodes.backupExported"));
                   } catch (e) {
-                    toast("error", e instanceof ApiError ? e.message : "Export failed.");
+                    toast("error", e instanceof ApiError ? e.message : t("nodes.exportFailed"));
                   }
                 },
               },
             ]}
           />
           <WarpButton primary onClick={() => setEditing("new")}>
-            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Node
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> {t("nodes.addNode")}
           </WarpButton>
         </div>
       </div>
 
       <WarpTableCard className="warp-users-table">
-        <WarpHead cols={["Name", "Host", "Status"]} actions />
+        <WarpHead cols={[t("common.name"), t("nodes.host"), t("common.status")]} actions />
         {query.isLoading ? (
           <WarpSkeleton />
+        ) : query.isError ? (
+          <WarpError onRetry={() => query.refetch()} />
         ) : filtered.length === 0 ? (
           <WarpEmpty>
-            {search ? "No matches." : "No nodes yet."}
+            {search ? t("common.noMatches") : t("nodes.noNodesYet")}
           </WarpEmpty>
         ) : (
           filtered.map((n) => (
@@ -156,45 +161,45 @@ export function NodesScreen() {
               key={n.id}
               onClick={() => setDetailId(n.id)}
               menu={[
-                { label: "Edit", icon: "edit", onClick: () => setEditing(n) },
+                { label: t("action.edit"), icon: "edit", onClick: () => setEditing(n) },
                 {
-                  label: "Restart core",
+                  label: t("nodes.restartCore"),
                   icon: "refresh",
                   onClick: async () => {
                     if (
                       await confirmDialog({
-                        title: `Restart core on "${n.name}"?`,
-                        message: "Active connections drop briefly.",
-                        confirmLabel: "Restart",
+                        title: t("nodes.restartCoreConfirm", { name: n.name }),
+                        message: t("nodes.restartCoreMessage"),
+                        confirmLabel: t("nodes.restart"),
                         danger: true,
                       })
                     )
-                      act(() => restartNodeCore(n.id), "Core restart requested.");
+                      act(() => restartNodeCore(n.id), t("nodes.coreRestartRequested"));
                   },
                 },
                 {
-                  label: "Disable",
+                  label: t("action.disable"),
                   icon: "disable",
                   danger: true,
                   onClick: async () => {
-                    if (await confirmDialog({ title: `Disable node "${n.name}"?`, confirmLabel: "Disable", danger: true }))
-                      act(() => disableNode(n.id), "Node disabled.");
+                    if (await confirmDialog({ title: t("nodes.disableConfirm", { name: n.name }), confirmLabel: t("action.disable"), danger: true }))
+                      act(() => disableNode(n.id), t("nodes.nodeDisabled"));
                   },
                 },
                 {
-                  label: "Delete",
+                  label: t("action.delete"),
                   icon: "delete",
                   danger: true,
                   onClick: async () => {
                     if (
                       await confirmDialog({
-                        title: `Delete node "${n.name}"?`,
-                        message: "The node and its assignments are removed. This cannot be undone.",
-                        confirmLabel: "Delete",
+                        title: t("nodes.deleteConfirm", { name: n.name }),
+                        message: t("nodes.deleteMessage"),
+                        confirmLabel: t("action.delete"),
                         danger: true,
                       })
                     )
-                      act(() => deleteNode(n.id), "Node deleted.");
+                      act(() => deleteNode(n.id), t("nodes.nodeDeleted"));
                   },
                 },
               ]}

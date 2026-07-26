@@ -28,6 +28,7 @@ import { userStatus } from "@/lib/status";
 import {
   WarpButton,
   WarpEmpty,
+  WarpError,
   WarpHead,
   WarpMenu,
   WarpSkeleton,
@@ -44,10 +45,12 @@ import { Badge, UserNameCell, SortTh, type SortCol, type SortDir } from "./compo
 import { UserProfileView } from "./UserProfileView";
 import { BulkEditModal } from "./BulkEditModal";
 import { useUserFilters } from "./useUserFilters";
+import { useT } from "@/lib/i18n";
 
 type UserStatusKey = "all" | "online" | "active" | "expired" | "disabled" | "limited";
 
 export function UsersScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const [showRemoved, setShowRemoved] = useState(false);
   const query = useInfiniteQuery({
@@ -145,9 +148,9 @@ export function UsersScreen() {
       refresh();
       qc.invalidateQueries({ queryKey: ["users-usage"] });
       if (res.failed === 0) toast("success", `${ok} (${res.ok}).`);
-      else toast("error", `${res.ok}/${ids.length} done — ${res.failed} failed.`);
+      else toast("error", t("users.bulkPartial", { ok: res.ok, total: ids.length, failed: res.failed }));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Bulk action failed.");
+      toast("error", e instanceof ApiError ? e.message : t("users.bulkFailed"));
     }
   };
   const [bulkEdit, setBulkEdit] = useState<null | "limit" | "expiry" | "reset">(null);
@@ -159,7 +162,7 @@ export function UsersScreen() {
       if (ok) toast("success", ok);
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
     }
   };
 
@@ -183,60 +186,60 @@ export function UsersScreen() {
       refresh();
     } catch (e) {
       qc.setQueryData(key, prev);
-      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
     }
   };
 
   const copyId = async (id: string) => {
     const ok = await copyText(id);
-    toast(ok ? "success" : "error", ok ? "User ID copied." : "Copy failed — select and copy manually.");
+    toast(ok ? "success" : "error", ok ? t("users.userIdCopied") : t("common.copyFailed"));
   };
   const copySub = async (id: string) => {
     let url: string;
     try {
       url = (await userSubscriptionUrl(id)).subscription_url;
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Could not get subscription link.");
+      toast("error", e instanceof ApiError ? e.message : t("users.couldNotGetSubLink"));
       return;
     }
     const ok = await copyText(url);
-    toast(ok ? "success" : "error", ok ? "Subscription link copied." : "Copy failed — select and copy manually.");
+    toast(ok ? "success" : "error", ok ? t("users.subLinkCopied") : t("common.copyFailed"));
   };
   const resetUsage = async (id: string) => {
-    if (!(await confirmDialog({ title: "Reset traffic usage?", message: "This user's counter returns to zero.", confirmLabel: "Reset", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("users.resetUsageTitle"), message: t("users.resetUsageMessage"), confirmLabel: t("action.reset"), danger: true }))) return;
     try {
       await resetUserUsage(id);
-      toast("success", "Usage reset.");
+      toast("success", t("users.usageReset"));
       qc.invalidateQueries({ queryKey: ["a-traffic"] });
       qc.invalidateQueries({ queryKey: ["assignments"] });
       qc.invalidateQueries({ queryKey: ["users-usage"] });
       qc.invalidateQueries({ queryKey: ["traffic"] });
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Reset failed.");
+      toast("error", e instanceof ApiError ? e.message : t("users.resetFailed"));
     }
   };
 
   const revoke = async (id: string) => {
-    if (!(await confirmDialog({ title: "Revoke subscription link?", message: "The current link will stop working.", confirmLabel: "Revoke", danger: true })))
+    if (!(await confirmDialog({ title: t("users.revokeSubTitle"), message: t("users.revokeSubMessage"), confirmLabel: t("action.revoke"), danger: true })))
       return;
     try {
       await revokeSubscription(id);
-      toast("success", "Subscription revoked.");
+      toast("success", t("users.subRevoked"));
       qc.invalidateQueries({ queryKey: ["users"] });
       qc.invalidateQueries({ queryKey: ["sub-url"] });
       qc.invalidateQueries({ queryKey: ["sub-links"] });
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
     }
   };
 
   const restore = async (id: string) => {
     try {
       await restoreUser(id);
-      toast("success", "User restored.");
+      toast("success", t("users.userRestored"));
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Restore failed.");
+      toast("error", e instanceof ApiError ? e.message : t("users.restoreFailed"));
     }
   };
 
@@ -261,8 +264,8 @@ export function UsersScreen() {
         onReset={() => resetUsage(live.id)}
         onToggle={() =>
           live.is_active
-            ? act(() => disableUser(live.id), "User disabled.")
-            : act(() => enableUser(live.id), "User enabled.")
+            ? act(() => disableUser(live.id), t("users.userDisabled"))
+            : act(() => enableUser(live.id), t("users.userEnabled"))
         }
       />
     );
@@ -272,37 +275,37 @@ export function UsersScreen() {
     <div className="mx-auto w-full max-w-6xl">
       {selected.size > 0 ? (
         <div className="warp-bulkbar">
-          <span className="warp-bulk-count">{selected.size} selected</span>
+          <span className="warp-bulk-count">{t("users.selectedCount", { n: selected.size })}</span>
           <span className="warp-bulk-sep" />
-          <button type="button" className="warp-tb-button" onClick={() => bulkServer("enable", "Enabled")}>
-            <Power size={14} aria-hidden /> Enable
+          <button type="button" className="warp-tb-button" onClick={() => bulkServer("enable", t("users.enabled"))}>
+            <Power size={14} aria-hidden /> {t("action.enable")}
           </button>
-          <button type="button" className="warp-tb-button" onClick={() => bulkServer("disable", "Disabled")}>
-            <Power size={14} aria-hidden /> Disable
+          <button type="button" className="warp-tb-button" onClick={() => bulkServer("disable", t("users.disabled"))}>
+            <Power size={14} aria-hidden /> {t("action.disable")}
           </button>
-          <button type="button" className="warp-tb-button" onClick={() => bulkServer("reset_usage", "Usage reset")}>
-            <RotateCcw size={14} aria-hidden /> Reset usage
+          <button type="button" className="warp-tb-button" onClick={() => bulkServer("reset_usage", t("users.usageReset"))}>
+            <RotateCcw size={14} aria-hidden /> {t("users.resetUsage")}
           </button>
           <button type="button" className="warp-tb-button" onClick={() => setBulkEdit("limit")}>
-            <Gauge size={14} aria-hidden /> Data limit
+            <Gauge size={14} aria-hidden /> {t("users.dataLimit")}
           </button>
           <button type="button" className="warp-tb-button" onClick={() => setBulkEdit("expiry")}>
-            <CalendarClock size={14} aria-hidden /> Expiry
+            <CalendarClock size={14} aria-hidden /> {t("users.expiry")}
           </button>
           <button type="button" className="warp-tb-button" onClick={() => setBulkEdit("reset")}>
-            <RefreshCw size={14} aria-hidden /> Auto-reset
+            <RefreshCw size={14} aria-hidden /> {t("users.autoReset")}
           </button>
           <button
             type="button"
             className="warp-tb-button warp-tb-button-danger"
             onClick={async () => {
-              if (await confirmDialog({ title: `Delete ${selected.size} user(s)?`, message: "This cannot be undone.", confirmLabel: "Delete", danger: true }))
-                bulkServer("delete", "Deleted");
+              if (await confirmDialog({ title: t("users.deleteManyTitle", { n: selected.size }), message: t("common.cannotBeUndone"), confirmLabel: t("action.delete"), danger: true }))
+                bulkServer("delete", t("users.deleted"));
             }}
           >
-            <Trash size={14} aria-hidden /> Delete
+            <Trash size={14} aria-hidden /> {t("action.delete")}
           </button>
-          <button type="button" className="warp-tb-button warp-bulk-clear" onClick={clearSel}>Clear</button>
+          <button type="button" className="warp-tb-button warp-bulk-clear" onClick={clearSel}>{t("action.clear")}</button>
         </div>
       ) : null}
 
@@ -319,7 +322,7 @@ export function UsersScreen() {
       ) : null}
 
       <div className="warp-table-top">
-        <span className="title">All users</span>
+        <span className="title">{t("users.allUsers")}</span>
         <div className="right">
           <label className="flex cursor-pointer select-none items-center gap-1.5 text-[13px] text-fg-muted">
             <input
@@ -328,11 +331,11 @@ export function UsersScreen() {
               checked={showRemoved}
               onChange={(e) => setShowRemoved(e.target.checked)}
             />
-            Show removed
+            {t("users.showRemoved")}
           </label>
-          <SearchBox value={search} onChange={setSearch} placeholder="Find user" />
+          <SearchBox value={search} onChange={setSearch} placeholder={t("users.findUser")} />
           <WarpButton primary onClick={() => setCreating(true)}>
-            <DgAddUser size={18} aria-hidden /> Add new user
+            <DgAddUser size={18} aria-hidden /> {t("users.addNewUser")}
           </WarpButton>
         </div>
       </div>
@@ -344,7 +347,7 @@ export function UsersScreen() {
               key="selall"
               type="checkbox"
               className="warp-tb-check"
-              aria-label="Select all"
+              aria-label={t("users.selectAll")}
               checked={filtered.length > 0 && filtered.every((u) => selected.has(u.id))}
               ref={(el) => {
                 if (el)
@@ -357,19 +360,21 @@ export function UsersScreen() {
                 )
               }
             />,
-            <SortTh key="username" col="username" label="Username" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
-            <SortTh key="status" col="status" label="Status" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
-            "Last seen",
-            <SortTh key="traffic" col="traffic" label="Used Traffic" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
-            <SortTh key="expiration" col="expiration" label="Expiration" sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
+            <SortTh key="username" col="username" label={t("users.username")} sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
+            <SortTh key="status" col="status" label={t("common.status")} sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
+            t("users.lastSeen"),
+            <SortTh key="traffic" col="traffic" label={t("users.usedTraffic")} sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
+            <SortTh key="expiration" col="expiration" label={t("users.expiration")} sortCol={sortCol} sortDir={sortDir} onSort={toggleSort} />,
           ]}
           actions
         />
         {query.isLoading ? (
           <WarpSkeleton />
+        ) : query.isError ? (
+          <WarpError onRetry={() => query.refetch()} />
         ) : filtered.length === 0 ? (
           <WarpEmpty>
-            {needle || statusFilter !== "all" ? "No matches." : "No users yet."}
+            {needle || statusFilter !== "all" ? t("users.noMatches") : t("users.noUsersYet")}
           </WarpEmpty>
         ) : (
           <>{filtered.map((u, idx) => {
@@ -407,15 +412,15 @@ export function UsersScreen() {
                 </span>
                 <span className="warp-tb-cell">
                   {u.removed ? (
-                    <Badge variant="neutral">Removed</Badge>
+                    <Badge variant="neutral">{t("users.status.removed")}</Badge>
                   ) : !u.is_active ? (
-                    <Badge variant="critical">Disabled</Badge>
+                    <Badge variant="critical">{t("users.status.disabled")}</Badge>
                   ) : expired ? (
-                    <Badge variant="critical">Expired</Badge>
+                    <Badge variant="critical">{t("users.status.expired")}</Badge>
                   ) : reached || u.on_hold ? (
-                    <Badge variant="warning">{reached ? "Limited" : "On hold"}</Badge>
+                    <Badge variant="warning">{reached ? t("users.status.limited") : t("users.status.onHold")}</Badge>
                   ) : (
-                    <Badge variant="success">Active</Badge>
+                    <Badge variant="success">{t("users.status.active")}</Badge>
                   )}
                 </span>
                 <span className="warp-tb-cell text-fg-muted">{relTimeShort(lastSeenMap.get(u.id))}</span>
@@ -436,22 +441,22 @@ export function UsersScreen() {
                 <span className="warp-tb-cell warp-tb-cell-actions" onClick={(e) => e.stopPropagation()}>
                   <WarpMenu
                     items={[
-                      ...(u.removed ? [{ label: "Restore", icon: "restore", onClick: () => restore(u.id) } as WarpMenuItem] : []),
-                      { label: "Edit", icon: "edit", onClick: () => setEditing(u) },
-                      { label: "Copy ID", icon: "copy-id", onClick: () => copyId(u.id) },
-                      { label: "Copy subscription", icon: "copy-link", onClick: () => copySub(u.id) },
-                      { label: "Reset usage", icon: "reset-usage", onClick: () => resetUsage(u.id) },
-                      { label: "Revoke subscription", icon: "revoke", onClick: () => revoke(u.id) },
+                      ...(u.removed ? [{ label: t("action.restore"), icon: "restore", onClick: () => restore(u.id) } as WarpMenuItem] : []),
+                      { label: t("action.edit"), icon: "edit", onClick: () => setEditing(u) },
+                      { label: t("users.copyId"), icon: "copy-id", onClick: () => copyId(u.id) },
+                      { label: t("users.copySubscription"), icon: "copy-link", onClick: () => copySub(u.id) },
+                      { label: t("users.resetUsage"), icon: "reset-usage", onClick: () => resetUsage(u.id) },
+                      { label: t("users.revokeSubscription"), icon: "revoke", onClick: () => revoke(u.id) },
                       u.is_active
-                        ? { label: "Disable", icon: "disable", onClick: () => setActiveOptimistic(u.id, false, () => disableUser(u.id), "User disabled.") }
-                        : { label: "Enable", icon: "enable", onClick: () => setActiveOptimistic(u.id, true, () => enableUser(u.id), "User enabled.") },
+                        ? { label: t("action.disable"), icon: "disable", onClick: () => setActiveOptimistic(u.id, false, () => disableUser(u.id), t("users.userDisabled")) }
+                        : { label: t("action.enable"), icon: "enable", onClick: () => setActiveOptimistic(u.id, true, () => enableUser(u.id), t("users.userEnabled")) },
                       {
-                        label: "Remove",
+                        label: t("action.remove"),
                         icon: "delete",
                         danger: true,
                         onClick: async () => {
-                          if (await confirmDialog({ title: `Delete user "${u.username}"?`, message: "This cannot be undone.", confirmLabel: "Delete", danger: true }))
-                            act(() => deleteUser(u.id), "User deleted.");
+                          if (await confirmDialog({ title: t("users.deleteUserTitle", { name: u.username }), message: t("common.cannotBeUndone"), confirmLabel: t("action.delete"), danger: true }))
+                            act(() => deleteUser(u.id), t("users.userDeleted"));
                         },
                       },
                     ]}
@@ -467,7 +472,7 @@ export function UsersScreen() {
         <div className="flex flex-col items-center gap-1">
           {needle ? (
             <p className="text-[11px] text-fg-muted">
-              Searching loaded users only — load more to widen the search.
+              {t("users.searchLoadedHint")}
             </p>
           ) : null}
           <Button
@@ -475,7 +480,7 @@ export function UsersScreen() {
             onClick={() => query.fetchNextPage()}
             disabled={query.isFetchingNextPage}
           >
-            {query.isFetchingNextPage ? "Loading…" : "Load more"}
+            {query.isFetchingNextPage ? t("common.loading") : t("action.loadMore")}
           </Button>
         </div>
       ) : null}

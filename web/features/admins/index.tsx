@@ -17,6 +17,7 @@ import {
 import {
   WarpButton,
   WarpEmpty,
+  WarpError,
   WarpHead,
   WarpRow,
   WarpSkeleton,
@@ -25,8 +26,10 @@ import {
 import { AdminDialog } from "./dialog";
 import { DgAddUser } from "@/components/console/dg-icons";
 import { SearchBox } from "@/components/ui/search-box";
+import { useT } from "@/lib/i18n";
 
 export function AdminsScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const query = useInfiniteQuery({
     queryKey: ["admins"],
@@ -49,7 +52,7 @@ export function AdminsScreen() {
       toast("success", ok);
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
     }
   };
 
@@ -62,53 +65,55 @@ export function AdminsScreen() {
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="warp-table-top">
-        <span className="title">All admins</span>
+        <span className="title">{t("admins.title")}</span>
         <div className="right">
-          <SearchBox value={search} onChange={setSearch} placeholder="Find admin" />
+          <SearchBox value={search} onChange={setSearch} placeholder={t("admins.findAdmin")} />
           <WarpButton primary onClick={() => setDialog("new")}>
-            <DgAddUser size={16} /> Add Admin
+            <DgAddUser size={16} /> {t("admins.addAdmin")}
           </WarpButton>
         </div>
       </div>
 
       <WarpTableCard className="warp-users-table">
-        <WarpHead cols={["Username", "Status", "Permission", "Created"]} actions />
+        <WarpHead cols={[t("admins.username"), t("common.status"), t("admins.permission"), t("common.created")]} actions />
         {query.isLoading ? (
           <WarpSkeleton />
+        ) : query.isError ? (
+          <WarpError onRetry={() => query.refetch()} />
         ) : filtered.length === 0 ? (
           <WarpEmpty>
-            {search ? "No matches." : "No admins yet."}
+            {search ? t("common.noMatches") : t("admins.noAdmins")}
           </WarpEmpty>
         ) : (
           filtered.map((a) => (
             <WarpRow
               key={a.id}
               menu={[
-                { label: "Edit", icon: "edit", onClick: () => setDialog(a) },
-                { label: "Enable users", icon: "enable", onClick: () => act(() => enableAdminUsers(a.id), "Enabled this admin's users.") },
-                { label: "Disable users", icon: "disable", onClick: () => act(() => disableAdminUsers(a.id), "Disabled this admin's users.") },
+                { label: t("action.edit"), icon: "edit", onClick: () => setDialog(a) },
+                { label: t("admins.enableUsers"), icon: "enable", onClick: () => act(() => enableAdminUsers(a.id), t("admins.usersEnabled")) },
+                { label: t("admins.disableUsers"), icon: "disable", onClick: () => act(() => disableAdminUsers(a.id), t("admins.usersDisabled")) },
                 {
-                  label: "Demote to user",
+                  label: t("admins.demoteToUser"),
                   icon: "disable",
                   onClick: async () => {
-                    if (await confirmDialog({ title: `Demote "${a.username}" to a regular user?`, message: "They lose all admin access.", confirmLabel: "Demote" }))
-                      act(() => demoteUser(a.id), "Admin demoted to user.");
+                    if (await confirmDialog({ title: t("admins.demoteConfirmTitle", { username: a.username }), message: t("admins.demoteConfirmMessage"), confirmLabel: t("admins.demote") }))
+                      act(() => demoteUser(a.id), t("admins.demoted"));
                   },
                 },
                 {
-                  label: "Delete",
+                  label: t("action.delete"),
                   icon: "delete",
                   danger: true,
                   onClick: async () => {
-                    if (await confirmDialog({ title: `Delete admin "${a.username}"?`, confirmLabel: "Delete", danger: true }))
-                      act(() => deleteUser(a.id), "Admin deleted.");
+                    if (await confirmDialog({ title: t("admins.deleteConfirmTitle", { username: a.username }), confirmLabel: t("action.delete"), danger: true }))
+                      act(() => deleteUser(a.id), t("admins.deleted"));
                   },
                 },
               ]}
               cells={[
                 <span className="font-medium">{a.username}</span>,
-                <span className={`warp-badge ${a.is_active ? "success" : "critical"}`}>{a.is_active ? "Enabled" : "Disabled"}</span>,
-                <span className={`warp-badge ${a.is_sudo ? "info" : "neutral"}`}>{a.is_sudo ? "Sudo" : "Standard"}</span>,
+                <span className={`warp-badge ${a.is_active ? "success" : "critical"}`}>{a.is_active ? t("common.enabled") : t("common.disabled")}</span>,
+                <span className={`warp-badge ${a.is_sudo ? "info" : "neutral"}`}>{a.is_sudo ? t("admins.sudo") : t("admins.standard")}</span>,
                 <span className="text-fg-muted">{a.created_at.slice(0, 10)}</span>,
               ]}
             />
@@ -120,7 +125,7 @@ export function AdminsScreen() {
         <div className="flex flex-col items-center gap-1">
           {needle ? (
             <p className="text-[11px] text-fg-muted">
-              Searching loaded admins only — load more to widen the search.
+              {t("admins.searchLoadedOnly")}
             </p>
           ) : null}
           <Button
@@ -128,7 +133,7 @@ export function AdminsScreen() {
             onClick={() => query.fetchNextPage()}
             disabled={query.isFetchingNextPage}
           >
-            {query.isFetchingNextPage ? "Loading…" : "Load more"}
+            {query.isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
           </Button>
         </div>
       ) : null}

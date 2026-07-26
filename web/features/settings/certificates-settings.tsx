@@ -15,7 +15,9 @@ import {
   requestAcmeCertificate,
   ApiError,
 } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { SettingsSection } from "@/shared/settings-kit";
+import { WarpError } from "@/shared/warp-table";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -28,6 +30,7 @@ function daysLeft(iso: string | null): number | null {
 }
 
 export function CertificatesSettingsScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const certsQ = useQuery({ queryKey: ["managed-certs"], queryFn: () => listCertificates() });
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -38,20 +41,20 @@ export function CertificatesSettingsScreen() {
   const remove = async (id: string, domain: string) => {
     if (
       !(await confirmDialog({
-        title: `Delete certificate for ${domain}?`,
-        message: "Inbounds using this domain will fall back to no certificate until you add another.",
-        confirmLabel: "Delete",
+        title: t("certificates.deleteConfirmTitle", { domain }),
+        message: t("certificates.deleteConfirmMessage"),
+        confirmLabel: t("action.delete"),
         danger: true,
       }))
     )
       return;
     try {
       await deleteCertificate(id);
-      toast("success", "Certificate deleted.");
+      toast("success", t("certificates.deleted"));
       qc.invalidateQueries({ queryKey: ["managed-certs"] });
       qc.invalidateQueries({ queryKey: ["cert-inventory"] });
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Delete failed.");
+      toast("error", e instanceof ApiError ? e.message : t("certificates.deleteFailed"));
     }
   };
 
@@ -59,26 +62,27 @@ export function CertificatesSettingsScreen() {
     <div className="w-full">
       <SettingsSection
         icon={ShieldCheck}
-        title="Certificates"
-        description="Manage the TLS certificates used to secure your inbounds. Upload your own, or issue one automatically with Let's Encrypt."
+        title={t("certificates.title")}
+        description={t("certificates.description")}
       >
         <div className="warp-cert-actions">
           <button type="button" className="warp-tb-button" onClick={() => setUploadOpen(true)}>
-            <Upload size={14} aria-hidden /> Upload certificate
+            <Upload size={14} aria-hidden /> {t("certificates.uploadCertificate")}
           </button>
           <button
             type="button"
             className="warp-tb-button warp-tb-button-primary"
             onClick={() => setAcmeOpen(true)}
           >
-            <Plus size={14} aria-hidden /> Get Let's Encrypt
+            <Plus size={14} aria-hidden /> {t("certificates.getLetsEncrypt")}
           </button>
         </div>
 
-        {certsQ.isLoading ? <p className="warp-cert-empty">Loading…</p> : null}
-        {certs.length === 0 && !certsQ.isLoading ? (
+        {certsQ.isLoading ? <p className="warp-cert-empty">{t("common.loading")}</p> : null}
+        {certsQ.isError && !certsQ.isLoading ? <WarpError onRetry={() => certsQ.refetch()} /> : null}
+        {certs.length === 0 && !certsQ.isLoading && !certsQ.isError ? (
           <p className="warp-cert-empty">
-            No certificates yet. Upload one or request a free Let's Encrypt certificate for your domain.
+            {t("certificates.empty")}
           </p>
         ) : null}
 
@@ -97,14 +101,14 @@ export function CertificatesSettingsScreen() {
                       : "success";
             const label =
               c.status === "error"
-                ? "Error"
+                ? t("certificates.status.error")
                 : c.status === "pending"
-                  ? "Pending"
+                  ? t("certificates.status.pending")
                   : dl != null && dl < 0
-                    ? "Expired"
+                    ? t("certificates.status.expired")
                     : dl != null
-                      ? `${dl}d left`
-                      : "Active";
+                      ? t("certificates.status.daysLeft", { n: dl })
+                      : t("certificates.status.active");
             return (
               <div key={c.id} className="warp-cert-row">
                 <div className="warp-cert-row-head">
@@ -114,20 +118,20 @@ export function CertificatesSettingsScreen() {
                     type="button"
                     className="warp-cert-del"
                     onClick={() => remove(c.id, c.domain)}
-                    aria-label="Delete"
+                    aria-label={t("action.delete")}
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
                 <div className="warp-cert-meta">
                   <span>
-                    Source: <b>{c.source === "acme" ? "Let's Encrypt" : "Manual"}</b>
+                    {t("certificates.source")} <b>{c.source === "acme" ? t("certificates.sourceLetsEncrypt") : t("certificates.sourceManual")}</b>
                   </span>
                   <span>
-                    Issuer: <b>{c.issuer || "—"}</b>
+                    {t("certificates.issuer")} <b>{c.issuer || "—"}</b>
                   </span>
                   <span>
-                    Expires: <b>{fmtDate(c.not_after)}</b>
+                    {t("certificates.expires")} <b>{fmtDate(c.not_after)}</b>
                   </span>
                 </div>
                 {c.last_error ? <p className="warp-cert-error">{c.last_error}</p> : null}
@@ -162,6 +166,7 @@ export function CertificatesSettingsScreen() {
 }
 
 function UploadCertModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const t = useT();
   const [domain, setDomain] = useState("");
   const [certPem, setCertPem] = useState("");
   const [keyPem, setKeyPem] = useState("");
@@ -171,10 +176,10 @@ function UploadCertModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
     setBusy(true);
     try {
       await importCertificate({ domain: domain.trim(), cert_pem: certPem, key_pem: keyPem });
-      toast("success", "Certificate saved.");
+      toast("success", t("certificates.saved"));
       onSaved();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Save failed.");
+      toast("error", e instanceof ApiError ? e.message : t("certificates.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -182,23 +187,23 @@ function UploadCertModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
 
   return (
     <Modal
-      title="Upload certificate"
+      title={t("certificates.uploadCertificate")}
       width="w-[min(640px,95vw)]"
       onClose={onClose}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button type="button" variant="primary" disabled={busy || !domain || !certPem || !keyPem} onClick={submit}>
-            {busy ? "Saving…" : "Save certificate"}
+            {busy ? t("common.saving") : t("certificates.saveCertificate")}
           </Button>
         </>
       }
     >
-      <p className="warp-dlg-section-title">Domain</p>
+      <p className="warp-dlg-section-title">{t("certificates.domain")}</p>
       <Input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="vpn.example.com" autoComplete="off" />
-      <p className="warp-dlg-section-title" style={{ marginTop: 16 }}>Certificate (PEM, full chain)</p>
+      <p className="warp-dlg-section-title" style={{ marginTop: 16 }}>{t("certificates.certPemLabel")}</p>
       <textarea
         className="warp-cert-textarea"
         value={certPem}
@@ -206,7 +211,7 @@ function UploadCertModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         placeholder="-----BEGIN CERTIFICATE-----"
         rows={6}
       />
-      <p className="warp-dlg-section-title" style={{ marginTop: 16 }}>Private key (PEM)</p>
+      <p className="warp-dlg-section-title" style={{ marginTop: 16 }}>{t("certificates.keyPemLabel")}</p>
       <textarea
         className="warp-cert-textarea"
         value={keyPem}
@@ -219,6 +224,7 @@ function UploadCertModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
 }
 
 function AcmeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const t = useT();
   const [domain, setDomain] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -226,10 +232,10 @@ function AcmeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
     setBusy(true);
     try {
       await requestAcmeCertificate(domain.trim());
-      toast("success", "Certificate issued.");
+      toast("success", t("certificates.issued"));
       onSaved();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Issuance failed.");
+      toast("error", e instanceof ApiError ? e.message : t("certificates.issuanceFailed"));
     } finally {
       setBusy(false);
     }
@@ -237,25 +243,24 @@ function AcmeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
 
   return (
     <Modal
-      title="Get a Let's Encrypt certificate"
+      title={t("certificates.getLetsEncryptTitle")}
       width="w-[min(560px,95vw)]"
       onClose={onClose}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button type="button" variant="primary" disabled={busy || !domain} onClick={submit}>
-            {busy ? "Issuing…" : "Issue certificate"}
+            {busy ? t("certificates.issuing") : t("certificates.issueCertificate")}
           </Button>
         </>
       }
     >
       <p className="warp-cert-hint">
-        The panel will validate ownership over HTTP and obtain a free certificate. The domain must
-        point to this panel and port 80 must be reachable.
+        {t("certificates.acmeHint")}
       </p>
-      <p className="warp-dlg-section-title" style={{ marginTop: 12 }}>Domain</p>
+      <p className="warp-dlg-section-title" style={{ marginTop: 12 }}>{t("certificates.domain")}</p>
       <Input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="vpn.example.com" autoComplete="off" autoFocus />
     </Modal>
   );

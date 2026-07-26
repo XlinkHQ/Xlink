@@ -9,6 +9,7 @@ import { ApiError, createNode, type NodeRead, setNodeStatus, updateNode } from "
 import { Field } from "@/shared/parts";
 import { InlineEditPanel } from "@/shared/settings-kit";
 import { STATUSES } from "./util";
+import { useT } from "@/lib/i18n";
 
 export function NodeDialog({
   node,
@@ -21,6 +22,7 @@ export function NodeDialog({
   onSaved: () => void;
   variant?: "modal" | "inline";
 }) {
+  const t = useT();
   const Shell = variant === "inline" ? InlineEditPanel : Modal;
   const [name, setName] = useState(node?.name ?? "");
   const [slug, setSlug] = useState(node?.slug ?? "");
@@ -52,7 +54,7 @@ export function NodeDialog({
         try {
           metadata = JSON.parse(meta);
         } catch {
-          throw new ApiError("Metadata must be valid JSON.", 400);
+          throw new ApiError(t("nodes.metadataInvalidJson"), 400);
         }
       }
       if (region.trim()) metadata.region = region.trim();
@@ -77,10 +79,10 @@ export function NodeDialog({
           "node";
         await createNode(body);
       }
-      toast("success", node ? "Node updated." : "Node created.");
+      toast("success", node ? t("nodes.nodeUpdated") : t("nodes.nodeCreated"));
       onSaved();
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.message : "Save failed.");
+      toast("error", err instanceof ApiError ? err.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -88,40 +90,40 @@ export function NodeDialog({
 
   return (
     <Shell
-      title={node ? "Edit Node" : "Add Node"}
+      title={node ? t("nodes.editNode") : t("nodes.addNode")}
       onClose={onClose}
       onSubmit={submit}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button type="submit" variant="primary" disabled={busy || !name.trim() || !host.trim()}>
-            {busy ? "Saving…" : node ? "Save" : "Create"}
+            {busy ? t("common.saving") : node ? t("action.save") : t("action.create")}
           </Button>
         </>
       }
     >
-      <Field label="Name">
+      <Field label={t("common.name")}>
         <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus placeholder="edge-fra-1" />
       </Field>
       {!node ? (
-        <Field label="Slug">
-          <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="auto from name" />
+        <Field label={t("nodes.slug")}>
+          <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder={t("nodes.slugPlaceholder")} />
         </Field>
       ) : null}
       <div className="warp-dlg-2col">
-        <Field label="Host / Address">
+        <Field label={t("nodes.hostAddress")}>
           <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="51.20.12.13" />
         </Field>
-        <Field label="Port">
+        <Field label={t("nodes.port")}>
           <Input value={port} onChange={(e) => setPort(e.target.value)} inputMode="numeric" placeholder="443" />
         </Field>
-        <Field label="Usage Coefficient" hint="1.0 = neutral">
+        <Field label={t("nodes.usageCoefficient")} hint={t("nodes.usageCoefficientHint")}>
           <Input value={usageCoefficient} onChange={(e) => setUsageCoefficient(e.target.value)} inputMode="decimal" placeholder="1.0" />
         </Field>
         {node ? (
-          <Field label="Status">
+          <Field label={t("common.status")}>
             <Select value={status} onChange={(e) => setStatus(e.target.value)}>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -129,14 +131,14 @@ export function NodeDialog({
             </Select>
           </Field>
         ) : null}
-        <Field label="Region" hint="used by the scheduler">
+        <Field label={t("nodes.region")} hint={t("nodes.regionHint")}>
           <Input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="eu-central" />
         </Field>
-        <Field label="Traffic Load" hint="scoring weight hint">
+        <Field label={t("nodes.trafficLoad")} hint={t("nodes.trafficLoadHint")}>
           <Input value={trafficLoad} onChange={(e) => setTrafficLoad(e.target.value)} inputMode="decimal" placeholder="0.0 – 1.0" />
         </Field>
       </div>
-      <Field label="Advanced Metadata (JSON)">
+      <Field label={t("nodes.advancedMetadata")}>
         <textarea
           value={meta}
           onChange={(e) => setMeta(e.target.value)}

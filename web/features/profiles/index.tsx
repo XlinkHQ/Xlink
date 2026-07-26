@@ -27,6 +27,7 @@ import {
   WarpBadge,
   WarpButton,
   WarpEmpty,
+  WarpError,
   WarpHead,
   WarpRow,
   WarpSkeleton,
@@ -37,8 +38,10 @@ import { HostDialog } from "./host-dialog";
 import { DgSearch } from "@/components/console/dg-icons";
 import { SettingsSection } from "@/shared/settings-kit";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 
 export function ProfilesScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const query = useQuery({ queryKey: ["profiles"], queryFn: () => listProfiles() });
   const nodesQuery = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes() });
@@ -61,34 +64,34 @@ export function ProfilesScreen() {
   };
 
   const disableInbound = async (p: ProfileRead) => {
-    if (!(await confirmDialog({ title: `Disable inbound "${p.name}"?`, confirmLabel: "Disable", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("profiles.disableConfirm", { name: p.name }), confirmLabel: t("action.disable"), danger: true }))) return;
     try {
       await disableProfile(p.id);
-      toast("success", "Inbound disabled.");
+      toast("success", t("profiles.disabled"));
       refreshInbounds();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
     }
   };
 
   const enableInbound = async (p: ProfileRead) => {
     try {
       await updateProfile(p.id, { is_active: true });
-      toast("success", "Inbound enabled.");
+      toast("success", t("profiles.enabled"));
       refreshInbounds();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
     }
   };
 
   const removeInbound = async (p: ProfileRead) => {
-    if (!(await confirmDialog({ title: `Delete inbound "${p.name}"?`, message: "This permanently removes it. Assignments must be removed first.", confirmLabel: "Delete", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("profiles.deleteConfirm", { name: p.name }), message: t("profiles.deleteConfirmMessage"), confirmLabel: t("action.delete"), danger: true }))) return;
     try {
       await deleteProfile(p.id);
-      toast("success", "Inbound deleted.");
+      toast("success", t("profiles.deleted"));
       refreshInbounds();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Request failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.requestFailed"));
     }
   };
 
@@ -133,7 +136,7 @@ export function ProfilesScreen() {
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="warp-table-top">
-        <span className="title">All hosts</span>
+        <span className="title">{t("profiles.allHosts")}</span>
         <div className="right">
           <span className="warp-tb-search-wrap" style={{ maxWidth: 321, flex: 1 }}>
             <DgSearch size={16} />
@@ -141,22 +144,24 @@ export function ProfilesScreen() {
               className="warp-tb-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Find host"
+              placeholder={t("profiles.findHost")}
             />
           </span>
           <WarpButton primary onClick={() => setEditingInbound("new")}>
-            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Inbound
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> {t("profiles.addInbound")}
           </WarpButton>
         </div>
       </div>
 
       <WarpTableCard className="warp-users-table">
-        <WarpHead cols={["Name", "Node", "Protocol", "Addresses"]} actions />
+        <WarpHead cols={[t("common.name"), t("profiles.node"), t("profiles.protocol"), t("profiles.addresses")]} actions />
         {query.isLoading ? (
           <WarpSkeleton />
+        ) : query.isError ? (
+          <WarpError onRetry={() => query.refetch()} />
         ) : filtered.length === 0 ? (
           <WarpEmpty>
-            {search ? "No matches." : "No inbounds yet."}
+            {search ? t("common.noMatches") : t("profiles.noInboundsYet")}
           </WarpEmpty>
         ) : (
           filtered.map((p) => (
@@ -164,11 +169,11 @@ export function ProfilesScreen() {
               key={p.id}
               onClick={() => setDetailId(p.id)}
               menu={[
-                { label: "Edit", icon: "edit", onClick: () => setEditingInbound(p) },
+                { label: t("action.edit"), icon: "edit", onClick: () => setEditingInbound(p) },
                 p.is_active
-                  ? { label: "Disable", icon: "disable", onClick: () => disableInbound(p) }
-                  : { label: "Enable", icon: "check", onClick: () => enableInbound(p) },
-                { label: "Delete", icon: "trash", danger: true, onClick: () => removeInbound(p) },
+                  ? { label: t("action.disable"), icon: "disable", onClick: () => disableInbound(p) }
+                  : { label: t("action.enable"), icon: "check", onClick: () => enableInbound(p) },
+                { label: t("action.delete"), icon: "trash", danger: true, onClick: () => removeInbound(p) },
               ]}
               cells={[
                 <span className="font-medium capitalize">{p.name}</span>,
@@ -211,6 +216,7 @@ function HostsDrawer({
   editing?: boolean;
   editForm?: React.ReactNode;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const hostsQuery = useQuery({
     queryKey: ["inbound-hosts", profile.id],
@@ -233,13 +239,13 @@ function HostsDrawer({
     qc.invalidateQueries({ queryKey: ["inbound-hosts", "all"] });
   };
   const removeHost = async (h: InboundHostRead) => {
-    if (!(await confirmDialog({ title: `Delete host "${h.remark || h.address || h.id.slice(0, 8)}"?`, confirmLabel: "Delete", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("profiles.deleteHostConfirm", { name: h.remark || h.address || h.id.slice(0, 8) }), confirmLabel: t("action.delete"), danger: true }))) return;
     try {
       await deleteInboundHost(h.id);
-      toast("success", "Host deleted.");
+      toast("success", t("profiles.hostDeleted"));
       refreshHosts();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Delete failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.deleteFailed"));
     }
   };
 
@@ -250,7 +256,7 @@ function HostsDrawer({
           <button
             type="button"
             className="warp-breadcrumbs-back"
-            aria-label="Back"
+            aria-label={t("action.back")}
             onClick={onClose}
           >
             <ArrowLeft size={20} strokeWidth={1.9} aria-hidden />
@@ -258,7 +264,7 @@ function HostsDrawer({
           <span className="warp-breadcrumbs-divider" />
           <div className="links">
             <button type="button" className="crumb" onClick={onClose}>
-              Hosts
+              {t("profiles.hosts")}
             </button>
             <ChevronRight size={20} strokeWidth={2} className="crumb-sep" aria-hidden />
             <span className="crumb active">{profile.name}</span>
@@ -270,13 +276,13 @@ function HostsDrawer({
               onClick={onEdit}
               aria-pressed={editing}
             >
-              <Pencil size={14} aria-hidden /> Edit
+              <Pencil size={14} aria-hidden /> {t("action.edit")}
             </button>
           </div>
         </div>
       </div>
       <div className="warp-pd-tabs warp-profile-tabs">
-        {([["general", "General"], ["traffic", "Inbound Traffic"], ["addresses", "Addresses"]] as const).map(([key, label]) => (
+        {([["general", t("profiles.tabGeneral")], ["traffic", t("profiles.tabInboundTraffic")], ["addresses", t("profiles.tabAddresses")]] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -290,17 +296,17 @@ function HostsDrawer({
 
       {tab === "general" ? (
       <div className="warp-settings-card">
-        <SettingsSection icon={Gauge} title="General" description="Inbound protocol, node and address summary.">
-          <PdRow label="Protocol" value={<span className={`warp-proto-badge ${protoBadge(profile.protocol)}`}>{profile.protocol}</span>} />
-          <PdRow label="Node" value={nodeName} />
-          <PdRow label="Addresses" value={String(allHosts.length)} />
+        <SettingsSection icon={Gauge} title={t("profiles.tabGeneral")} description={t("profiles.generalDescription")}>
+          <PdRow label={t("profiles.protocol")} value={<span className={`warp-proto-badge ${protoBadge(profile.protocol)}`}>{profile.protocol}</span>} />
+          <PdRow label={t("profiles.node")} value={nodeName} />
+          <PdRow label={t("profiles.addresses")} value={String(allHosts.length)} />
         </SettingsSection>
       </div>
       ) : null}
 
       {tab === "traffic" ? (
       <div className="warp-settings-card">
-        <SettingsSection icon={Activity} title="Inbound Traffic" description="Traffic served through this inbound.">
+        <SettingsSection icon={Activity} title={t("profiles.tabInboundTraffic")} description={t("profiles.trafficDescription")}>
           <ProfileUsageCard profileId={profile.id} />
         </SettingsSection>
       </div>
@@ -309,7 +315,7 @@ function HostsDrawer({
       {tab === "addresses" ? (
         <>
           <div className="warp-table-top">
-            <span className="title">Addresses</span>
+            <span className="title">{t("profiles.addresses")}</span>
             <div className="right">
               {allHosts.length > 3 ? (
                 <span className="warp-tb-search-wrap" style={{ maxWidth: 321, flex: 1 }}>
@@ -318,32 +324,36 @@ function HostsDrawer({
                     className="warp-tb-search"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Find address"
+                    placeholder={t("profiles.findAddress")}
                   />
                 </span>
               ) : null}
               <WarpButton primary onClick={() => setHostDialog("new")}>
-                <Plus size={16} strokeWidth={1.8} aria-hidden /> Add address
+                <Plus size={16} strokeWidth={1.8} aria-hidden /> {t("profiles.addAddress")}
               </WarpButton>
             </div>
           </div>
           <WarpTableCard className="warp-users-table">
-            <WarpHead cols={["Remark", "Address", "Port"]} actions />
-            {hosts.length === 0 ? (
-              <WarpEmpty>No extra addresses — the inbound already works on the node address.</WarpEmpty>
+            <WarpHead cols={[t("profiles.remark"), t("profiles.address"), t("profiles.port")]} actions />
+            {hostsQuery.isLoading ? (
+              <WarpSkeleton />
+            ) : hostsQuery.isError ? (
+              <WarpError onRetry={() => hostsQuery.refetch()} />
+            ) : hosts.length === 0 ? (
+              <WarpEmpty>{t("profiles.noExtraAddresses")}</WarpEmpty>
             ) : (
               hosts.map((h) => (
                 <WarpRow
                   key={h.id}
                   onClick={() => setHostDialog(h)}
                   menu={[
-                    { label: "Edit", icon: "edit", onClick: () => setHostDialog(h) },
-                    { label: "Delete", icon: "delete", danger: true, onClick: () => removeHost(h) },
+                    { label: t("action.edit"), icon: "edit", onClick: () => setHostDialog(h) },
+                    { label: t("action.delete"), icon: "delete", danger: true, onClick: () => removeHost(h) },
                   ]}
                   cells={[
                     <span className="font-medium">
                       {h.remark || "—"}
-                      {h.is_universal ? <span className="ml-1.5 warp-badge info">universal</span> : null}
+                      {h.is_universal ? <span className="ml-1.5 warp-badge info">{t("profiles.universal")}</span> : null}
                     </span>,
                     <span className="text-fg-muted">{h.address ?? "—"}</span>,
                     <span className="text-fg-muted">{h.port ?? "—"}</span>,
@@ -383,6 +393,7 @@ function PdRow({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function ProfileUsageCard({ profileId }: { profileId: string }) {
+  const t = useT();
   const seriesQ = useQuery({
     queryKey: ["profile-usage-series", profileId],
     queryFn: () => profileUsageSeries(profileId, 24),
@@ -401,12 +412,12 @@ function ProfileUsageCard({ profileId }: { profileId: string }) {
     <div>
       <div className="flex items-end justify-between gap-3 pb-3">
         <div>
-          <h4 className="text-base font-medium text-fg">Inbound Traffic</h4>
-          <p className="mt-1 text-sm text-fg-muted">Last 24 hours</p>
+          <h4 className="text-base font-medium text-fg">{t("profiles.tabInboundTraffic")}</h4>
+          <p className="mt-1 text-sm text-fg-muted">{t("profiles.last24Hours")}</p>
         </div>
         <div className="flex flex-col items-end">
           <span className="text-2xl font-medium leading-none text-fg">{bytes(total)}</span>
-          <span className="text-sm text-fg-muted">All-time total</span>
+          <span className="text-sm text-fg-muted">{t("profiles.allTimeTotal")}</span>
         </div>
       </div>
       <div className="py-2">

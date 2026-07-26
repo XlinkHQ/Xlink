@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/cn";
 import { Field } from "@/shared/parts";
 import { InlineEditPanel } from "@/shared/settings-kit";
+import { useT } from "@/lib/i18n";
 
 const NETWORKS = ["", "tcp", "ws", "grpc", "httpupgrade", "xhttp", "splithttp", "kcp"];
 const SECURITIES = ["", "none", "tls", "reality", "inbound_default"];
@@ -47,6 +48,7 @@ export function HostDialog({
   onSaved: () => void;
   variant?: "modal" | "inline";
 }) {
+  const t = useT();
   const editing = !!host;
   const [remark, setRemark] = useState(host?.remark ?? "");
   const [enabled, setEnabled] = useState(host ? !host.is_disabled : true);
@@ -94,10 +96,10 @@ export function HostDialog({
       };
       if (editing && host) await updateInboundHost(host.id, body);
       else await createInboundHost({ profile_id: profileId, ...body });
-      toast("success", editing ? "Host updated." : "Host created.");
+      toast("success", editing ? t("profiles.hostUpdated") : t("profiles.hostCreated"));
       onSaved();
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.message : "Save failed.");
+      toast("error", err instanceof ApiError ? err.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -106,17 +108,17 @@ export function HostDialog({
   const Shell = variant === "inline" ? InlineEditPanel : Modal;
   return (
     <Shell
-      title={editing ? "Edit address" : "Add address"}
+      title={editing ? t("profiles.editAddress") : t("profiles.addAddress")}
       onClose={onClose}
       onSubmit={submit}
       width="sm:w-[40rem]"
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button type="submit" variant="primary" disabled={busy || !remark.trim()}>
-            {busy ? "Saving…" : editing ? "Save" : "Create"}
+            {busy ? t("common.saving") : editing ? t("action.save") : t("action.create")}
           </Button>
         </>
       }
@@ -124,7 +126,7 @@ export function HostDialog({
       {}
       <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
         <span className="flex items-center justify-between gap-3">
-          Name
+          {t("common.name")}
           <span className="flex items-center gap-3">
             <label className="flex items-center gap-1.5 text-xs font-normal text-fg-muted">
               <input
@@ -132,7 +134,7 @@ export function HostDialog({
                 checked={isUniversal}
                 onChange={(e) => setIsUniversal(e.target.checked)}
               />
-              Universal
+              {t("profiles.universalLabel")}
             </label>
             <Switch checked={enabled} onChange={setEnabled} />
           </span>
@@ -143,33 +145,33 @@ export function HostDialog({
       {}
       <div className="grid grid-cols-4 gap-3">
         <div className="col-span-2">
-          <Field label="Address">
+          <Field label={t("profiles.address")}>
             <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="cdn.example.com" />
           </Field>
         </div>
-        <Field label="Port">
+        <Field label={t("profiles.port")}>
           <Input value={port} onChange={(e) => setPort(e.target.value)} type="number" placeholder="443" />
         </Field>
-        <Field label="Weight">
+        <Field label={t("profiles.weight")}>
           <Input value={weight} onChange={(e) => setWeight(e.target.value)} type="number" />
         </Field>
       </div>
 
       {}
       <div>
-        <Section title="Network settings" defaultOpen>
+        <Section title={t("profiles.networkSettings")} defaultOpen>
           <div className="warp-dlg-2col">
-            <Field label="Host">
-              <Input value={hostHeader} onChange={(e) => setHostHeader(e.target.value)} placeholder="cdn domain" />
+            <Field label={t("profiles.host")}>
+              <Input value={hostHeader} onChange={(e) => setHostHeader(e.target.value)} placeholder={t("profiles.cdnDomainPlaceholder")} />
             </Field>
-            <Field label="Path">
+            <Field label={t("profiles.path")}>
               <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="/" />
             </Field>
-            <Field label="Network">
+            <Field label={t("profiles.network")}>
               <Select value={network} onChange={(e) => setNetwork(e.target.value)}>
                 {NETWORKS.map((n) => (
                   <option key={n} value={n}>
-                    {n === "" ? "— inherit —" : n}
+                    {n === "" ? t("profiles.inherit") : n}
                   </option>
                 ))}
               </Select>
@@ -177,38 +179,38 @@ export function HostDialog({
           </div>
         </Section>
 
-        <Section title="Camouflage settings">
+        <Section title={t("profiles.camouflageSettings")}>
           <div className="flex flex-col gap-3.5">
-            <Field label="Fragment (len,interval,packets)">
+            <Field label={t("profiles.fragmentLabel")}>
               <Input value={fragment} onChange={(e) => setFragment(e.target.value)} placeholder="100-200,10-20,tlshello" />
             </Field>
-            <Field label="Noise (packets,delay)">
+            <Field label={t("profiles.noiseLabel")}>
               <Input value={noise} onChange={(e) => setNoise(e.target.value)} placeholder="rand:10-20,10-20" />
             </Field>
           </div>
         </Section>
 
-        <Section title="Mux settings">
-          <Toggle checked={mux} onChange={setMux} label="Enable mux" />
+        <Section title={t("profiles.muxSettings")}>
+          <Toggle checked={mux} onChange={setMux} label={t("profiles.enableMux")} />
         </Section>
 
-        <Section title="Security settings">
-          <Field label="Security">
+        <Section title={t("profiles.securitySettings")}>
+          <Field label={t("profiles.security")}>
             <Select value={security} onChange={(e) => setSecurity(e.target.value)}>
               {SECURITIES.map((s) => (
                 <option key={s} value={s}>
-                  {s === "" ? "— inherit —" : s === "inbound_default" ? "Inbound Default" : s.toUpperCase()}
+                  {s === "" ? t("profiles.inherit") : s === "inbound_default" ? t("profiles.inboundDefault") : s.toUpperCase()}
                 </option>
               ))}
             </Select>
           </Field>
           {extraSecurity ? (
             <div className="mt-3 flex flex-col gap-3.5">
-              <Field label="SNI">
+              <Field label={t("profiles.sni")}>
                 <Input value={sni} onChange={(e) => setSni(e.target.value)} />
               </Field>
               <div className="warp-dlg-2col">
-                <Field label="ALPN">
+                <Field label={t("profiles.alpn")}>
                   <Select value={alpn} onChange={(e) => setAlpn(e.target.value)}>
                     {ALPN_OPTIONS.map((a) => (
                       <option key={a} value={a}>
@@ -217,7 +219,7 @@ export function HostDialog({
                     ))}
                   </Select>
                 </Field>
-                <Field label="Fingerprint">
+                <Field label={t("profiles.fingerprint")}>
                   <Select value={fingerprint} onChange={(e) => setFingerprint(e.target.value)}>
                     {FINGERPRINTS.map((f) => (
                       <option key={f} value={f}>
@@ -227,7 +229,7 @@ export function HostDialog({
                   </Select>
                 </Field>
               </div>
-              <Toggle checked={allowInsecure} onChange={setAllowInsecure} label="Allow insecure" />
+              <Toggle checked={allowInsecure} onChange={setAllowInsecure} label={t("profiles.allowInsecure")} />
             </div>
           ) : null}
         </Section>

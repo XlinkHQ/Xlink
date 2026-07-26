@@ -20,6 +20,7 @@ import {
   updateUser,
   type UserRead,
 } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { fromGiB, toGiB } from "@/lib/format";
 import { Field } from "@/shared/parts";
 
@@ -32,6 +33,7 @@ export function EditUserDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   const [fullName, setFullName] = useState(user.full_name ?? "");
   const [limitGib, setLimitGib] = useState(
     user.data_limit_bytes ? toGiB(user.data_limit_bytes).toString() : "",
@@ -71,10 +73,10 @@ export function EditUserDialog({
         activation_deadline: onHold ? dateToIso(activationDeadline, user.activation_deadline) : null,
         pinned_node_ids: pinned,
       });
-      toast("success", "User updated.");
+      toast("success", t("users.edit.updated"));
       onSaved();
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.message : "Update failed.");
+      toast("error", err instanceof ApiError ? err.message : t("users.edit.updateFailed"));
     } finally {
       setBusy(false);
     }
@@ -82,72 +84,72 @@ export function EditUserDialog({
 
   return (
     <Modal
-      title={`Edit ${user.username}`}
+      title={t("users.edit.title", { name: user.username })}
       onClose={onClose}
       onSubmit={submit}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? "Saving…" : "Save"}
+            {busy ? t("action.saving") : t("action.save")}
           </Button>
         </>
       }
     >
-      <Field label="Full name (optional)">
+      <Field label={t("users.field.fullNameOptional")}>
         <Input value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="off" />
       </Field>
       <div className="warp-dlg-2col">
-        <Field label="Data limit (GiB)">
+        <Field label={t("users.field.dataLimitGib")}>
           <Input
             type="number"
             min="0"
             step="0.1"
             value={limitGib}
             onChange={(e) => setLimitGib(e.target.value)}
-            placeholder="unlimited"
+            placeholder={t("users.value.unlimitedLower")}
           />
         </Field>
-        <Field label="Expires">
+        <Field label={t("users.field.expires")}>
           <Input type="date" value={expire} onChange={(e) => setExpire(e.target.value)} />
         </Field>
-        <Field label="Auto-reset usage">
+        <Field label={t("users.field.autoResetUsage")}>
           <Select value={reset} onChange={(e) => setReset(e.target.value)}>
-            <option value="no_reset">No reset</option>
-            <option value="day">Daily</option>
-            <option value="week">Weekly</option>
-            <option value="month">Monthly</option>
-            <option value="year">Yearly</option>
+            <option value="no_reset">{t("users.reset.noReset")}</option>
+            <option value="day">{t("users.reset.daily")}</option>
+            <option value="week">{t("users.reset.weekly")}</option>
+            <option value="month">{t("users.reset.monthly")}</option>
+            <option value="year">{t("users.reset.yearly")}</option>
           </Select>
         </Field>
-        <Field label="Device limit (HWID)">
+        <Field label={t("users.field.deviceLimitHwid")}>
           <Input
             type="number"
             min="0"
             value={devices}
             onChange={(e) => setDevices(e.target.value)}
-            placeholder="unlimited"
+            placeholder={t("users.value.unlimitedLower")}
           />
         </Field>
       </div>
       <label className="flex items-center gap-2 text-xs text-fg">
         <input type="checkbox" checked={onHold} onChange={(e) => setOnHold(e.target.checked)} />
-        On-hold — start the expiry countdown on first connection
+        {t("users.field.onHoldLabel")}
       </label>
       {onHold ? (
         <div className="warp-dlg-2col">
-          <Field label="Hold duration (days)">
+          <Field label={t("users.field.holdDuration")}>
             <Input
               type="number"
               min="0"
               value={holdDays}
               onChange={(e) => setHoldDays(e.target.value)}
-              placeholder="e.g. 30"
+              placeholder={t("users.field.holdDurationPlaceholder")}
             />
           </Field>
-          <Field label="Activation deadline">
+          <Field label={t("users.field.activationDeadline")}>
             <Input
               type="date"
               value={activationDeadline}
@@ -156,10 +158,10 @@ export function EditUserDialog({
           </Field>
         </div>
       ) : null}
-      <Field label="Pinned nodes (empty = all nodes)">
+      <Field label={t("users.field.pinnedNodes")}>
         <div className="warp-dlg-chipbox">
           {nodes.length === 0 ? (
-            <span className="text-[11px] text-fg-muted">No nodes yet.</span>
+            <span className="text-[11px] text-fg-muted">{t("users.field.noNodesYet")}</span>
           ) : (
             nodes.map((n) => (
               <button
@@ -176,14 +178,14 @@ export function EditUserDialog({
         </div>
       </Field>
       <p className="text-[11px] text-fg-muted">
-        Leave a field empty for unlimited / no expiry. Activation deadline: the user must connect
-        before this date or the sub expires.
+        {t("users.edit.hint")}
       </p>
     </Modal>
   );
 }
 
 export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const t = useT();
   const qc = useQueryClient();
   const groupsQ = useQuery({ queryKey: ["groups"], queryFn: () => listGroups() });
   const profilesQ = useQuery({ queryKey: ["profiles"], queryFn: () => listProfiles() });
@@ -283,17 +285,17 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
             | PromiseRejectedResult
             | undefined;
           const reason =
-            firstErr?.reason instanceof ApiError ? firstErr.reason.message : "some inbounds failed";
-          toast("error", `User created, but ${failed} inbound(s) failed: ${reason}`);
+            firstErr?.reason instanceof ApiError ? firstErr.reason.message : t("users.create.someInboundsFailed");
+          toast("error", t("users.create.partialFailure", { failed, reason }));
         } else {
-          toast("success", `User “${username.trim()}” created with ${ok} inbound(s).`);
+          toast("success", t("users.create.createdWithInbounds", { name: username.trim(), ok }));
         }
       } else {
-        toast("success", `User “${username.trim()}” created.`);
+        toast("success", t("users.create.created", { name: username.trim() }));
       }
       onSaved();
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.message : "Create failed.");
+      toast("error", err instanceof ApiError ? err.message : t("users.create.createFailed"));
     } finally {
       setBusy(false);
     }
@@ -301,90 +303,90 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
 
   return (
     <Modal
-      title="Add user"
+      title={t("users.add.title")}
       width="sm:w-[40rem]"
       onClose={onClose}
       onSubmit={submit}
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button
             type="submit"
             variant="primary"
             disabled={busy || !/^[a-zA-Z0-9_]{3,64}$/.test(username.trim())}
           >
-            {busy ? "Adding…" : "Add user"}
+            {busy ? t("users.add.adding") : t("users.add.title")}
           </Button>
         </>
       }
     >
       {templates.length > 0 ? (
-        <Field label="Template" hint="Prefill limits/expiry from a preset (optional).">
+        <Field label={t("users.field.template")} hint={t("users.field.templateHint")}>
           <Select defaultValue="" onChange={(e) => applyTemplate(e.target.value)}>
-            <option value="">No template</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            <option value="">{t("users.field.noTemplate")}</option>
+            {templates.map((tpl) => (
+              <option key={tpl.id} value={tpl.id}>
+                {tpl.name}
               </option>
             ))}
           </Select>
         </Field>
       ) : null}
 
-      <p className="warp-dlg-section-title">Login information</p>
+      <p className="warp-dlg-section-title">{t("users.section.loginInfo")}</p>
       <div className="warp-dlg-2col">
-        <Field label="Username" hint="3–64 chars · letters, numbers, _">
+        <Field label={t("users.field.username")} hint={t("users.field.usernameHint")}>
           <Input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus autoComplete="off" />
           {username.trim() && !/^[a-zA-Z0-9_]{3,64}$/.test(username.trim()) ? (
             <p className="text-[12px] text-danger" style={{ marginTop: 4 }}>
-              Only letters, numbers and _ (3–64 chars). No spaces or other characters.
+              {t("users.field.usernameError")}
             </p>
           ) : null}
         </Field>
-        <Field label="Full name" hint="Optional display name.">
+        <Field label={t("common.name")} hint={t("users.field.fullNameHint")}>
           <Input value={note} onChange={(e) => setNote(e.target.value)} autoComplete="off" />
         </Field>
       </div>
 
       <div className="warp-dlg-divider" />
-      <p className="warp-dlg-section-title">Account details</p>
+      <p className="warp-dlg-section-title">{t("users.section.accountDetails")}</p>
       <div className="warp-dlg-2col">
-        <Field label="Data limit (GiB)">
-          <Input type="number" min="0" step="0.1" value={limitGib} onChange={(e) => setLimitGib(e.target.value)} placeholder="unlimited" />
+        <Field label={t("users.field.dataLimitGib")}>
+          <Input type="number" min="0" step="0.1" value={limitGib} onChange={(e) => setLimitGib(e.target.value)} placeholder={t("users.value.unlimitedLower")} />
         </Field>
-        <Field label="Device limit (HWID)" hint="max simultaneous devices/IPs">
-          <Input type="number" min="0" value={devices} onChange={(e) => setDevices(e.target.value)} placeholder="unlimited" />
+        <Field label={t("users.field.deviceLimitHwid")} hint={t("users.field.deviceLimitHint")}>
+          <Input type="number" min="0" value={devices} onChange={(e) => setDevices(e.target.value)} placeholder={t("users.value.unlimitedLower")} />
         </Field>
-        <Field label="Expiration">
+        <Field label={t("users.field.expiration")}>
           <Select
             value={expireStrategy}
             onChange={(e) => setExpireStrategy(e.target.value as "never" | "fixed_date" | "start_on_first_use")}
           >
-            <option value="never">Never</option>
-            <option value="fixed_date">Fixed Date</option>
-            <option value="start_on_first_use">On first use</option>
+            <option value="never">{t("users.expire.never")}</option>
+            <option value="fixed_date">{t("users.expire.fixedDate")}</option>
+            <option value="start_on_first_use">{t("users.expire.onFirstUse")}</option>
           </Select>
         </Field>
       </div>
       {expireStrategy === "fixed_date" ? (
-        <Field label="Expire date">
+        <Field label={t("users.field.expireDate")}>
           <Input type="date" value={expire} onChange={(e) => setExpire(e.target.value)} />
         </Field>
       ) : null}
       {expireStrategy === "start_on_first_use" ? (
-        <Field label="Usage duration (days)">
-          <Input type="number" min="1" value={usageDays} onChange={(e) => setUsageDays(e.target.value)} placeholder="e.g. 30" />
+        <Field label={t("users.field.usageDuration")}>
+          <Input type="number" min="1" value={usageDays} onChange={(e) => setUsageDays(e.target.value)} placeholder={t("users.field.holdDurationPlaceholder")} />
         </Field>
       ) : null}
 
       <div className="warp-dlg-divider" />
-      <p className="warp-dlg-section-title">Access</p>
-      <Field label="Services" hint="grants their inbounds on create">
+      <p className="warp-dlg-section-title">{t("users.section.access")}</p>
+      <Field label={t("users.tab.services")} hint={t("users.field.servicesHint")}>
         <div className="warp-dlg-chipbox">
           {groups.length === 0 ? (
-            <span className="text-[11px] text-fg-muted">No services yet.</span>
+            <span className="text-[11px] text-fg-muted">{t("users.field.noServicesYet")}</span>
           ) : (
             groups.map((g) => (
               <button
@@ -400,10 +402,10 @@ export function UserDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
           )}
         </div>
       </Field>
-      <Field label="Inbounds" hint="combine multiple in one sub">
+      <Field label={t("users.field.inbounds")} hint={t("users.field.inboundsHint")}>
         <div className="warp-dlg-chipbox">
           {profiles.length === 0 ? (
-            <span className="text-[11px] text-fg-muted">No inbounds yet.</span>
+            <span className="text-[11px] text-fg-muted">{t("users.field.noInboundsYet")}</span>
           ) : (
             profiles.map((p) => (
               <button

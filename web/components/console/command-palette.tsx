@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import { NAV_ITEMS } from "./nav";
 
 export function CommandPalette({ onSelect }: { onSelect: (key: string) => void }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
@@ -48,14 +50,14 @@ export function CommandPalette({ onSelect }: { onSelect: (key: string) => void }
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={t("command.paletteLabel")}
       >
         <div className="warp-cmd-input">
           <Search aria-hidden size={14} />
           <input
             autoFocus
             value={q}
-            placeholder="Jump to…"
+            placeholder={t("command.jumpTo")}
             onChange={(e) => { setQ(e.target.value); setActive(0); }}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(items.length - 1, a + 1)); }
@@ -67,7 +69,7 @@ export function CommandPalette({ onSelect }: { onSelect: (key: string) => void }
         </div>
         <div className="warp-cmd-list" role="listbox">
           {items.length === 0 ? (
-            <div className="warp-cmd-empty">No matches.</div>
+            <div className="warp-cmd-empty">{t("command.noMatches")}</div>
           ) : (
             items.map((it, i) => {
               const ItemIcon = it.icon;

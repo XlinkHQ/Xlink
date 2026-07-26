@@ -18,6 +18,7 @@ import {
 } from "@/lib/api";
 import { Field } from "@/shared/parts";
 import { InlineEditPanel } from "@/shared/settings-kit";
+import { useT } from "@/lib/i18n";
 import { PROTOCOLS, PROVIDERS, protocolsFor } from "./util";
 import { BOOL_KEYS, NUMERIC_KEYS, type TField, TRANSPORT_KEYS, transportFields } from "./transport";
 
@@ -54,6 +55,7 @@ export function ProfileDialog({
   onSaved: () => void;
   variant?: "modal" | "inline";
 }) {
+  const t = useT();
   const providersQuery = useQuery({ queryKey: ["providers"], queryFn: listProviders });
   const providerKinds =
     providersQuery.data && providersQuery.data.length > 0
@@ -104,9 +106,9 @@ export function ProfileDialog({
     try {
       const keys = await generateProfileKeys(protocol, cfg.security || "none");
       setCfg((c) => ({ ...c, ...keys }));
-      toast("success", "Keys generated.");
+      toast("success", t("profiles.keysGenerated"));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Could not generate keys.");
+      toast("error", e instanceof ApiError ? e.message : t("profiles.keysGenerateFailed"));
     } finally {
       setGenBusy(false);
     }
@@ -162,14 +164,14 @@ export function ProfileDialog({
         try {
           Object.assign(parsed, JSON.parse(advanced));
         } catch {
-          throw new ApiError("Advanced settings must be valid JSON.", 400);
+          throw new ApiError(t("profiles.advancedJsonInvalid"), 400);
         }
       }
       if (existingHosts && existingHosts.length > 0) parsed.hosts = existingHosts;
       if (parsed.port != null) {
         const p = Number(parsed.port);
         if (!Number.isInteger(p) || p < 1 || p > 65535) {
-          throw new ApiError("Port must be between 1 and 65535.", 400);
+          throw new ApiError(t("profiles.portRange"), 400);
         }
       }
       if (profile) {
@@ -199,10 +201,10 @@ export function ProfileDialog({
           }
         }
       }
-      toast("success", profile ? "Inbound updated." : "Inbound created.");
+      toast("success", profile ? t("profiles.updated") : t("profiles.created"));
       onSaved();
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.message : "Save failed.");
+      toast("error", err instanceof ApiError ? err.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -230,38 +232,38 @@ export function ProfileDialog({
   const Shell = variant === "inline" ? InlineEditPanel : Modal;
   return (
     <Shell
-      title={profile ? "Edit inbound" : "Add inbound"}
+      title={profile ? t("profiles.editInbound") : t("profiles.addInbound")}
       onClose={onClose}
       onSubmit={submit}
       width="sm:w-[40rem]"
       footer={
         <>
           <Button type="button" variant="outline" onClick={onClose}>
-            Cancel
+            {t("action.cancel")}
           </Button>
           <Button
             type="submit"
             variant="primary"
             disabled={busy || !name.trim() || (!profile && !nodeId)}
           >
-            {busy ? "Saving…" : profile ? "Save" : "Add inbound"}
+            {busy ? t("common.saving") : profile ? t("action.save") : t("profiles.addInbound")}
           </Button>
         </>
       }
     >
-      <p className="warp-dlg-section-title">General</p>
+      <p className="warp-dlg-section-title">{t("profiles.tabGeneral")}</p>
       {!profile ? (
         <>
           <div className="warp-dlg-2col">
-            <Field label="Name">
+            <Field label={t("common.name")}>
               <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
             </Field>
-            <Field label="Slug" hint="auto from name if left empty">
-              <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="auto from name" autoComplete="off" />
+            <Field label={t("profiles.slug")} hint={t("profiles.slugHint")}>
+              <Input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder={t("profiles.slugPlaceholder")} autoComplete="off" />
             </Field>
           </div>
           <div className="warp-dlg-2col">
-            <Field label="Provider (core)">
+            <Field label={t("profiles.providerCore")}>
               <Select
                 value={provider}
                 onChange={(e) => {
@@ -278,7 +280,7 @@ export function ProfileDialog({
                 ))}
               </Select>
             </Field>
-            <Field label="Node">
+            <Field label={t("profiles.node")}>
               <Select value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
                 {nodes.map((n) => (
                   <option key={n.id} value={n.id}>
@@ -288,7 +290,7 @@ export function ProfileDialog({
               </Select>
             </Field>
           </div>
-          <Field label="Protocol">
+          <Field label={t("profiles.protocol")}>
             <Select value={protocol} onChange={(e) => setProtocol(e.target.value)}>
               {protocolsFor(provider).map((p) => (
                 <option key={p} value={p}>
@@ -301,10 +303,10 @@ export function ProfileDialog({
       ) : (
         <>
           <div className="warp-dlg-2col">
-            <Field label="Name">
+            <Field label={t("common.name")}>
               <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus autoComplete="off" />
             </Field>
-            <Field label="Protocol">
+            <Field label={t("profiles.protocol")}>
               <Select value={protocol} onChange={(e) => setProtocol(e.target.value)}>
                 {protocolsFor(provider).map((p) => (
                   <option key={p} value={p}>
@@ -315,7 +317,7 @@ export function ProfileDialog({
             </Field>
           </div>
           <p className="text-[11px] text-fg-muted">
-            Core <span className="font-medium text-fg">{provider}</span> · Node{" "}
+            {t("profiles.coreLabel")} <span className="font-medium text-fg">{provider}</span> · {t("profiles.node")}{" "}
             <span className="font-medium text-fg">
               {nodes.find((n) => n.id === nodeId)?.name ?? "—"}
             </span>
@@ -326,7 +328,7 @@ export function ProfileDialog({
       {top.length > 0 ? (
         <>
           <div className="warp-dlg-divider" />
-          <p className="warp-dlg-section-title">Connection</p>
+          <p className="warp-dlg-section-title">{t("profiles.connection")}</p>
           <Grid fields={top} cfg={cfg} setField={setField} />
         </>
       ) : null}
@@ -334,7 +336,7 @@ export function ProfileDialog({
       {network.length > 0 ? (
         <>
           <div className="warp-dlg-divider" />
-          <p className="warp-dlg-section-title">Network settings</p>
+          <p className="warp-dlg-section-title">{t("profiles.networkSettings")}</p>
           <Grid fields={network} cfg={cfg} setField={setField} />
         </>
       ) : null}
@@ -343,7 +345,7 @@ export function ProfileDialog({
         <>
           <div className="warp-dlg-divider" />
           <div className="flex items-center justify-between gap-3">
-            <p className="warp-dlg-section-title">Security settings</p>
+            <p className="warp-dlg-section-title">{t("profiles.securitySettings")}</p>
             {showGenerate ? (
               <button
                 type="button"
@@ -351,7 +353,7 @@ export function ProfileDialog({
                 disabled={genBusy}
                 className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
               >
-                {genBusy ? "Generating…" : "Generate keys"}
+                {genBusy ? t("profiles.generating") : t("profiles.generateKeys")}
               </button>
             ) : null}
           </div>
@@ -362,7 +364,7 @@ export function ProfileDialog({
       {camouflage.length > 0 ? (
         <>
           <div className="warp-dlg-divider" />
-          <p className="warp-dlg-section-title">Camouflage settings</p>
+          <p className="warp-dlg-section-title">{t("profiles.camouflageSettings")}</p>
           <Grid fields={camouflage} cfg={cfg} setField={setField} />
         </>
       ) : null}
@@ -370,7 +372,7 @@ export function ProfileDialog({
       {mux.length > 0 ? (
         <>
           <div className="warp-dlg-divider" />
-          <p className="warp-dlg-section-title">Multiplexing</p>
+          <p className="warp-dlg-section-title">{t("profiles.multiplexing")}</p>
           <Grid fields={mux} cfg={cfg} setField={setField} />
         </>
       ) : null}
@@ -378,20 +380,20 @@ export function ProfileDialog({
       <div className="warp-dlg-divider" />
       <div className="flex items-center justify-between">
         <p className="warp-dlg-section-title" style={{ margin: 0 }}>
-          Advanced (JSON)
+          {t("profiles.advancedJson")}
         </p>
         <button
           type="button"
           className="warp-cpe-tab"
           onClick={() => setJsonEdit((v) => !v)}
         >
-          {jsonEdit ? "Preview" : "Edit"}
+          {jsonEdit ? t("profiles.preview") : t("action.edit")}
         </button>
       </div>
       {jsonEdit ? (
         <Field
-          label="Full settings JSON"
-          hint="edited here overrides the fields above; must be valid JSON"
+          label={t("profiles.fullSettingsJson")}
+          hint={t("profiles.fullSettingsJsonHint")}
         >
           <JsonArea value={advanced || previewJson} onChange={setAdvanced} invalid={!advancedValid} />
         </Field>

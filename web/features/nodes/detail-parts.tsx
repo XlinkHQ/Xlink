@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { copyText } from "@/lib/clipboard";
+import { useT } from "@/lib/i18n";
 
 const XRAY_DEFAULT_TEMPLATE = JSON.stringify(
   {
@@ -88,6 +89,7 @@ export const CORE_LABELS: Record<string, string> = {
 };
 
 export function CopyField({ label, value }: { label: string; value: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   return (
     <div className="warp-copyfield">
@@ -106,7 +108,7 @@ export function CopyField({ label, value }: { label: string; value: string }) {
             window.setTimeout(() => setCopied(false), 1200);
           }}
         >
-          {copied ? "Copied" : "Copy"}
+          {copied ? t("common.copied") : t("action.copy")}
         </button>
       </div>
     </div>

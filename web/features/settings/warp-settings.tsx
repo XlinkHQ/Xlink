@@ -10,6 +10,7 @@ import {
   updateWarpSettings,
   type WarpSettingsRead,
 } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { SettingsRow, useRegisterSave } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
 
@@ -23,6 +24,7 @@ const EMPTY: WarpSettingsRead = {
 };
 
 export function WarpSettingsScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["warp-settings"], queryFn: () => getWarpSettings() });
   const [form, setForm] = useState<WarpSettingsRead>(EMPTY);
@@ -45,9 +47,9 @@ export function WarpSettingsScreen() {
       const saved = await updateWarpSettings(form);
       setForm(saved);
       qc.invalidateQueries({ queryKey: ["warp-settings"] });
-      toast("success", "WARP settings saved — nodes apply on next sync.");
+      toast("success", t("warp.saved"));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Save failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -57,29 +59,29 @@ export function WarpSettingsScreen() {
     <div className="w-full">
       <SettingsSection
         icon={Globe}
-        title="Cloudflare WARP"
-        description="Route selected traffic through a WARP (WireGuard) outbound. Add a routing rule with outbound “warp” to send matching domains/IPs through it."
+        title={t("warp.title")}
+        description={t("warp.desc")}
       >
-        <SettingsRow label="Enable WARP outbound" hint="Injects a WARP wireguard outbound into the Xray config.">
+        <SettingsRow label={t("warp.enable")} hint={t("warp.enableHint")}>
           <label className="warp-switch">
             <input type="checkbox" checked={form.warp_enabled} onChange={(e) => set("warp_enabled", e.target.checked)} />
             <span className="warp-switch-track" />
           </label>
         </SettingsRow>
-        <SettingsRow label="Private key" hint="WARP WireGuard secret key (from wgcf / warp-cli).">
-          <input className="warp-set-input warp-set-input-wide" value={form.warp_private_key} onChange={(e) => set("warp_private_key", e.target.value)} placeholder="base64 key" />
+        <SettingsRow label={t("warp.privateKey")} hint={t("warp.privateKeyHint")}>
+          <input className="warp-set-input warp-set-input-wide" value={form.warp_private_key} onChange={(e) => set("warp_private_key", e.target.value)} placeholder={t("warp.base64Placeholder")} />
         </SettingsRow>
-        <SettingsRow label="Peer public key" hint="Cloudflare endpoint public key.">
-          <input className="warp-set-input warp-set-input-wide" value={form.warp_public_key} onChange={(e) => set("warp_public_key", e.target.value)} placeholder="base64 key" />
+        <SettingsRow label={t("warp.peerPublicKey")} hint={t("warp.peerPublicKeyHint")}>
+          <input className="warp-set-input warp-set-input-wide" value={form.warp_public_key} onChange={(e) => set("warp_public_key", e.target.value)} placeholder={t("warp.base64Placeholder")} />
         </SettingsRow>
-        <SettingsRow label="Address(es)" hint="Comma-separated interface addresses (e.g. 172.16.0.2/32, 2606:…/128).">
+        <SettingsRow label={t("warp.addresses")} hint={t("warp.addressesHint")}>
           <input className="warp-set-input warp-set-input-wide" value={form.warp_address} onChange={(e) => set("warp_address", e.target.value)} placeholder="172.16.0.2/32" />
         </SettingsRow>
-        <SettingsRow label="Endpoint" hint="WARP endpoint host:port.">
+        <SettingsRow label={t("warp.endpoint")} hint={t("warp.endpointHint")}>
           <input className="warp-set-input warp-set-input-wide" value={form.warp_endpoint} onChange={(e) => set("warp_endpoint", e.target.value)} />
         </SettingsRow>
-        <SettingsRow label="Reserved" hint="Optional comma-separated reserved bytes (e.g. 12,34,56).">
-          <input className="warp-set-input" value={form.warp_reserved} onChange={(e) => set("warp_reserved", e.target.value)} placeholder="optional" />
+        <SettingsRow label={t("warp.reserved")} hint={t("warp.reservedHint")}>
+          <input className="warp-set-input" value={form.warp_reserved} onChange={(e) => set("warp_reserved", e.target.value)} placeholder={t("warp.optionalPlaceholder")} />
         </SettingsRow>
       </SettingsSection>
     </div>

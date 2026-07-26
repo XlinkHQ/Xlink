@@ -21,8 +21,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { SettingsSection } from "@/shared/settings-kit";
 import { CORE_DEFAULTS, CORE_LABELS, CORE_PLACEHOLDERS } from "./detail-parts";
 import { NodeLogs } from "./detail-logs";
+import { useT } from "@/lib/i18n";
 
 export function XrayBackendCard({ node, running }: { node: NodeRead; running: boolean }) {
+  const t = useT();
   const [sub, setSub] = useState<"logs" | "config">("logs");
   const [core, setCore] = useState<string>("xray");
   const [upgrading, setUpgrading] = useState(false);
@@ -49,15 +51,15 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
     try {
       versions = await xrayVersions();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Could not load Xray versions.");
+      toast("error", e instanceof ApiError ? e.message : t("nodes.xrayVersionsError"));
       return;
     }
     const current = version ? (version.startsWith("v") ? version : `v${version}`) : "";
     const latest = versions[0] ?? "";
     const options = versions.map((v, i) => {
       const tags: string[] = [];
-      if (v === current) tags.push("installed");
-      if (i === 0) tags.push("latest");
+      if (v === current) tags.push(t("nodes.tagInstalled"));
+      if (i === 0) tags.push(t("nodes.tagLatest"));
       return {
         value: v,
         label: v,
@@ -67,16 +69,16 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
     });
     const upToDate = current && current === latest;
     const target = await selectDialog({
-      title: "Upgrade Xray core",
+      title: t("nodes.upgradeXrayTitle"),
       message: upToDate
-        ? `This node already runs the latest release (${current}). Pick an older release only to roll back.`
+        ? t("nodes.upgradeUpToDate", { current })
         : current
-          ? `This node runs ${current}. Select a release to install — ${latest} is the latest.`
-          : "Select the Xray-core release to install on this node.",
+          ? t("nodes.upgradeCurrent", { current, latest })
+          : t("nodes.upgradeSelect"),
       options,
       defaultValue: upToDate ? "" : latest,
-      confirmLabel: "Upgrade",
-      emptyLabel: "No releases available right now. Try again shortly.",
+      confirmLabel: t("nodes.upgrade"),
+      emptyLabel: t("nodes.noReleases"),
     });
     if (!target || target === current) return;
     setUpgrading(true);
@@ -85,9 +87,9 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
         kind: "upgrade",
         payload: { core: activeCore, target_version: target },
       });
-      toast("success", `Upgrade to ${target} queued — the agent applies it shortly.`);
+      toast("success", t("nodes.upgradeQueued", { target }));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Upgrade failed.");
+      toast("error", e instanceof ApiError ? e.message : t("nodes.upgradeFailed"));
     } finally {
       setUpgrading(false);
     }
@@ -98,9 +100,9 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
     setRestarting(true);
     try {
       await issueAgentCommand(node.id, { kind: "restart", payload: { core: activeCore } });
-      toast("success", `Restart of ${CORE_LABELS[activeCore] ?? activeCore} queued.`);
+      toast("success", t("nodes.restartQueued", { core: CORE_LABELS[activeCore] ?? activeCore }));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Restart failed.");
+      toast("error", e instanceof ApiError ? e.message : t("nodes.restartFailed"));
     } finally {
       setRestarting(false);
     }
@@ -110,13 +112,13 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
 
   return (
     <div className="warp-settings-card">
-      <SettingsSection icon={Server} title="Cores" description="Version, runtime status, logs and configuration per installed core.">
+      <SettingsSection icon={Server} title={t("nodes.coresTitle")} description={t("nodes.coresConfigDesc")}>
         <div className="warp-xray-head">
           <select
             className="warp-ver-pill warp-core-select"
             value={activeCore}
             onChange={(e) => setCore(e.target.value)}
-            title="Select core"
+            title={t("nodes.selectCore")}
           >
             {cores.map((k) => (
               <option key={k} value={k}>
@@ -129,7 +131,7 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
             const ok = st
               ? ["healthy", "online", "connected", "running", "ok", "idle"].includes(st)
               : running;
-            const label = coreHealth ? (ok ? "Healthy" : coreHealth.status) : running ? "Running" : "Offline";
+            const label = coreHealth ? (ok ? t("nodes.healthy") : coreHealth.status) : running ? t("nodes.running") : t("nodes.offline");
             return (
               <span className={cn("warp-badge", ok ? "success" : "neutral")}>{label}</span>
             );
@@ -140,10 +142,10 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
               className="warp-ver-pill"
               onClick={upgrade}
               disabled={upgrading}
-              title="Change Xray-core version"
+              title={t("nodes.changeXrayVersion")}
             >
               {upgrading ? <Spinner size={12} /> : null}
-              {version ? `v${version}` : "Set version"}
+              {version ? `v${version}` : t("nodes.setVersion")}
               <ChevronDown size={12} aria-hidden />
             </button>
           ) : null}
@@ -152,17 +154,17 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
             className="warp-ver-pill"
             onClick={restartCore}
             disabled={restarting}
-            title={`Restart ${CORE_LABELS[activeCore] ?? activeCore}`}
+            title={t("nodes.restartCoreTitle", { core: CORE_LABELS[activeCore] ?? activeCore })}
           >
             {restarting ? <Spinner size={12} /> : null}
-            Restart
+            {t("nodes.restart")}
           </button>
         </div>
         <div className="warp-pd-tabs warp-xray-tabs">
           {(
             [
-              ["logs", "Logs"],
-              ["config", "Core config"],
+              ["logs", t("nodes.tabLogs")],
+              ["config", t("nodes.tabCoreConfig")],
             ] as Array<["logs" | "config", string]>
           ).map(([key, label]) => (
             <button
@@ -186,6 +188,7 @@ export function XrayBackendCard({ node, running }: { node: NodeRead; running: bo
 }
 
 function CoreConfig({ node, core }: { node: NodeRead; core: string }) {
+  const t = useT();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["core-templates"], queryFn: () => getCoreTemplates() });
   const [text, setText] = useState("");
@@ -218,9 +221,9 @@ function CoreConfig({ node, core }: { node: NodeRead; core: string }) {
     try {
       const res = await updateCoreTemplate(core, text || "{}");
       qc.setQueryData(["core-templates"], res);
-      toast("success", `${core} template saved — nodes apply it instantly.`);
+      toast("success", t("nodes.templateSaved", { core }));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Save failed.");
+      toast("error", e instanceof ApiError ? e.message : t("common.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -230,9 +233,9 @@ function CoreConfig({ node, core }: { node: NodeRead; core: string }) {
     setRestarting(true);
     try {
       await restartNodeCore(node.id);
-      toast("success", "Core restart requested — applies within seconds.");
+      toast("success", t("nodes.coreRestartApplies"));
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Restart failed.");
+      toast("error", e instanceof ApiError ? e.message : t("nodes.restartFailed"));
     } finally {
       setRestarting(false);
     }
@@ -241,7 +244,7 @@ function CoreConfig({ node, core }: { node: NodeRead; core: string }) {
   return (
     <div className="flex flex-col gap-3">
       <JsonEditor
-        value={q.isLoading ? "Loading…" : text}
+        value={q.isLoading ? t("common.loading") : text}
         onChange={setText}
         rows={24}
         disabled={q.isLoading}
@@ -254,16 +257,16 @@ function CoreConfig({ node, core }: { node: NodeRead; core: string }) {
           onClick={save}
           disabled={busy || !valid || !dirty || q.isLoading}
         >
-          {busy ? "Saving…" : "Save"}
+          {busy ? t("common.saving") : t("action.save")}
         </button>
         <button type="button" className="warp-tb-button" onClick={restart} disabled={restarting}>
           <RotateCw size={14} aria-hidden />
-          {restarting ? "Restarting…" : "Restart core"}
+          {restarting ? t("nodes.restarting") : t("nodes.restartCore")}
         </button>
         {!valid ? (
-          <span className="text-[11px] font-medium text-danger">Invalid JSON</span>
+          <span className="text-[11px] font-medium text-danger">{t("nodes.invalidJson")}</span>
         ) : dirty ? (
-          <span className="text-[11px] text-fg-muted">Unsaved changes</span>
+          <span className="text-[11px] text-fg-muted">{t("nodes.unsavedChanges")}</span>
         ) : null}
       </div>
     </div>

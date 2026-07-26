@@ -13,11 +13,13 @@ import {
   pingOutboundById,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { WarpButton, WarpEmpty, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard, type WarpMenuItem } from "@/shared/warp-table";
+import { WarpButton, WarpEmpty, WarpError, WarpHead, WarpMenu, WarpSkeleton, WarpTableCard, type WarpMenuItem } from "@/shared/warp-table";
+import { useT } from "@/lib/i18n";
 import { HAS_ADDRESS } from "./constants";
 import { OutboundModal } from "./OutboundModal";
 
 export function OutboundsScreen() {
+  const t = useT();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["outbounds"], queryFn: () => listOutbounds() });
   const outbounds = q.data ?? [];
@@ -36,53 +38,55 @@ export function OutboundsScreen() {
     try {
       const r = await pingOutboundById(o.id);
       if (r.ok) {
-        toast("success", `${o.tag} reachable · ${r.latency_ms ?? 0} ms`);
+        toast("success", t("outbounds.toast.reachable", { tag: o.tag, ms: r.latency_ms ?? 0 }));
       } else {
-        toast("error", `${o.tag} unreachable · ${r.detail}`);
+        toast("error", t("outbounds.toast.unreachable", { tag: o.tag, detail: r.detail }));
       }
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Test failed.");
+      toast("error", e instanceof ApiError ? e.message : t("outbounds.toast.testFailed"));
     } finally {
       setPinging(null);
     }
   };
 
   const remove = async (o: OutboundRead) => {
-    if (!(await confirmDialog({ title: `Delete outbound "${o.tag}"?`, confirmLabel: "Delete", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("outbounds.confirmDelete", { tag: o.tag }), confirmLabel: t("action.delete"), danger: true }))) return;
     try {
       await deleteOutbound(o.id);
-      toast("success", "Outbound deleted.");
+      toast("success", t("outbounds.toast.deleted"));
       refresh();
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Delete failed.");
+      toast("error", e instanceof ApiError ? e.message : t("outbounds.toast.deleteFailed"));
     }
   };
 
   const target = (o: OutboundRead) => {
     if (HAS_ADDRESS.has(o.type)) return String(o.settings.address ?? "");
     if (o.type === "wireguard") return String(o.settings.endpoint ?? "");
-    if (o.type === "custom") return "raw JSON";
+    if (o.type === "custom") return t("outbounds.rawJson");
     return "—";
   };
 
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="warp-table-top">
-        <span className="title">All outbounds</span>
+        <span className="title">{t("outbounds.allOutbounds")}</span>
         <div className="right">
           <WarpButton primary onClick={() => setDialog("new")}>
-            <Plus size={16} strokeWidth={1.8} aria-hidden /> Add Outbound
+            <Plus size={16} strokeWidth={1.8} aria-hidden /> {t("outbounds.addOutbound")}
           </WarpButton>
         </div>
       </div>
 
       <WarpTableCard className="warp-users-table">
-        <WarpHead cols={["Tag", "Type", "Target", "Status"]} actions />
+        <WarpHead cols={[t("outbounds.col.tag"), t("outbounds.col.type"), t("outbounds.col.target"), t("common.status")]} actions />
         {q.isLoading ? (
           <WarpSkeleton />
+        ) : q.isError ? (
+          <WarpError onRetry={() => q.refetch()} />
         ) : outbounds.length === 0 ? (
           <WarpEmpty>
-            No custom outbounds yet. Rules can also use the builtins (block / direct / warp).
+            {t("outbounds.empty")}
           </WarpEmpty>
         ) : (
           <>
@@ -95,15 +99,15 @@ export function OutboundsScreen() {
                 </span>
                 <span className="warp-tb-cell">
                   <span className={`warp-rt-status ${o.enabled ? "is-on" : "is-off"}`}>
-                    <span className="warp-rt-dot" />{o.enabled ? "Enabled" : "Disabled"}
+                    <span className="warp-rt-dot" />{o.enabled ? t("common.enabled") : t("common.disabled")}
                   </span>
                 </span>
                 <span className="warp-tb-cell warp-tb-cell-actions" onClick={(e) => e.stopPropagation()}>
                   <WarpMenu
                     items={[
-                      ...(testable(o) ? [{ label: pinging === o.id ? "Testing…" : "Test connection", icon: "ping", disabled: pinging === o.id, onClick: () => ping(o) } as WarpMenuItem] : []),
-                      { label: "Edit", icon: "edit", onClick: () => setDialog(o) },
-                      { label: "Delete", icon: "delete", danger: true, onClick: () => remove(o) },
+                      ...(testable(o) ? [{ label: pinging === o.id ? t("outbounds.testing") : t("outbounds.testConnection"), icon: "ping", disabled: pinging === o.id, onClick: () => ping(o) } as WarpMenuItem] : []),
+                      { label: t("action.edit"), icon: "edit", onClick: () => setDialog(o) },
+                      { label: t("action.delete"), icon: "delete", danger: true, onClick: () => remove(o) },
                     ]}
                   />
                 </span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 export type SortCol = "name" | "username" | "email" | "online" | "status" | "traffic" | "expiration";
 export type SortDir = "asc" | "desc";
@@ -11,12 +12,13 @@ export function Badge({ variant, children }: { variant: BadgeVariant; children: 
 }
 
 export function UserNameCell({ name, online }: { name: string; online: boolean }) {
+  const t = useT();
   return (
     <span className="warp-user-namecell">
       <span
         className={`warp-user-online-dot ${online ? "is-on" : "is-off"}`}
-        aria-label={online ? "online" : "offline"}
-        title={online ? "Online" : "Offline"}
+        aria-label={online ? t("users.onlineLower") : t("users.offlineLower")}
+        title={online ? t("users.online") : t("users.offline")}
       />
       <span className="warp-user-name">{name}</span>
     </span>

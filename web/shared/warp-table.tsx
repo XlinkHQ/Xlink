@@ -2,9 +2,10 @@
 
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Menu, Plus, Trash } from "lucide-react";
+import { AlertTriangle, Menu, Plus, RotateCw, Trash } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/lib/icons";
+import { useT } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme";
 
 function DotsMenu({ size = 20 }: { size?: number }) {
@@ -26,6 +27,7 @@ export type WarpMenuItem = {
 };
 
 export function WarpMenu({ items, label }: { items: WarpMenuItem[]; label?: string }) {
+  const t = useT();
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -69,8 +71,8 @@ export function WarpMenu({ items, label }: { items: WarpMenuItem[]; label?: stri
         <button
           ref={btnRef}
           type="button"
-          title="More options"
-          aria-label="More options"
+          title={t("table.moreOptions")}
+          aria-label={t("table.moreOptions")}
           className="warp-tb-rowicon"
           aria-haspopup="menu"
           aria-expanded={open}
@@ -265,6 +267,27 @@ export function WarpEmpty({
       {cta ? (
         <button type="button" className="warp-tb-button warp-tb-button-primary" onClick={cta.onClick}>
           <Plus size={14} aria-hidden /> {cta.label}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function WarpError({
+  onRetry,
+  message,
+}: {
+  onRetry?: () => void;
+  message?: ReactNode;
+}) {
+  const t = useT();
+  return (
+    <div className="warp-tb-empty">
+      <span className="warp-tb-empty-ico"><AlertTriangle size={28} aria-hidden /></span>
+      <p className="warp-tb-empty-text">{message ?? t("common.loadFailed")}</p>
+      {onRetry ? (
+        <button type="button" className="warp-tb-button" onClick={onRetry}>
+          <RotateCw size={14} aria-hidden /> {t("action.retry")}
         </button>
       ) : null}
     </div>

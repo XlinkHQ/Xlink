@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { isNodeOnline } from "@/lib/status";
 import { XrayBackendCard } from "./detail-config";
 import { NodeInboundsCard, NodeInfo } from "./detail-info";
+import { useT } from "@/lib/i18n";
 
 export function NodeDetail({
   node,
@@ -21,6 +22,7 @@ export function NodeDetail({
   editing?: boolean;
   editForm?: ReactNode;
 }) {
+  const t = useT();
   const [tab, setTab] = useState<"config" | "info" | "inbounds">("config");
   const running = isNodeOnline(node.status);
 
@@ -31,7 +33,7 @@ export function NodeDetail({
           <button
             type="button"
             className="warp-breadcrumbs-back"
-            aria-label="Back"
+            aria-label={t("action.back")}
             onClick={onClose}
           >
             <ArrowLeft size={20} strokeWidth={1.9} aria-hidden />
@@ -39,7 +41,7 @@ export function NodeDetail({
           <span className="warp-breadcrumbs-divider" />
           <div className="links">
             <button type="button" className="crumb" onClick={onClose}>
-              Nodes
+              {t("nav.nodes")}
             </button>
             <ChevronRight size={20} strokeWidth={2} className="crumb-sep" aria-hidden />
             <span className="crumb active">{node.name}</span>
@@ -51,7 +53,7 @@ export function NodeDetail({
               onClick={onEdit}
               aria-pressed={editing}
             >
-              <Pencil size={14} aria-hidden /> Edit
+              <Pencil size={14} aria-hidden /> {t("action.edit")}
             </button>
           </div>
         </div>
@@ -59,9 +61,9 @@ export function NodeDetail({
       <div className="warp-pd-tabs warp-profile-tabs">
         {(
           [
-            ["config", "Config"],
-            ["info", "Info"],
-            ["inbounds", "Inbounds"],
+            ["config", t("nodes.tabConfig")],
+            ["info", t("nodes.tabInfo")],
+            ["inbounds", t("nodes.tabInbounds")],
           ] as Array<["config" | "info" | "inbounds", string]>
         ).map(([key, label]) => (
           <button

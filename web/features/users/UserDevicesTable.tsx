@@ -4,39 +4,43 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/toast";
 import { confirmDialog } from "@/components/ui/dialog";
 import { ApiError, listUserDevices, resetUserDevices } from "@/lib/api";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { useT } from "@/lib/i18n";
+import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 import { relTimeShort } from "./helpers";
 
 export function UserDevicesTable({ userId, deviceLimit }: { userId: string; deviceLimit: number | null }) {
+  const t = useT();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["user-devices", userId], queryFn: () => listUserDevices(userId) });
   const devices = q.data ?? [];
   const reset = async () => {
-    if (!(await confirmDialog({ title: "Reset this user's devices?", message: "All device bindings are removed; the user can re-bind up to the limit.", confirmLabel: "Reset", danger: true }))) return;
+    if (!(await confirmDialog({ title: t("users.devices.resetConfirmTitle"), message: t("users.devices.resetConfirmMessage"), confirmLabel: t("users.devices.reset"), danger: true }))) return;
     try {
       await resetUserDevices(userId);
-      toast("success", "Devices reset.");
+      toast("success", t("users.devices.resetSuccess"));
       qc.invalidateQueries({ queryKey: ["user-devices", userId] });
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : "Reset failed.");
+      toast("error", e instanceof ApiError ? e.message : t("users.devices.resetFailed"));
     }
   };
   return (
     <>
       <div className="mb-3 flex items-center justify-between">
         <span className="text-sm text-fg-muted">
-          {devices.length}{deviceLimit != null ? ` / ${deviceLimit}` : ""} bound
+          {devices.length}{deviceLimit != null ? ` / ${deviceLimit}` : ""} {t("users.devices.bound")}
         </span>
         <button type="button" className="warp-dg-btn secondary" onClick={reset} disabled={devices.length === 0}>
-          Reset devices
+          {t("users.devices.resetDevices")}
         </button>
       </div>
       <WarpTableCard className="warp-users-table warp-devices-table">
-        <WarpHead cols={["Device", "User agent", "Last seen"]} />
+        <WarpHead cols={[t("users.devices.device"), t("users.devices.userAgent"), t("users.devices.lastSeen")]} />
         {q.isLoading ? (
           <WarpSkeleton />
+        ) : q.isError ? (
+          <WarpError onRetry={() => q.refetch()} />
         ) : devices.length === 0 ? (
-          <WarpEmpty>No devices bound.</WarpEmpty>
+          <WarpEmpty>{t("users.devices.empty")}</WarpEmpty>
         ) : (
           devices.map((d) => (
             <WarpRow

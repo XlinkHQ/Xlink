@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { useT } from "@/lib/i18n";
 
 
 
@@ -55,6 +56,7 @@ export function InlineEditPanel({
   className?: string;
   width?: string;
 }) {
+  const t = useT();
   return (
     <form
       onSubmit={onSubmit}
@@ -65,7 +67,7 @@ export function InlineEditPanel({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t("action.close")}
           className="grid h-7 w-7 place-items-center rounded text-fg-muted transition-colors hover:bg-muted hover:text-fg"
         >
           <X className="h-4 w-4" />

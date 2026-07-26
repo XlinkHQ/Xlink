@@ -6,8 +6,9 @@ import { useState } from "react";
 import { ApiError, type AuditEntry, downloadAuditCsv, listAudit } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
 import { DatePicker } from "@/components/ui/calendar";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 import { DgSearch } from "@/components/console/dg-icons";
+import { type TranslateFn, useT } from "@/lib/i18n";
 
 type BadgeVariant = "success" | "critical" | "neutral" | "warning" | "info";
 
@@ -19,12 +20,12 @@ function methodVariant(m: string): BadgeVariant {
   return "neutral";
 }
 
-function relTime(iso: string): string {
+function relTime(iso: string, t: TranslateFn): string {
   const d = Date.parse(iso);
   const s = Math.max(0, Math.floor((Date.now() - d) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 60) return t("common.secondsAgo", { n: s });
+  if (s < 3600) return t("common.minutesAgo", { n: Math.floor(s / 60) });
+  if (s < 86400) return t("common.hoursAgo", { n: Math.floor(s / 3600) });
   return new Date(d).toLocaleString();
 }
 
@@ -33,6 +34,7 @@ function cap(s: string): string {
 }
 
 export function AuditLogScreen() {
+  const t = useT();
   const [actor, setActor] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -53,13 +55,13 @@ export function AuditLogScreen() {
   return (
     <div className="mx-auto w-full max-w-6xl">
       <div className="warp-table-top">
-        <span className="title">Activity log</span>
+        <span className="title">{t("auditlog.title")}</span>
         <div className="right">
           <div className="warp-daterange">
             <CalendarDays size={16} className="warp-daterange-ico" aria-hidden />
-            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder="From" />
+            <DatePicker value={dateFrom} onChange={setDateFrom} placeholder={t("auditlog.from")} />
             <span className="warp-daterange-sep">→</span>
-            <DatePicker value={dateTo} onChange={setDateTo} placeholder="To" />
+            <DatePicker value={dateTo} onChange={setDateTo} placeholder={t("auditlog.to")} />
             {dateFrom || dateTo ? (
               <button
                 type="button"
@@ -68,7 +70,7 @@ export function AuditLogScreen() {
                   setDateFrom("");
                   setDateTo("");
                 }}
-                aria-label="Clear dates"
+                aria-label={t("auditlog.clearDates")}
               >
                 <X size={13} aria-hidden />
               </button>
@@ -80,7 +82,7 @@ export function AuditLogScreen() {
               className="warp-tb-search"
               value={actor}
               onChange={(e) => setActor(e.target.value)}
-              placeholder="Filter by admin"
+              placeholder={t("auditlog.filterByAdmin")}
             />
           </span>
           <button
@@ -94,22 +96,24 @@ export function AuditLogScreen() {
                   dateTo: dateTo || undefined,
                 });
               } catch (e) {
-                toast("error", e instanceof ApiError ? e.message : "Export failed.");
+                toast("error", e instanceof ApiError ? e.message : t("auditlog.exportFailed"));
               }
             }}
           >
-            Export CSV
+            {t("auditlog.exportCsv")}
           </button>
         </div>
       </div>
 
       <WarpTableCard className="warp-users-table">
-        <WarpHead cols={["Date", "Admin", "Action", "Method", "Path", "IP"]} />
+        <WarpHead cols={[t("auditlog.date"), t("auditlog.admin"), t("auditlog.action"), t("auditlog.method"), t("auditlog.path"), t("auditlog.ip")]} />
         {q.isLoading ? (
           <WarpSkeleton />
+        ) : q.isError ? (
+          <WarpError onRetry={() => q.refetch()} />
         ) : entries.length === 0 ? (
           <WarpEmpty>
-            {actor.trim() ? "No entries for this admin." : "No audit entries yet."}
+            {actor.trim() ? t("auditlog.noEntriesForAdmin") : t("auditlog.noEntries")}
           </WarpEmpty>
         ) : (
           <>
@@ -118,7 +122,7 @@ export function AuditLogScreen() {
                 key={e.id}
                 cells={[
                   <span key="date" title={new Date(e.created_at).toLocaleString()}>
-                    {relTime(e.created_at)}
+                    {relTime(e.created_at, t)}
                   </span>,
                   e.actor_username || "—",
                   cap(e.action),

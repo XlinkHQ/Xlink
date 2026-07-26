@@ -4,8 +4,10 @@ import { type FormEvent, useEffect, useState } from "react";
 import { ApiError, login } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
 import { getBranding, onBrandingChange } from "@/lib/branding";
+import { useT } from "@/lib/i18n";
 
 export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }) {
+  const t = useT();
   const [brand, setBrand] = useState(getBranding);
   useEffect(() => onBrandingChange(() => setBrand(getBranding())), []);
   const [username, setUsername] = useState("");
@@ -18,7 +20,7 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
     event.preventDefault();
     if (submitting) return;
     if (username.trim().length === 0) {
-      toast("error", "Please check your username and password and try again.");
+      toast("error", t("login.error.invalidCredentials"));
       return;
     }
     setSubmitting(true);
@@ -28,7 +30,7 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
     try {
       const res = await login(username.trim(), password, needTotp ? totpCode.trim() : undefined);
       await settle();
-      toast("success", "Signed in successfully.");
+      toast("success", t("login.success"));
       window.setTimeout(() => onSuccess(res.user?.username ?? username.trim()), 700);
     } catch (caught) {
       await settle();
@@ -37,7 +39,7 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
         setSubmitting(false);
         return;
       }
-      toast("error", caught instanceof ApiError ? caught.message : "Please check your username and password and try again.");
+      toast("error", caught instanceof ApiError ? caught.message : t("login.error.invalidCredentials"));
       setSubmitting(false);
     }
   };
@@ -57,17 +59,17 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
             draggable={false}
           />
 
-          <h1 className="warp-login-title">Sign in to your account</h1>
-          <h2 className="warp-login-subtitle">Enter your credentials to continue.</h2>
+          <h1 className="warp-login-title">{t("login.title")}</h1>
+          <h2 className="warp-login-subtitle">{t("login.subtitle")}</h2>
 
           <form className="warp-login-form" onSubmit={submit} autoCapitalize="off" autoCorrect="off">
             <div className="warp-login-field">
-              <label htmlFor="warp-login-username">Username</label>
+              <label htmlFor="warp-login-username">{t("login.username")}</label>
               <input
                 id="warp-login-username"
                 type="text"
-                placeholder="Username"
-                aria-placeholder="Username"
+                placeholder={t("login.username")}
+                aria-placeholder={t("login.username")}
                 autoComplete="username"
                 autoFocus
                 value={username}
@@ -75,12 +77,12 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
               />
             </div>
             <div className="warp-login-field">
-              <label htmlFor="warp-login-password">Password</label>
+              <label htmlFor="warp-login-password">{t("login.password")}</label>
               <input
                 id="warp-login-password"
                 type="password"
-                placeholder="Password"
-                aria-placeholder="Password"
+                placeholder={t("login.password")}
+                aria-placeholder={t("login.password")}
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -88,13 +90,13 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
             </div>
             {needTotp ? (
               <div className="warp-login-field">
-                <label htmlFor="warp-login-totp">Two-factor code</label>
+                <label htmlFor="warp-login-totp">{t("login.totp")}</label>
                 <input
                   id="warp-login-totp"
                   type="text"
                   inputMode="numeric"
-                  placeholder="Two-factor code"
-                  aria-placeholder="Two-factor code"
+                  placeholder={t("login.totp")}
+                  aria-placeholder={t("login.totp")}
                   autoComplete="one-time-code"
                   autoFocus
                   value={totpCode}
@@ -107,12 +109,12 @@ export function LoginScreen({ onSuccess }: { onSuccess: (name: string) => void }
               className={`warp-login-submit${submitting ? " warp-login-submit-loading" : ""}`}
               disabled={submitting}
             >
-              {submitting ? "Processing..." : "Sign in"}
+              {submitting ? t("login.processing") : t("login.signIn")}
             </button>
           </form>
 
           <footer className="warp-login-footer">
-            <p>Copyright © {new Date().getFullYear()} {brand.name}</p>
+            <p>{t("login.copyright", { year: new Date().getFullYear(), name: brand.name })}</p>
           </footer>
         </main>
       </div>

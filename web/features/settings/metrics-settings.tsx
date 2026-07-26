@@ -5,9 +5,10 @@ import { Activity } from "lucide-react";
 import { toast } from "@/components/ui/toast";
 import { monitoringMetrics } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { useT } from "@/lib/i18n";
 import { SettingsRow } from "./save-context";
 import { SettingsSection } from "@/shared/settings-kit";
-import { WarpEmpty, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
+import { WarpEmpty, WarpError, WarpHead, WarpRow, WarpSkeleton, WarpTableCard } from "@/shared/warp-table";
 
 function prometheusUrl(): string {
   if (typeof window === "undefined") return "";
@@ -17,6 +18,7 @@ function prometheusUrl(): string {
 }
 
 export function MetricsSettingsScreen() {
+  const t = useT();
   const q = useQuery({
     queryKey: ["monitoring-metrics"],
     queryFn: () => monitoringMetrics(),
@@ -30,30 +32,32 @@ export function MetricsSettingsScreen() {
     <div className="w-full">
       <SettingsSection
         icon={Activity}
-        title="Metrics"
-        description="Live panel metrics. Scrape the Prometheus endpoint for dashboards and alerting."
+        title={t("metrics.title")}
+        description={t("metrics.description")}
       >
-        <SettingsRow label="Prometheus endpoint" hint="Point your Prometheus scrape config at this URL.">
+        <SettingsRow label={t("metrics.endpointLabel")} hint={t("metrics.endpointHint")}>
           <button
             type="button"
             className="warp-tb-button"
             onClick={async () => {
               const ok = await copyText(url);
-              toast(ok ? "success" : "error", ok ? "Prometheus URL copied." : "Copy failed.");
+              toast(ok ? "success" : "error", ok ? t("metrics.urlCopied") : t("common.copyFailed"));
             }}
           >
-            Copy URL
+            {t("metrics.copyUrl")}
           </button>
         </SettingsRow>
       </SettingsSection>
 
-      <SettingsSection divider icon={Activity} title="Current values" description={q.data?.collected_at ? `Collected ${new Date(q.data.collected_at).toLocaleString()}.` : "Snapshot of the latest metric values."}>
+      <SettingsSection divider icon={Activity} title={t("metrics.currentValues")} description={q.data?.collected_at ? t("metrics.collectedAt", { time: new Date(q.data.collected_at).toLocaleString() }) : t("metrics.currentValuesDescription")}>
         <WarpTableCard className="warp-users-table warp-edge-table">
-          <WarpHead cols={["Metric", "Labels", "Value"]} />
+          <WarpHead cols={[t("metrics.col.metric"), t("metrics.col.labels"), t("metrics.col.value")]} />
           {q.isLoading ? (
             <WarpSkeleton />
+          ) : q.isError ? (
+            <WarpError onRetry={() => q.refetch()} />
           ) : metrics.length === 0 ? (
-            <WarpEmpty>No metrics reported yet.</WarpEmpty>
+            <WarpEmpty>{t("metrics.empty")}</WarpEmpty>
           ) : (
             metrics.map((m, i) => (
               <WarpRow
