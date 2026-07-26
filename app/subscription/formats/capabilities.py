@@ -27,7 +27,6 @@ from __future__ import annotations
 
 from app.subscription.schemas import SubscriptionFormat
 
-
 _URI_PROTOCOLS = frozenset(
     {
         "vless",
