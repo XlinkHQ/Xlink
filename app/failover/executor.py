@@ -116,9 +116,7 @@ class FailoverExecutor:
                 logger.exception("failover_provider_failed", assignment_id=str(ctx.assignment_id))
                 return False
             try:
-                committed = await self._commit_migration(
-                    ctx, new_id, result.client_id, result.raw
-                )
+                committed = await self._commit_migration(ctx, new_id, result.client_id, result.raw)
             except Exception:
                 logger.exception("failover_commit_failed", assignment_id=str(ctx.assignment_id))
                 committed = False

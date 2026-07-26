@@ -15,8 +15,6 @@ def _settings(**kw) -> Settings:
     return Settings(**base)
 
 
-
-
 def test_no_replica_by_default():
     s = _settings()
     assert s.database_url_replica is None
@@ -45,8 +43,6 @@ def test_replica_from_host_reuses_primary_credentials():
     assert "standby.internal" in url
     assert ":6432" in url
     assert "/xlink" in url
-
-
 
 
 async def test_reader_falls_back_to_primary_when_unconfigured():
@@ -90,8 +86,6 @@ async def test_second_engine_built_and_disposed_when_replica_set(tmp_path):
             assert r.bind is db.reader_engine
     finally:
         await db.dispose()
-
-
 
 
 async def test_reader_dep_is_wired(app_state):

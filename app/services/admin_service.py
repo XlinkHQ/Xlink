@@ -85,9 +85,7 @@ class AdminService(UserServiceBase):
 
         if not user_ids:
             return
-        rows = await self._repo.session.execute(
-            select(User).where(User.id.in_(user_ids))
-        )
+        rows = await self._repo.session.execute(select(User).where(User.id.in_(user_ids)))
         found = {u.id: u for u in rows.scalars().all()}
         for uid in user_ids:
             target = found.get(uid)
@@ -100,9 +98,9 @@ class AdminService(UserServiceBase):
     async def admin_usage(self, admin_id: uuid.UUID) -> dict:
         owner = await self.get(admin_id)
         users_count = await self._repo.session.scalar(
-            select(func.count()).select_from(User).where(
-                User.owner_id == admin_id, User.removed.is_(False)
-            )
+            select(func.count())
+            .select_from(User)
+            .where(User.owner_id == admin_id, User.removed.is_(False))
         )
         allocated = await self._repo.session.scalar(
             select(func.coalesce(func.sum(User.data_limit_bytes), 0)).where(
@@ -153,9 +151,7 @@ class AdminService(UserServiceBase):
             base.append(User.suspended_by_owner.is_(True))
         else:
             base.append(User.is_active.is_(True))
-        ids = (
-            (await self._repo.session.execute(select(User.id).where(*base))).scalars().all()
-        )
+        ids = (await self._repo.session.execute(select(User.id).where(*base))).scalars().all()
         if not ids:
             return 0
         await self._repo.session.execute(
@@ -165,13 +161,17 @@ class AdminService(UserServiceBase):
         )
         if active:
             rows = (
-                await self._repo.session.execute(
-                    select(ClientAssignment).where(
-                        ClientAssignment.user_id.in_(ids),
-                        ClientAssignment.status == AssignmentStatus.DISABLED,
+                (
+                    await self._repo.session.execute(
+                        select(ClientAssignment).where(
+                            ClientAssignment.user_id.in_(ids),
+                            ClientAssignment.status == AssignmentStatus.DISABLED,
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             for a in rows:
                 if (a.credentials or {}).get("ip_limited"):
                     continue

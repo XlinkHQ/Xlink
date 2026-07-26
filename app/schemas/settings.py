@@ -102,6 +102,7 @@ class SubscriptionSettingsUpdate(InputModel):
         if not low.startswith(("http://", "https://", "mailto:", "tg://", "https://t.me/")):
             raise ValueError("support_link must be http(s)/mailto/tg")
         return v.strip()
+
     update_interval_hours: int | None = Field(default=None, ge=1, le=168)
     active_status_text: str | None = Field(default=None, min_length=1, max_length=64)
     expired_status_text: str | None = Field(default=None, min_length=1, max_length=64)

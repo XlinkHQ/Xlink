@@ -185,7 +185,9 @@ class RateLimitMiddleware:
     async def _handle_redis_failure(
         self, scope: Scope, receive: Receive, send: Send, *, force_closed: bool = False
     ) -> None:
-        logger.warning("rate_limit_redis_unavailable", fail_open=self._fail_open and not force_closed)
+        logger.warning(
+            "rate_limit_redis_unavailable", fail_open=self._fail_open and not force_closed
+        )
         if self._fail_open and not force_closed:
             await self.app(scope, receive, send)
             return

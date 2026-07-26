@@ -84,9 +84,7 @@ class ClientAssignmentRepository(BaseRepository[ClientAssignment]):
             from app.domain.user import User
 
             stmt = stmt.where(
-                ClientAssignment.user_id.in_(
-                    select(User.id).where(User.owner_id == owner_id)
-                )
+                ClientAssignment.user_id.in_(select(User.id).where(User.owner_id == owner_id))
             )
         if profile_id is not None:
             stmt = stmt.where(ClientAssignment.profile_id == profile_id)

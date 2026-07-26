@@ -13,9 +13,7 @@ from app.services.user_service_base import UserServiceBase, logger
 class UserBulkService(UserServiceBase):
     @property
     def _core(self) -> UserService:
-        return UserService(
-            self._repo, self._cache, self._webhooks, self._subscription_service
-        )
+        return UserService(self._repo, self._cache, self._webhooks, self._subscription_service)
 
     async def bulk_action(
         self,
@@ -38,7 +36,9 @@ class UserBulkService(UserServiceBase):
             try:
                 strategy_value = DataResetStrategy(data_reset_strategy or "no_reset")
             except ValueError as exc:
-                raise ValidationError("Invalid reset strategy.", code="invalid_reset_strategy") from exc
+                raise ValidationError(
+                    "Invalid reset strategy.", code="invalid_reset_strategy"
+                ) from exc
         if action == "extend_expiry" and not extend_days:
             raise ValidationError("extend_days is required.", code="extend_days_required")
         limit_value = data_limit_bytes or None
@@ -84,7 +84,12 @@ class UserBulkService(UserServiceBase):
                         refreshed = await self.get(uid)
                         await self._repo.session.refresh(refreshed, ["users_data_usage"])
                         await self._reactivate_recovered(refreshed)
-                if action in ("set_data_limit", "set_expiry", "extend_expiry", "set_reset_strategy"):
+                if action in (
+                    "set_data_limit",
+                    "set_expiry",
+                    "extend_expiry",
+                    "set_reset_strategy",
+                ):
                     await self._invalidate(uid)
                 if action in ("set_data_limit", "set_expiry", "extend_expiry"):
                     await self._invalidate_user_feed(uid)

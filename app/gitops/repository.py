@@ -44,4 +44,3 @@ class GitOpsRepository:
             .limit(limit)
         )
         return list((await self._session.execute(stmt)).scalars().all())
-

@@ -34,7 +34,8 @@ def _build_client(spec: ClientSpec, protocol: str) -> dict[str, Any]:
     if protocol in PASSWORD_PROTOCOLS:
         password = attrs.get("password")
         client["password"] = (
-            str(password).strip() if isinstance(password, str) and password.strip()
+            str(password).strip()
+            if isinstance(password, str) and password.strip()
             else secrets.token_urlsafe(16)
         )
         valid = methods_for(protocol)
@@ -43,12 +44,14 @@ def _build_client(spec: ClientSpec, protocol: str) -> dict[str, Any]:
     if protocol in SOCKS_PROTOCOLS:
         password = attrs.get("password")
         client["password"] = (
-            str(password).strip() if isinstance(password, str) and password.strip()
+            str(password).strip()
+            if isinstance(password, str) and password.strip()
             else secrets.token_urlsafe(16)
         )
         user = attrs.get("username")
         client["username"] = (
-            str(user).strip() if isinstance(user, str) and user.strip()
+            str(user).strip()
+            if isinstance(user, str) and user.strip()
             else (client["email"] or str(spec.client_id))
         )
     for field, default in CLIENT_DEFAULTS.items():

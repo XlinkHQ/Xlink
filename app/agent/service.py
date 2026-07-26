@@ -101,9 +101,7 @@ class NodeAgentService:
         await self.authenticate(node_id, token)
         return await self.ingest_traffic(node_id, batch)
 
-    async def ingest_traffic(
-        self, node_id: uuid.UUID, batch: TrafficBatch
-    ) -> TrafficIngestResult:
+    async def ingest_traffic(self, node_id: uuid.UUID, batch: TrafficBatch) -> TrafficIngestResult:
         if batch.node_id != node_id:
             batch = TrafficBatch(node_id=node_id, batch_id=batch.batch_id, samples=batch.samples)
         return await self._traffic.ingest(batch)

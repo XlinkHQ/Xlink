@@ -56,10 +56,7 @@ class UserService(UserServiceBase):
         if "data_limit_bytes" in provided:
             new_limit = data.data_limit_bytes or None
             old_limit = user.data_limit_bytes
-            if (
-                user.owner_id is not None
-                and (new_limit or 0) > (old_limit or 0)
-            ):
+            if user.owner_id is not None and (new_limit or 0) > (old_limit or 0):
                 await self._enforce_owner_quota(
                     user.owner_id, new_limit, old_limit_bytes=old_limit, is_update=True
                 )

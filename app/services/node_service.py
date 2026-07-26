@@ -84,9 +84,7 @@ class NodeService:
         affected = set(
             (
                 await session.execute(
-                    select(ClientAssignment.user_id).where(
-                        ClientAssignment.node_id == node_id
-                    )
+                    select(ClientAssignment.user_id).where(ClientAssignment.node_id == node_id)
                 )
             )
             .scalars()

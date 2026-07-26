@@ -18,9 +18,7 @@ def _parse_cert(cert_pem: str) -> x509.Certificate:
     try:
         return x509.load_pem_x509_certificate(cert_pem.encode())
     except ValueError as exc:
-        raise ValidationError(
-            "Invalid certificate PEM.", code="invalid_certificate"
-        ) from exc
+        raise ValidationError("Invalid certificate PEM.", code="invalid_certificate") from exc
 
 
 def _parse_key(key_pem: str) -> object:
@@ -192,9 +190,7 @@ class CertificateService:
             existing.status = CertificateStatus.ERROR
             existing.last_error = str(exc)[:500]
             await self._repo.session.flush()
-            raise ValidationError(
-                f"ACME issuance failed: {exc}", code="acme_failed"
-            ) from exc
+            raise ValidationError(f"ACME issuance failed: {exc}", code="acme_failed") from exc
 
         result = await self.import_manual(domain, fullchain_pem, key_pem)
         result.source = CertificateSource.ACME

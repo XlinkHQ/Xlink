@@ -34,10 +34,16 @@ def _providers_from_module(module: object) -> list[Provider]:
         try:
             result = factory()
         except Exception as exc:
-            logger.warning("plugin_register_failed", module=getattr(module, "__name__", "?"), error=str(exc))
+            logger.warning(
+                "plugin_register_failed", module=getattr(module, "__name__", "?"), error=str(exc)
+            )
             result = None
         if result is not None:
-            items = result if isinstance(result, Iterable) and not isinstance(result, Provider) else [result]
+            items = (
+                result
+                if isinstance(result, Iterable) and not isinstance(result, Provider)
+                else [result]
+            )
             for item in items:
                 provider = _instantiate(item)
                 if provider is not None:
@@ -85,7 +91,11 @@ def load_from_entrypoints() -> list[Provider]:
         from importlib.metadata import entry_points
 
         eps = entry_points()
-        selected = eps.select(group=ENTRYPOINT_GROUP) if hasattr(eps, "select") else eps.get(ENTRYPOINT_GROUP, [])
+        selected = (
+            eps.select(group=ENTRYPOINT_GROUP)
+            if hasattr(eps, "select")
+            else eps.get(ENTRYPOINT_GROUP, [])
+        )
     except Exception as exc:
         logger.warning("plugin_entrypoints_failed", error=str(exc))
         return providers

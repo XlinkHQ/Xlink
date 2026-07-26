@@ -342,10 +342,7 @@ async def public_subscription(
     not_servable = (
         not owner.is_active
         or (quota.expire_timestamp is not None and quota.expire_timestamp < now_ts)
-        or (
-            quota.traffic_limit_bytes is not None
-            and quota.used_bytes >= quota.traffic_limit_bytes
-        )
+        or (quota.traffic_limit_bytes is not None and quota.used_bytes >= quota.traffic_limit_bytes)
     )
 
     if is_browser_preview:
@@ -484,9 +481,7 @@ async def _issue_subscription_url(
     settings: Settings,
     users: UserService,
 ) -> dict[str, str]:
-    token = create_subscription_token(
-        subject.id, scope, settings, revision=subject.sub_revision
-    )
+    token = create_subscription_token(subject.id, scope, settings, revision=subject.sub_revision)
     base_url = await _sub_base(request, subject, users)
     prefix = settings.api_v1_prefix
     subscription_url = f"{base_url}{prefix}/subscriptions/sub/{token}"

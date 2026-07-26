@@ -72,9 +72,7 @@ import http.client
 
 
 def _guarded_connect(conn: http.client.HTTPConnection) -> None:
-    sock = socket.create_connection(
-        (conn.host, conn.port), conn.timeout, conn.source_address
-    )
+    sock = socket.create_connection((conn.host, conn.port), conn.timeout, conn.source_address)
     peer = sock.getpeername()[0]
     if _is_blocked_ip(peer):
         sock.close()
@@ -145,9 +143,7 @@ class WebhookDispatcher:
         telegram_chat_ids: str = "",
     ) -> None:
         wa = webhook_address.strip()
-        self._urls = (
-            [u.strip() for u in wa.split(",") if u.strip()] if wa else list(self._env_urls)
-        )
+        self._urls = [u.strip() for u in wa.split(",") if u.strip()] if wa else list(self._env_urls)
         self._discord = discord_webhook_url.strip() or self._env_discord
         self._tg_token = telegram_bot_token.strip() or self._env_tg_token
         tc = telegram_chat_ids.strip()

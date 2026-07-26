@@ -23,6 +23,7 @@ logger = get_logger("xlink.agent.reconcile")
 
 _BATCH_SIZE = 100
 
+
 def _shift_calendar(dt: datetime, *, months: int = 0, years: int = 0) -> datetime:
     total = (dt.year + years) * 12 + (dt.month - 1) + months
     year, month = divmod(total, 12)
@@ -88,9 +89,7 @@ async def _apply_data_resets(session) -> list:
             .values(status=AssignmentStatus.ACTIVE)
         )
         await session.execute(
-            update(User)
-            .where(User.id.in_(due_ids))
-            .values(users_data_usage=0, last_reset_at=now)
+            update(User).where(User.id.in_(due_ids)).values(users_data_usage=0, last_reset_at=now)
         )
 
     if changed and woke_nodes:
@@ -183,9 +182,7 @@ async def _reconcile_batch(
         upgrade = AutoUpgradeService(commands)
         configs = await config_sync.desired_configs_for_nodes([n.id for n in nodes])
         for node in nodes:
-            config = configs.get(
-                node.id, {"clients": [], "client_count": 0, "core_templates": {}}
-            )
+            config = configs.get(node.id, {"clients": [], "client_count": 0, "core_templates": {}})
             config["restart_nonce"] = node.node_metadata.get("restart_nonce", 0)
             report = await healing.reconcile_with_config(node, config)
             if report.severity is not DriftSeverity.NONE:

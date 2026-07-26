@@ -24,9 +24,7 @@ def canonical_row(row: dict[str, Any]) -> str:
     """Canonical JSON for a single row: sorted keys, compact separators. Feeding
     the concatenation of these (with array/object punctuation) to sha256 yields
     the exact same digest as ``checksum_payload`` over the whole document."""
-    return json.dumps(
-        to_jsonable_python(row), sort_keys=True, separators=_CANONICAL_SEPARATORS
-    )
+    return json.dumps(to_jsonable_python(row), sort_keys=True, separators=_CANONICAL_SEPARATORS)
 
 
 def checksum_payload(data: dict[str, list[dict[str, Any]]]) -> str:

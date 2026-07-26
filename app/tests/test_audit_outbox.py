@@ -72,9 +72,7 @@ async def test_authenticated_mutation_is_audited(
 
     async with app_state.db.session() as session:
         row = (
-            await session.execute(
-                select(AuditLog).order_by(AuditLog.created_at.desc()).limit(1)
-            )
+            await session.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(1))
         ).scalar_one()
     assert row.method == "POST"
     assert row.actor_username == "admin"

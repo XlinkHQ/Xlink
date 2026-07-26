@@ -121,7 +121,7 @@ def render_custom_page(
     pct = min(100, round(used / total * 100)) if total else 0
     configs_html = "".join(
         f'<div class="x-config"><code>{e(c)}</code>'
-        f"<button onclick=\"(function(v){{if(navigator.clipboard&&window.isSecureContext)"
+        f'<button onclick="(function(v){{if(navigator.clipboard&&window.isSecureContext)'
         f"{{navigator.clipboard.writeText(v)}}else{{var t=document.createElement('textarea');"
         f"t.value=v;t.style.position='fixed';t.style.top='-9999px';document.body.appendChild(t);"
         f"t.select();try{{document.execCommand('copy')}}catch(e){{}}document.body.removeChild(t)}}}})"
@@ -176,9 +176,7 @@ def render_subscription_page(
         detail = ""
         if expire_ts:
             detail = datetime.fromtimestamp(expire_ts, UTC).strftime("%Y-%m-%d")
-        return _render_inactive_page(
-            title=title, username=username, status=status, detail=detail
-        )
+        return _render_inactive_page(title=title, username=username, status=status, detail=detail)
 
     if total:
         if pct < _USAGE_WARN_PCT:
@@ -192,7 +190,7 @@ def render_subscription_page(
             f'<span class="ubar"><i style="width:{pct}%;background:{bar_color}"></i></span>'
         )
     else:
-        usage_value = f"{_bytes(used)} <span class=\"muted\">used · unlimited</span>"
+        usage_value = f'{_bytes(used)} <span class="muted">used · unlimited</span>'
 
     _rows = [
         (_IC_USER, "User", e(username)),
@@ -216,22 +214,16 @@ def render_subscription_page(
         safe_name = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in label)[:32]
         conf_uri = "data:text/plain;charset=utf-8," + quote(c)
         fname = (safe_name or f"config-{i + 1}") + (".conf" if is_wg else ".txt")
-        actions = (
-            f'<button class="act" type="button" title="Copy" onclick="cp(this,\'{js_val}\')">{_IC_COPY}</button>'
-        )
+        actions = f'<button class="act" type="button" title="Copy" onclick="cp(this,\'{js_val}\')">{_IC_COPY}</button>'
         try:
             q = segno.make(c, error="m" if len(c) < 800 else "l").svg_data_uri(
                 scale=5, border=2, dark="#1c1c1c", light="#ffffff"
             )
             js_q = e(q.replace("\\", "\\\\").replace("'", "\\'"))
-            actions += (
-                f'<button class="act" type="button" title="QR" onclick="qr(\'{js_q}\')">{_IC_QR}</button>'
-            )
+            actions += f'<button class="act" type="button" title="QR" onclick="qr(\'{js_q}\')">{_IC_QR}</button>'
         except Exception as exc:
             logger.warning("qr_render_failed", error=str(exc))
-        actions += (
-            f'<a class="act" title="Download" download="{e(fname)}" href="{conf_uri}">{_IC_DOWN}</a>'
-        )
+        actions += f'<a class="act" title="Download" download="{e(fname)}" href="{conf_uri}">{_IC_DOWN}</a>'
         server_rows += (
             '<div class="row">'
             f'<span class="rtag">{e(proto)}</span>'

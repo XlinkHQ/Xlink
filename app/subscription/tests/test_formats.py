@@ -140,9 +140,7 @@ def test_wireguard_missing_peer_key_is_skipped_not_fatal():
     )
     assert "[Interface]" in mixed and "PublicKey = PUB" in mixed
 
-    all_bad = default_registry().render(
-        SubscriptionFormat.WIREGUARD_CONF, (_cfg("wireguard"),)
-    )
+    all_bad = default_registry().render(SubscriptionFormat.WIREGUARD_CONF, (_cfg("wireguard"),))
     assert all_bad == ""
 
 
@@ -227,17 +225,29 @@ def test_bad_int_setting_skips_config_not_feed():
 
     def mk(alter):
         return ProviderConfig(
-            assignment_id=uuid.uuid4(), user_id=uuid.uuid4(), provider_kind=None,
-            provider_name="p", protocol="vmess", client_id=str(uuid.uuid4()),
-            email=None, inbound_tag="t", host="1.2.3.4", port=443, expires_at=None,
+            assignment_id=uuid.uuid4(),
+            user_id=uuid.uuid4(),
+            provider_kind=None,
+            provider_name="p",
+            protocol="vmess",
+            client_id=str(uuid.uuid4()),
+            email=None,
+            inbound_tag="t",
+            host="1.2.3.4",
+            port=443,
+            expires_at=None,
             traffic_limit_bytes=None,
-            settings=MappingProxyType({"alterId": alter, "network": "tcp",
-                                       "security": "none", "uuid": str(uuid.uuid4())}),
+            settings=MappingProxyType(
+                {"alterId": alter, "network": "tcp", "security": "none", "uuid": str(uuid.uuid4())}
+            ),
         )
 
     r = SubscriptionRenderer()
     good, bad = mk(0), mk("x")
-    for fmt in (SubscriptionFormat.CLASH_YAML, SubscriptionFormat.SINGBOX_JSON,
-                SubscriptionFormat.XRAY_JSON):
+    for fmt in (
+        SubscriptionFormat.CLASH_YAML,
+        SubscriptionFormat.SINGBOX_JSON,
+        SubscriptionFormat.XRAY_JSON,
+    ):
         out = r.render_feed((good, bad), version=RenderVersion.V1, feed_format=fmt)
         assert out.content

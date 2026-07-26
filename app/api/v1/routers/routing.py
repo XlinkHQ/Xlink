@@ -80,7 +80,9 @@ def _validate_match_values(match_type: str, match_values: str) -> None:
                 ) from exc
 
 
-async def _validate(match_type: str, outbound: str, session, match_values: str | None = None) -> None:
+async def _validate(
+    match_type: str, outbound: str, session, match_values: str | None = None
+) -> None:
     from app.core.exceptions import ValidationError
     from app.domain.outbound import Outbound
 
@@ -90,9 +92,7 @@ async def _validate(match_type: str, outbound: str, session, match_values: str |
         _validate_match_values(match_type, match_values)
     if outbound in _OUTBOUNDS:
         return
-    row = await session.scalar(
-        select(Outbound.enabled).where(Outbound.tag == outbound)
-    )
+    row = await session.scalar(select(Outbound.enabled).where(Outbound.tag == outbound))
     if row is None:
         raise ValidationError(
             "Unknown outbound — use a builtin or a defined outbound tag.", code="invalid_outbound"
@@ -107,8 +107,14 @@ async def _validate(match_type: str, outbound: str, session, match_values: str |
 @router.get("/rules", response_model=list[RoutingRuleRead])
 async def list_rules(_admin: AdminUser, session: SessionDep) -> list[RoutingRuleRead]:
     rows = (
-        await session.execute(select(RoutingRule).order_by(RoutingRule.priority, RoutingRule.name))
-    ).scalars().all()
+        (
+            await session.execute(
+                select(RoutingRule).order_by(RoutingRule.priority, RoutingRule.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return [RoutingRuleRead.model_validate(r) for r in rows]
 
 
@@ -142,7 +148,11 @@ async def update_rule(
     rule = await session.get(RoutingRule, rule_id)
     if rule is None:
         raise NotFoundError("Rule not found.", code="rule_not_found")
-    if payload.match_type is not None or payload.outbound is not None or payload.match_values is not None:
+    if (
+        payload.match_type is not None
+        or payload.outbound is not None
+        or payload.match_values is not None
+    ):
         await _validate(
             payload.match_type or rule.match_type,
             payload.outbound or rule.outbound,
@@ -171,8 +181,21 @@ async def delete_rule(
 
 
 _OUTBOUND_TYPES = {
-    "direct", "freedom", "block", "blackhole", "dns", "warp", "proxy",
-    "socks", "http", "vmess", "vless", "trojan", "shadowsocks", "wireguard", "custom",
+    "direct",
+    "freedom",
+    "block",
+    "blackhole",
+    "dns",
+    "warp",
+    "proxy",
+    "socks",
+    "http",
+    "vmess",
+    "vless",
+    "trojan",
+    "shadowsocks",
+    "wireguard",
+    "custom",
 }
 _ADDR_TYPES = {"socks", "http", "vmess", "vless", "trojan", "shadowsocks"}
 
@@ -225,15 +248,20 @@ def _validate_outbound(type_: str, settings: dict, tag: str | None = None) -> No
     if type_ in ("vmess", "vless") and str(settings.get("security", "")).lower() == "reality":
         if not settings.get("publicKey"):
             raise ValidationError(
-                "A REALITY outbound needs a publicKey.", code="invalid_outbound_reality",
+                "A REALITY outbound needs a publicKey.",
+                code="invalid_outbound_reality",
             )
     if type_ == "trojan" and not settings.get("password"):
         raise ValidationError("trojan outbound needs a password.", code="invalid_outbound_password")
     if type_ == "shadowsocks" and not settings.get("password"):
-        raise ValidationError("shadowsocks outbound needs a password.", code="invalid_outbound_password")
+        raise ValidationError(
+            "shadowsocks outbound needs a password.", code="invalid_outbound_password"
+        )
     if type_ == "wireguard":
         if not settings.get("secretKey"):
-            raise ValidationError("wireguard outbound needs a secretKey.", code="invalid_outbound_secretkey")
+            raise ValidationError(
+                "wireguard outbound needs a secretKey.", code="invalid_outbound_secretkey"
+            )
         if not settings.get("publicKey") or not settings.get("endpoint"):
             raise ValidationError(
                 "wireguard outbound needs a peer publicKey and endpoint.",
@@ -284,7 +312,9 @@ class OutboundPingResult(APIModel):
 
 
 @router.post("/outbounds/ping", response_model=OutboundPingResult)
-async def ping_outbound_address(payload: OutboundPingRequest, _admin: SudoAdminUser) -> OutboundPingResult:
+async def ping_outbound_address(
+    payload: OutboundPingRequest, _admin: SudoAdminUser
+) -> OutboundPingResult:
     from app.agent.config_sync import _parse_host_port
     from app.services.outbound_ping import _tcp_ping
 
@@ -315,9 +345,7 @@ async def ping_outbound(
 async def list_outbounds(_admin: SudoAdminUser, session: SessionDep) -> list[OutboundRead]:
     from app.domain.outbound import Outbound
 
-    rows = (
-        await session.execute(select(Outbound).order_by(Outbound.tag))
-    ).scalars().all()
+    rows = (await session.execute(select(Outbound).order_by(Outbound.tag))).scalars().all()
     return [OutboundRead.model_validate(r) for r in rows]
 
 

@@ -20,9 +20,7 @@ router = APIRouter(prefix="/user-templates", tags=["user-templates"])
 
 @router.get("", response_model=list[UserTemplateRead])
 async def list_templates(_admin: AdminUser, session: SessionDep) -> list[UserTemplateRead]:
-    rows = (
-        await session.execute(select(UserTemplate).order_by(UserTemplate.name))
-    ).scalars().all()
+    rows = (await session.execute(select(UserTemplate).order_by(UserTemplate.name))).scalars().all()
     return [UserTemplateRead.model_validate(t) for t in rows]
 
 
@@ -33,8 +31,10 @@ async def create_template(
     session: SessionDep,
 ) -> UserTemplateRead:
     exists = (
-        await session.execute(select(UserTemplate).where(UserTemplate.name == payload.name))
-    ).scalars().first()
+        (await session.execute(select(UserTemplate).where(UserTemplate.name == payload.name)))
+        .scalars()
+        .first()
+    )
     if exists is not None:
         raise ConflictError("A template with this name already exists.", code="template_exists")
     tpl = UserTemplate(

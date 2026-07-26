@@ -44,7 +44,11 @@ async def _wait_port(port: int, deadline: float) -> bool:
 async def _real_ping(type_: str, settings: dict) -> dict:
     built = _build_outbound("proxy-test", type_, settings or {})
     if built is None:
-        return {"ok": False, "latency_ms": None, "detail": "Could not build this outbound for testing."}
+        return {
+            "ok": False,
+            "latency_ms": None,
+            "detail": "Could not build this outbound for testing.",
+        }
 
     socks_port = _free_port()
     config = {
@@ -59,7 +63,9 @@ async def _real_ping(type_: str, settings: dict) -> dict:
             }
         ],
         "outbounds": [built],
-        "routing": {"rules": [{"type": "field", "network": "tcp,udp", "outboundTag": "proxy-test"}]},
+        "routing": {
+            "rules": [{"type": "field", "network": "tcp,udp", "outboundTag": "proxy-test"}]
+        },
     }
 
     def _write_config() -> str:
@@ -81,7 +87,10 @@ async def _real_ping(type_: str, settings: dict) -> dict:
     proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
-            _XRAY_BIN, "run", "-c", tmp.name,
+            _XRAY_BIN,
+            "run",
+            "-c",
+            tmp.name,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -95,9 +104,16 @@ async def _real_ping(type_: str, settings: dict) -> dict:
 
         start = time.monotonic()
         curl = await asyncio.create_subprocess_exec(
-            "curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}",
-            "--max-time", str(int(_TEST_TIMEOUT)),
-            "--proxy", f"socks5h://127.0.0.1:{socks_port}",
+            "curl",
+            "-sS",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "--max-time",
+            str(int(_TEST_TIMEOUT)),
+            "--proxy",
+            f"socks5h://127.0.0.1:{socks_port}",
             _TEST_URL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

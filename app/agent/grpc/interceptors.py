@@ -23,7 +23,9 @@ class LoggingInterceptor(grpc.aio.ServerInterceptor):
 
             async def wrapper(request, context):
                 start = time.monotonic()
-                structlog.contextvars.bind_contextvars(request_id=uuid.uuid4().hex, transport="grpc")
+                structlog.contextvars.bind_contextvars(
+                    request_id=uuid.uuid4().hex, transport="grpc"
+                )
                 try:
                     return await inner(request, context)
                 except grpc.RpcError:

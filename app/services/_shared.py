@@ -11,6 +11,7 @@ from app.core.exceptions import ConflictError
 if TYPE_CHECKING:
     from app.subscription.service import SubscriptionService
 
+
 async def invalidate_subscription_cache(
     subscription_service: SubscriptionService | None,
     node_id: uuid.UUID | None = None,
@@ -21,12 +22,8 @@ async def invalidate_subscription_cache(
             await subscription_service.notify_node_changed(node_id)
 
 
-async def save_or_conflict[T](
-    save: Callable[[T], Awaitable[T]], entity: T, label: str
-) -> T:
+async def save_or_conflict[T](save: Callable[[T], Awaitable[T]], entity: T, label: str) -> T:
     try:
         return await save(entity)
     except StaleDataError as exc:
-        raise ConflictError(
-            f"{label} was modified concurrently.", code="version_conflict"
-        ) from exc
+        raise ConflictError(f"{label} was modified concurrently.", code="version_conflict") from exc

@@ -185,10 +185,10 @@ class ClientAssignmentService:
             from app.domain.profile import Profile as _Profile
 
             rows = (
-                await self._repo.session.execute(
-                    _select(_Profile).where(_Profile.id.in_(target))
-                )
-            ).scalars().all()
+                (await self._repo.session.execute(_select(_Profile).where(_Profile.id.in_(target))))
+                .scalars()
+                .all()
+            )
             profiles_by_id = {p.id: p for p in rows}
         by_user: dict[uuid.UUID, dict[uuid.UUID, ClientAssignment]] = {}
         for a in existing:
@@ -368,9 +368,7 @@ class ClientAssignmentService:
         )
         await self._repo.session.flush()
 
-    async def _allocate_wireguard_address(
-        self, node_id: uuid.UUID, server_address: object
-    ) -> str:
+    async def _allocate_wireguard_address(self, node_id: uuid.UUID, server_address: object) -> str:
         await self._repo.session.execute(
             select(Node.id).where(Node.id == node_id).with_for_update()
         )

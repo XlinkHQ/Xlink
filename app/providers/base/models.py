@@ -20,8 +20,6 @@ class ProviderKind(StrEnum):
     WIREGUARD = "wireguard"
 
 
-
-
 def protocols_for(kind: ProviderKind) -> frozenset[str]:
     from app.protocols import protocols_for as _protocols_for
 

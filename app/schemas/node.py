@@ -31,7 +31,9 @@ def _valid_host(value: str) -> str:
     except ValueError:
         pass
     if not _HOSTNAME_RE.match(v):
-        raise ValueError("Host must be a valid IP address or domain (e.g. 1.2.3.4 or node.example.com).")
+        raise ValueError(
+            "Host must be a valid IP address or domain (e.g. 1.2.3.4 or node.example.com)."
+        )
     return v
 
 
@@ -44,6 +46,7 @@ class NodeCreate(InputModel):
     @classmethod
     def _v_host(cls, v: str) -> str:
         return _valid_host(v)
+
     port: int = Field(ge=PORT_MIN, le=PORT_MAX)
     max_users: int = Field(default=100, ge=1)
     usage_coefficient: float = Field(default=1.0, gt=0, le=1000)

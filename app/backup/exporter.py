@@ -105,8 +105,7 @@ class BackupExporter:
         redacted: bool = False,
     ) -> list[dict[str, Any]]:
         return [
-            row
-            async for row in stream_rows(self._session, model, since=since, redacted=redacted)
+            row async for row in stream_rows(self._session, model, since=since, redacted=redacted)
         ]
 
     async def _traffic_metadata(self, *, since: datetime | None = None) -> list[dict[str, Any]]:

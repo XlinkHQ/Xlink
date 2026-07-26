@@ -164,6 +164,6 @@ class PrometheusMiddleware:
             self.metrics.http_requests_total.labels(
                 method=method, route=route, status=str(status_code)
             ).inc()
-            self.metrics.http_request_duration_seconds.labels(
-                method=method, route=route
-            ).observe(duration)
+            self.metrics.http_request_duration_seconds.labels(method=method, route=route).observe(
+                duration
+            )

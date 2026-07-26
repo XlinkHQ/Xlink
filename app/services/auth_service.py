@@ -117,7 +117,12 @@ class AuthService:
 
         if token_issued_at is not None:
             for ts, msg, code, reject_equal in (
-                (user.password_changed_at, "Token invalidated by a password change.", "password_changed", False),
+                (
+                    user.password_changed_at,
+                    "Token invalidated by a password change.",
+                    "password_changed",
+                    False,
+                ),
                 (user.sessions_revoked_at, "Session was logged out.", "session_revoked", True),
             ):
                 if ts is None:

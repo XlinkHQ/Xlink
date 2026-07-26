@@ -80,9 +80,7 @@ async def test_keyset_pagination_walks_all_users(client: AsyncClient, admin_head
     assert len(seen) == len(set(seen))
 
 
-async def test_keyset_sort_by_name_walks_ordered(
-    client: AsyncClient, admin_headers: dict
-) -> None:
+async def test_keyset_sort_by_name_walks_ordered(client: AsyncClient, admin_headers: dict) -> None:
     seen: list[str] = []
     cursor = None
     for _ in range(10):

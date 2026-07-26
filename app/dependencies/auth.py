@@ -26,6 +26,7 @@ def _set_actor(request: Request, user: User) -> None:
     request.state.actor_id = str(user.id)
     request.state.actor_username = user.username
 
+
 _bearer = HTTPBearer(auto_error=False, description="JWT access token")
 BearerDep = Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]
 
@@ -130,9 +131,7 @@ async def enforce_agent_ingest_quota(
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> None:
     await agent.authenticate(node_id, x_agent_token)
-    await enforce_ingest_quota(
-        cache, node_id, limit=settings.agent_ingest_rate_limit_per_minute
-    )
+    await enforce_ingest_quota(cache, node_id, limit=settings.agent_ingest_rate_limit_per_minute)
 
 
 AgentIngestQuota = Annotated[None, Depends(enforce_agent_ingest_quota)]

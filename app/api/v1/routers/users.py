@@ -124,7 +124,15 @@ async def export_users_csv(
         header = io.StringIO()
         writer = csv.writer(header)
         writer.writerow(
-            ["username", "email", "status", "on_hold", "data_limit_bytes", "expire_at", "created_at"]
+            [
+                "username",
+                "email",
+                "status",
+                "on_hold",
+                "data_limit_bytes",
+                "expire_at",
+                "created_at",
+            ]
         )
         yield header.getvalue()
         offset = 0

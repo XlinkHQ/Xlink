@@ -75,9 +75,7 @@ def _table(headers: list[str], rows: list[list[str]]) -> str:
     out = [sep.join(h.ljust(widths[j]) for j, h in enumerate(head))]
     out.append(sep.join("─" * widths[j] for j in range(len(head))))
     if rows:
-        out.extend(
-            sep.join(str(c).ljust(widths[j]) for j, c in enumerate(row)) for row in rows
-        )
+        out.extend(sep.join(str(c).ljust(widths[j]) for j, c in enumerate(row)) for row in rows)
     else:
         out.append("(none)")
     return "\n".join(out)

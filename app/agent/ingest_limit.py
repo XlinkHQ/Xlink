@@ -16,9 +16,7 @@ def _window_key(node_id: uuid.UUID, now: float) -> str:
     return f"agent:ingest:{node_id}:{int(now // _WINDOW_SECONDS)}"
 
 
-async def enforce_ingest_quota(
-    cache: RedisCache, node_id: uuid.UUID, *, limit: int
-) -> None:
+async def enforce_ingest_quota(cache: RedisCache, node_id: uuid.UUID, *, limit: int) -> None:
     """Bound per-node ingest rate. Raises RateLimitError (429) past the limit.
 
     Fails OPEN on a Redis outage: a limiter blip must not take real nodes
@@ -39,9 +37,5 @@ async def enforce_ingest_quota(
         logger.warning("agent_ingest_limit_redis_unavailable", node_id=str(node_id))
         return
     if count > limit:
-        logger.warning(
-            "agent_ingest_rate_limited", node_id=str(node_id), count=count, limit=limit
-        )
-        raise RateLimitError(
-            "Node ingest rate limit exceeded.", code="agent_ingest_rate_limited"
-        )
+        logger.warning("agent_ingest_rate_limited", node_id=str(node_id), count=count, limit=limit)
+        raise RateLimitError("Node ingest rate limit exceeded.", code="agent_ingest_rate_limited")

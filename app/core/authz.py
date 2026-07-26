@@ -38,7 +38,10 @@ def has_permission(actor: User, permission: Permission, *, target: User | None =
 _DENIALS = {
     Permission.ADMIN_ACCESS: ("Administrator access required.", None),
     Permission.SUDO: ("Sudo administrator access required.", "sudo_required"),
-    Permission.MANAGE_INFRA: ("Infrastructure changes require a sudo administrator.", "sudo_required"),
+    Permission.MANAGE_INFRA: (
+        "Infrastructure changes require a sudo administrator.",
+        "sudo_required",
+    ),
     Permission.WRITE_USERS: ("Read-only administrator.", "read_only_admin"),
     Permission.MANAGE_USER: ("This user is not in your scope.", "user_out_of_scope"),
 }
@@ -57,8 +60,14 @@ def owner_scope(actor: User) -> uuid.UUID | None:
 
 
 _SECRET_SETTING_MARKERS = (
-    "private", "privatekey", "secret", "password", "presharedkey",
-    "preshared", "uuid", "psk",
+    "private",
+    "privatekey",
+    "secret",
+    "password",
+    "presharedkey",
+    "preshared",
+    "uuid",
+    "psk",
 )
 _PUBLIC_SETTING_KEYS = {"publickey", "pbk", "shortid", "sid", "spiderx"}
 
@@ -76,7 +85,9 @@ def redact_settings(settings: dict, actor: User) -> dict:
     return {k: ("***" if _is_secret_setting(k) else v) for k, v in settings.items()}
 
 
-def assert_group_in_scope(actor: User, group_id: uuid.UUID | None, scoped_ids: set[uuid.UUID]) -> None:
+def assert_group_in_scope(
+    actor: User, group_id: uuid.UUID | None, scoped_ids: set[uuid.UUID]
+) -> None:
     if actor.is_sudo or actor.all_groups_access:
         return
     if group_id is None:
@@ -84,6 +95,4 @@ def assert_group_in_scope(actor: User, group_id: uuid.UUID | None, scoped_ids: s
             "You may only assign users to your allowed groups.", code="group_out_of_scope"
         )
     if group_id not in scoped_ids:
-        raise PermissionDeniedError(
-            "This group is not in your scope.", code="group_out_of_scope"
-        )
+        raise PermissionDeniedError("This group is not in your scope.", code="group_out_of_scope")

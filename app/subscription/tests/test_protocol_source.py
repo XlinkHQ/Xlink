@@ -80,8 +80,6 @@ def _cfg(protocol: str) -> ProviderConfig:
     )
 
 
-
-
 def test_provider_protocols_reexport_matches_source():
     """PROVIDER_PROTOCOLS (re-exported from providers.base.models) is exactly
     what the source derives; the re-export can't drift from app.protocols."""
@@ -115,14 +113,8 @@ def test_every_protocol_belongs_to_a_provider_or_is_http():
     which is subscription-only (rendered but not provisioned as an inbound).
     This pins the one deliberate exception so a new orphan protocol is noticed.
     """
-    orphans = {
-        spec.name for spec in source.PROTOCOLS if not spec.providers
-    }
-    assert orphans == {"http"}, (
-        f"protocols with no provider: {orphans} (only 'http' is expected)"
-    )
-
-
+    orphans = {spec.name for spec in source.PROTOCOLS if not spec.providers}
+    assert orphans == {"http"}, f"protocols with no provider: {orphans} (only 'http' is expected)"
 
 
 def test_provider_registry_only_offers_known_protocols():
@@ -153,9 +145,7 @@ def test_matrix_protocols_are_all_known():
     known = source.all_protocols()
     for fmt, protos in FORMAT_PROTOCOLS.items():
         for protocol in protos:
-            assert protocol in known, (
-                f"format {fmt.value} references unknown protocol '{protocol}'"
-            )
+            assert protocol in known, f"format {fmt.value} references unknown protocol '{protocol}'"
 
 
 def test_uri_renderers_are_subscription_protocols():
@@ -185,11 +175,8 @@ def test_singbox_dispatch_matches_matrix():
         except FormatRenderError:
             emitted = False
         assert emitted == claims, (
-            f"sing-box dispatch/matrix disagree on '{protocol}': "
-            f"emitted={emitted} matrix={claims}"
+            f"sing-box dispatch/matrix disagree on '{protocol}': emitted={emitted} matrix={claims}"
         )
-
-
 
 
 def _parse_node_agent_core_protocols() -> dict[str, frozenset[str]]:
@@ -202,9 +189,7 @@ def _parse_node_agent_core_protocols() -> dict[str, frozenset[str]]:
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             if node.target.id == "CORE_PROTOCOLS":
                 return {
-                    ast.literal_eval(k): frozenset(
-                        _frozenset_arg(v)
-                    )
+                    ast.literal_eval(k): frozenset(_frozenset_arg(v))
                     for k, v in zip(node.value.keys, node.value.values, strict=True)
                 }
     raise AssertionError("CORE_PROTOCOLS not found in node-agent/xlink-agent.py")

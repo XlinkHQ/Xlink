@@ -15,6 +15,7 @@ def _check_password(value: str | None) -> str | None:
         return value
     return validate_password_strength(value)
 
+
 USERNAME_PATTERN = r"^[a-zA-Z0-9_]{3,64}$"
 PASSWORD_MIN_LEN = 12
 PASSWORD_MAX_LEN = 128
@@ -32,6 +33,7 @@ class UserCreate(InputModel):
     @classmethod
     def _strong_password(cls, v: str | None) -> str | None:
         return _check_password(v)
+
     data_limit_bytes: int | None = Field(default=None, ge=0)
     expire_at: datetime | None = Field(default=None)
     data_reset_strategy: DataResetStrategy = Field(default=DataResetStrategy.NO_RESET)
@@ -69,6 +71,7 @@ class AdminUpdate(InputModel):
     @classmethod
     def _strong_password(cls, v: str | None) -> str | None:
         return _check_password(v)
+
     is_active: bool | None = Field(default=None)
     is_sudo: bool | None = Field(default=None)
     all_groups_access: bool | None = Field(default=None)

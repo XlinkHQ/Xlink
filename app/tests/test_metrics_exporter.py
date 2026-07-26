@@ -41,9 +41,7 @@ async def test_metrics_requires_bearer(metrics_client: AsyncClient) -> None:
 
 
 async def test_metrics_returns_prometheus_text(metrics_client: AsyncClient) -> None:
-    resp = await metrics_client.get(
-        "/metrics", headers={"Authorization": f"Bearer {_TOKEN}"}
-    )
+    resp = await metrics_client.get("/metrics", headers={"Authorization": f"Bearer {_TOKEN}"})
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/plain")
     body = resp.text
@@ -65,10 +63,8 @@ async def test_request_metrics_increment(metrics_client: AsyncClient) -> None:
         r = await metrics_client.get("/api/v1/health/live")
         assert r.status_code == 200
 
-    scrape = await metrics_client.get(
-        "/metrics", headers={"Authorization": f"Bearer {_TOKEN}"}
-    )
+    scrape = await metrics_client.get("/metrics", headers={"Authorization": f"Bearer {_TOKEN}"})
     count = _scrape_count(scrape.text, "/api/v1/health/live")
     assert count >= 3.0
 
-    assert "route=\"/api/v1/health/live\"" in scrape.text
+    assert 'route="/api/v1/health/live"' in scrape.text

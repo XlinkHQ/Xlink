@@ -72,9 +72,7 @@ class GrpcServer:
         try:
             from grpc_reflection.v1alpha import reflection
 
-            reflection.enable_server_reflection(
-                (*service_names, reflection.SERVICE_NAME), server
-            )
+            reflection.enable_server_reflection((*service_names, reflection.SERVICE_NAME), server)
         except Exception as exc:
             logger.warning("grpc_reflection_unavailable", error=str(exc))
         return service_names

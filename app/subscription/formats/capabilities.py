@@ -75,7 +75,6 @@ _SINGBOX_PROTOCOLS = frozenset(
 )
 
 
-
 FORMAT_PROTOCOLS: dict[SubscriptionFormat, frozenset[str]] = {
     SubscriptionFormat.TEXT: _URI_PROTOCOLS,
     SubscriptionFormat.BASE64: _URI_PROTOCOLS,

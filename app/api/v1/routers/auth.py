@@ -24,7 +24,9 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserCreate, auth: AuthServiceDep, settings: SettingsDep) -> AuthResponse:
+async def register(
+    payload: UserCreate, auth: AuthServiceDep, settings: SettingsDep
+) -> AuthResponse:
     if not settings.registration_enabled:
         raise PermissionDeniedError(
             "Self-service registration is disabled.", code="registration_disabled"
@@ -41,9 +43,7 @@ async def login(payload: LoginRequest, auth: AuthServiceDep) -> AuthResponse:
 async def totp_enroll(
     user: CurrentUser, auth: AuthServiceDep, payload: TotpEnrollRequest | None = None
 ) -> TotpEnrollResponse:
-    secret, uri = await auth.begin_totp_enrollment(
-        user.id, code=payload.code if payload else None
-    )
+    secret, uri = await auth.begin_totp_enrollment(user.id, code=payload.code if payload else None)
     return TotpEnrollResponse(secret=secret, otpauth_uri=uri)
 
 

@@ -79,7 +79,7 @@ def _parse_vless_trojan(link: str, proto: str) -> tuple[str, dict[str, Any]] | N
 
 
 def _parse_vmess(link: str) -> tuple[str, dict[str, Any]] | None:
-    raw = _b64(link[len("vmess://"):])
+    raw = _b64(link[len("vmess://") :])
     if not raw:
         return None
     try:
@@ -108,7 +108,7 @@ def _parse_vmess(link: str) -> tuple[str, dict[str, Any]] | None:
 
 
 def _parse_ss(link: str) -> tuple[str, dict[str, Any]] | None:
-    body = link[len("ss://"):]
+    body = link[len("ss://") :]
     body = body.split("#", 1)[0]
     if "@" in body:
         creds, server = body.rsplit("@", 1)

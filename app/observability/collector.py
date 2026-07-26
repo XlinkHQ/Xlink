@@ -71,9 +71,7 @@ class DomainMetricsCollector:
             )
             nodes_total = await session.scalar(select(func.count()).select_from(Node))
             nodes_online = await session.scalar(
-                select(func.count())
-                .select_from(Node)
-                .where(Node.status == NodeStatus.ACTIVE)
+                select(func.count()).select_from(Node).where(Node.status == NodeStatus.ACTIVE)
             )
             assignments_active, traffic_bytes = await self._assignments_and_traffic(session)
 

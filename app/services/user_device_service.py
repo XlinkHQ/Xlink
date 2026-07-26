@@ -39,9 +39,7 @@ class UserDeviceService(UserServiceBase):
             await session.flush()
             return True
         if device_limit is not None and device_limit > 0:
-            await session.execute(
-                select(User.id).where(User.id == user_id).with_for_update()
-            )
+            await session.execute(select(User.id).where(User.id == user_id).with_for_update())
             count = (
                 await session.execute(
                     select(func.count())

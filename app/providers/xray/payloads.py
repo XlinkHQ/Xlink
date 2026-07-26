@@ -66,6 +66,7 @@ def default_method_for(protocol: str) -> str:
         return DEFAULT_SHADOWSOCKS2022_METHOD
     return DEFAULT_SHADOWSOCKS_METHOD
 
+
 SUPPORTED_NETWORKS: frozenset[str] = frozenset(n.value for n in XrayNetwork)
 
 SUPPORTED_SECURITIES: frozenset[str] = frozenset(s.value for s in XraySecurity)

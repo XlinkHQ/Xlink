@@ -155,7 +155,11 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
             elif nid != authed_nid:
                 await context.abort(grpc.StatusCode.PERMISSION_DENIED, "node_id mismatch in stream")
             lines = [
-                {"level": ln.level, "message": ln.message, "observed_at": _ms_to_dt(ln.observed_at_unix_ms)}
+                {
+                    "level": ln.level,
+                    "message": ln.message,
+                    "observed_at": _ms_to_dt(ln.observed_at_unix_ms),
+                }
                 for ln in batch.lines
             ]
             async with self._db.session() as session:
@@ -214,7 +218,9 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
             )
         return pb.DriftReport(
             node_id=str(report.node_id),
-            severity=str(report.severity.value if hasattr(report.severity, "value") else report.severity),
+            severity=str(
+                report.severity.value if hasattr(report.severity, "value") else report.severity
+            ),
             desired_version=report.desired_version,
             reported_version=report.reported_version or "",
             drift_json=json.dumps(report.drift),

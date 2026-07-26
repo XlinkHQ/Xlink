@@ -165,9 +165,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         "Group", secondary=admin_groups, lazy="noload"
     )
 
-    assignments: Mapped[list[ClientAssignment]] = relationship(
-        back_populates="user", lazy="noload"
-    )
+    assignments: Mapped[list[ClientAssignment]] = relationship(back_populates="user", lazy="noload")
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user", lazy="noload")
 
     __table_args__ = (

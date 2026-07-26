@@ -70,7 +70,9 @@ class BackupImporter:
                 continue
         return values
 
-    async def _upsert(self, model, row: dict[str, Any], *, drop_missing_group: bool = False) -> None:
+    async def _upsert(
+        self, model, row: dict[str, Any], *, drop_missing_group: bool = False
+    ) -> None:
         values = dict(row)
         if model is Node and "metadata" in values:
             values["node_metadata"] = values.pop("metadata")

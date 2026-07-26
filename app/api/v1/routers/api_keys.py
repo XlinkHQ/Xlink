@@ -104,9 +104,7 @@ async def create_api_key(
 
 async def _owned_key(session, key_id: uuid.UUID, admin: AdminUser) -> ApiKey:
     row = (
-        await session.execute(
-            select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == admin.id)
-        )
+        await session.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == admin.id))
     ).scalar_one_or_none()
     if row is None:
         raise HTTPException(status_code=404, detail="API key not found.")
@@ -122,9 +120,7 @@ async def revoke_api_key(key_id: uuid.UUID, admin: AdminUser, database: Database
 
 
 @router.post("/{key_id}/enable", response_model=ApiKeyRead)
-async def enable_api_key(
-    key_id: uuid.UUID, admin: AdminUser, database: DatabaseDep
-) -> ApiKeyRead:
+async def enable_api_key(key_id: uuid.UUID, admin: AdminUser, database: DatabaseDep) -> ApiKeyRead:
     async with database.session() as session:
         row = await _owned_key(session, key_id, admin)
         row.revoked_at = None
@@ -137,6 +133,4 @@ async def enable_api_key(
 async def purge_api_key(key_id: uuid.UUID, admin: AdminUser, database: DatabaseDep) -> None:
     async with database.session() as session:
         await _owned_key(session, key_id, admin)
-        await session.execute(
-            delete(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == admin.id)
-        )
+        await session.execute(delete(ApiKey).where(ApiKey.id == key_id, ApiKey.user_id == admin.id))

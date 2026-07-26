@@ -38,9 +38,7 @@ def _validate_security(settings: dict[str, Any]) -> None:
             )
     elif security == "reality":
         if not (settings.get("publicKey") or settings.get("pbk")):
-            raise ValidationError(
-                "REALITY requires a publicKey.", code="profile_settings_invalid"
-            )
+            raise ValidationError("REALITY requires a publicKey.", code="profile_settings_invalid")
         if not settings.get("sni"):
             raise ValidationError(
                 "REALITY requires an SNI (server name).", code="profile_settings_invalid"

@@ -85,9 +85,7 @@ async def export_audit_csv(
         rows = (await session.execute(stmt)).scalars().all()
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(
-        ["timestamp", "actor", "action", "method", "path", "status_code", "ip_address"]
-    )
+    writer.writerow(["timestamp", "actor", "action", "method", "path", "status_code", "ip_address"])
     for r in rows:
         writer.writerow(
             [

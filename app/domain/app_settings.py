@@ -55,7 +55,9 @@ class AppSettings(Base):
     warp_private_key: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     warp_public_key: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     warp_address: Mapped[str] = mapped_column(String(255), nullable=False, default="")
-    warp_endpoint: Mapped[str] = mapped_column(String(255), nullable=False, default="engage.cloudflareclient.com:2408")
+    warp_endpoint: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="engage.cloudflareclient.com:2408"
+    )
     warp_reserved: Mapped[str] = mapped_column(String(64), nullable=False, default="")
 
     updated_at: Mapped[datetime] = mapped_column(

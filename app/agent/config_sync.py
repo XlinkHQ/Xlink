@@ -213,8 +213,9 @@ def _build_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str,
     return None
 
 
-
-def _singbox_route_rule(match_type: str, values: list[str], outbound: str) -> tuple[dict[str, Any] | None, list[str]]:
+def _singbox_route_rule(
+    match_type: str, values: list[str], outbound: str
+) -> tuple[dict[str, Any] | None, list[str]]:
     """Translate one admin RoutingRule into a sing-box route rule.
 
     Returns (rule, dropped_selectors). rule is None when nothing survived the
@@ -265,7 +266,9 @@ def _singbox_route_rule(match_type: str, values: list[str], outbound: str) -> tu
     return rule, dropped
 
 
-def _build_singbox_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str, Any] | None:
+def _build_singbox_outbound(
+    tag: str, type_: str, settings: dict[str, Any]
+) -> dict[str, Any] | None:
     """Translate a DB Outbound (or a builtin spec) to a sing-box outbound.
 
     Returns None when the type can't be expressed in sing-box — the caller
@@ -339,9 +342,15 @@ def _build_singbox_outbound(tag: str, type_: str, settings: dict[str, Any]) -> d
             ],
             "private_key": settings["secretKey"],
             "peer_public_key": settings.get("publicKey", ""),
-            **({"pre_shared_key": settings["preSharedKey"]} if settings.get("preSharedKey") else {}),
             **(
-                {"reserved": [int(x) for x in str(settings["reserved"]).split(",") if x.strip().isdigit()]}
+                {"pre_shared_key": settings["preSharedKey"]} if settings.get("preSharedKey") else {}
+            ),
+            **(
+                {
+                    "reserved": [
+                        int(x) for x in str(settings["reserved"]).split(",") if x.strip().isdigit()
+                    ]
+                }
                 if settings.get("reserved")
                 else {}
             ),
@@ -368,6 +377,7 @@ def _user_serviceable(now: datetime):
             User.users_data_usage < User.data_limit_bytes,
         ),
     )
+
 
 _AGENT_CRED_ALLOW = frozenset(
     {
@@ -571,7 +581,13 @@ class ConfigSyncService:
                             }
                         ],
                         **(
-                            {"reserved": [int(x) for x in row.warp_reserved.split(",") if x.strip().isdigit()]}
+                            {
+                                "reserved": [
+                                    int(x)
+                                    for x in row.warp_reserved.split(",")
+                                    if x.strip().isdigit()
+                                ]
+                            }
                             if row.warp_reserved
                             else {}
                         ),

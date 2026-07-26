@@ -157,7 +157,7 @@ async def stream_export_to_file(
                 emit(f"\n{_PAD * 2}]")
 
         digest = checksum.end_object()
-        emit(f"\n{_PAD}}},\n{_PAD}\"checksum\": {json.dumps(digest)}\n}}\n")
+        emit(f'\n{_PAD}}},\n{_PAD}"checksum": {json.dumps(digest)}\n}}\n')
         await flush()
     finally:
         await anyio.to_thread.run_sync(fh.close)

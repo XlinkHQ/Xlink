@@ -46,9 +46,10 @@ class TrafficService:
             try:
                 return await self._ingest_once(batch)
             except DBAPIError as exc:
-                if not getattr(exc.orig, "sqlstate", None) == "40P01" and "deadlock" not in str(
-                    exc
-                ).lower():
+                if (
+                    not getattr(exc.orig, "sqlstate", None) == "40P01"
+                    and "deadlock" not in str(exc).lower()
+                ):
                     raise
                 await self._session.rollback()
                 if attempt == attempts - 1:
@@ -273,9 +274,7 @@ class TrafficService:
         owned: dict[uuid.UUID, ClientAssignment],
         deltas: dict[uuid.UUID, int],
     ) -> list[uuid.UUID]:
-        return sorted(
-            {owned[aid].user_id for aid in deltas if aid in owned and deltas[aid] > 0}
-        )
+        return sorted({owned[aid].user_id for aid in deltas if aid in owned and deltas[aid] > 0})
 
     async def _bump_user_usage(
         self,
@@ -303,14 +302,18 @@ class TrafficService:
 
     async def _enforce_user_limits(self, user_ids: Sequence[uuid.UUID]) -> None:
         rows = (
-            await self._session.execute(
-                select(User).where(
-                    User.id.in_(user_ids),
-                    User.data_limit_bytes.isnot(None),
-                    User.users_data_usage >= User.data_limit_bytes,
+            (
+                await self._session.execute(
+                    select(User).where(
+                        User.id.in_(user_ids),
+                        User.data_limit_bytes.isnot(None),
+                        User.users_data_usage >= User.data_limit_bytes,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if not rows:
             return
         over = [u.id for u in rows]

@@ -91,13 +91,9 @@ async def test_reseller_blocked_from_other_tenant_sub_token(
     assert allowed.status_code == 200
 
 
-async def test_non_sudo_cannot_pull_profile_feed(
-    client: AsyncClient, sudo_headers: dict
-) -> None:
+async def test_non_sudo_cannot_pull_profile_feed(client: AsyncClient, sudo_headers: dict) -> None:
     r1 = await _reseller(client, sudo_headers, "tenant1")
     import uuid as _uuid
 
-    resp = await client.get(
-        f"/api/v1/subscriptions/profiles/{_uuid.uuid4()}/feed", headers=r1
-    )
+    resp = await client.get(f"/api/v1/subscriptions/profiles/{_uuid.uuid4()}/feed", headers=r1)
     assert resp.status_code == 403

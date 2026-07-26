@@ -137,11 +137,7 @@ class UserServiceBase:
         )
         if owner is None:
             return
-        if (
-            not is_update
-            and owner.admin_user_limit is not None
-            and owner.admin_user_limit > 0
-        ):
+        if not is_update and owner.admin_user_limit is not None and owner.admin_user_limit > 0:
             count = await self._repo.session.scalar(
                 select(func.count())
                 .select_from(User)
@@ -174,8 +170,7 @@ class UserServiceBase:
             return
         now = datetime.now(UTC)
         under_limit = (
-            user.data_limit_bytes is None
-            or (user.users_data_usage or 0) < user.data_limit_bytes
+            user.data_limit_bytes is None or (user.users_data_usage or 0) < user.data_limit_bytes
         )
         not_expired = user.expire_at is None or user.expire_at > now
         recover = []

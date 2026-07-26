@@ -5,23 +5,24 @@ import grpc
 
 from app.agent.grpc import agent_pb2 as agent__pb2
 
-GRPC_GENERATED_VERSION = '1.81.1'
+GRPC_GENERATED_VERSION = "1.81.1"
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
 try:
     from grpc._utilities import first_version_is_lower
+
     _version_not_supported = first_version_is_lower(GRPC_VERSION, GRPC_GENERATED_VERSION)
 except ImportError:
     _version_not_supported = True
 
 if _version_not_supported:
     raise RuntimeError(
-        f'The grpc package installed is at version {GRPC_VERSION},'
-        + ' but the generated code in agent_pb2_grpc.py depends on'
-        + f' grpcio>={GRPC_GENERATED_VERSION}.'
-        + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
-        + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
+        f"The grpc package installed is at version {GRPC_VERSION},"
+        + " but the generated code in agent_pb2_grpc.py depends on"
+        + f" grpcio>={GRPC_GENERATED_VERSION}."
+        + f" Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}"
+        + f" or downgrade your generated code using grpcio-tools<={GRPC_VERSION}."
     )
 
 
@@ -35,55 +36,65 @@ class NodeAgentStub:
             channel: A grpc.Channel.
         """
         self.GetConfig = channel.unary_unary(
-                '/xlink.agent.v1.NodeAgent/GetConfig',
-                request_serializer=agent__pb2.ConfigRequest.SerializeToString,
-                response_deserializer=agent__pb2.DesiredConfig.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/GetConfig",
+            request_serializer=agent__pb2.ConfigRequest.SerializeToString,
+            response_deserializer=agent__pb2.DesiredConfig.FromString,
+            _registered_method=True,
+        )
         self.StreamTraffic = channel.stream_stream(
-                '/xlink.agent.v1.NodeAgent/StreamTraffic',
-                request_serializer=agent__pb2.TrafficBatch.SerializeToString,
-                response_deserializer=agent__pb2.TrafficAck.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/StreamTraffic",
+            request_serializer=agent__pb2.TrafficBatch.SerializeToString,
+            response_deserializer=agent__pb2.TrafficAck.FromString,
+            _registered_method=True,
+        )
         self.StreamMetrics = channel.stream_stream(
-                '/xlink.agent.v1.NodeAgent/StreamMetrics',
-                request_serializer=agent__pb2.MetricBatch.SerializeToString,
-                response_deserializer=agent__pb2.Ack.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/StreamMetrics",
+            request_serializer=agent__pb2.MetricBatch.SerializeToString,
+            response_deserializer=agent__pb2.Ack.FromString,
+            _registered_method=True,
+        )
         self.StreamLogs = channel.stream_stream(
-                '/xlink.agent.v1.NodeAgent/StreamLogs',
-                request_serializer=agent__pb2.LogBatch.SerializeToString,
-                response_deserializer=agent__pb2.Ack.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/StreamLogs",
+            request_serializer=agent__pb2.LogBatch.SerializeToString,
+            response_deserializer=agent__pb2.Ack.FromString,
+            _registered_method=True,
+        )
         self.ReportConnections = channel.unary_unary(
-                '/xlink.agent.v1.NodeAgent/ReportConnections',
-                request_serializer=agent__pb2.ConnectionBatch.SerializeToString,
-                response_deserializer=agent__pb2.Ack.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/ReportConnections",
+            request_serializer=agent__pb2.ConnectionBatch.SerializeToString,
+            response_deserializer=agent__pb2.Ack.FromString,
+            _registered_method=True,
+        )
         self.ReportProviderHealth = channel.unary_unary(
-                '/xlink.agent.v1.NodeAgent/ReportProviderHealth',
-                request_serializer=agent__pb2.ProviderHealthBatch.SerializeToString,
-                response_deserializer=agent__pb2.Ack.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/ReportProviderHealth",
+            request_serializer=agent__pb2.ProviderHealthBatch.SerializeToString,
+            response_deserializer=agent__pb2.Ack.FromString,
+            _registered_method=True,
+        )
         self.ReportState = channel.unary_unary(
-                '/xlink.agent.v1.NodeAgent/ReportState',
-                request_serializer=agent__pb2.ReportedState.SerializeToString,
-                response_deserializer=agent__pb2.DriftReport.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/ReportState",
+            request_serializer=agent__pb2.ReportedState.SerializeToString,
+            response_deserializer=agent__pb2.DriftReport.FromString,
+            _registered_method=True,
+        )
         self.LeaseCommands = channel.unary_unary(
-                '/xlink.agent.v1.NodeAgent/LeaseCommands',
-                request_serializer=agent__pb2.CommandLeaseRequest.SerializeToString,
-                response_deserializer=agent__pb2.CommandLease.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/LeaseCommands",
+            request_serializer=agent__pb2.CommandLeaseRequest.SerializeToString,
+            response_deserializer=agent__pb2.CommandLease.FromString,
+            _registered_method=True,
+        )
         self.SubmitCommandResult = channel.unary_unary(
-                '/xlink.agent.v1.NodeAgent/SubmitCommandResult',
-                request_serializer=agent__pb2.CommandResult.SerializeToString,
-                response_deserializer=agent__pb2.CommandResultAck.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/SubmitCommandResult",
+            request_serializer=agent__pb2.CommandResult.SerializeToString,
+            response_deserializer=agent__pb2.CommandResultAck.FromString,
+            _registered_method=True,
+        )
         self.WatchEvents = channel.unary_stream(
-                '/xlink.agent.v1.NodeAgent/WatchEvents',
-                request_serializer=agent__pb2.EventRequest.SerializeToString,
-                response_deserializer=agent__pb2.NodeEvent.FromString,
-                _registered_method=True)
+            "/xlink.agent.v1.NodeAgent/WatchEvents",
+            request_serializer=agent__pb2.EventRequest.SerializeToString,
+            response_deserializer=agent__pb2.NodeEvent.FromString,
+            _registered_method=True,
+        )
 
 
 class NodeAgentServicer:
@@ -92,142 +103,145 @@ class NodeAgentServicer:
     def GetConfig(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def StreamTraffic(self, request_iterator, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def StreamMetrics(self, request_iterator, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def StreamLogs(self, request_iterator, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def ReportConnections(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def ReportProviderHealth(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def ReportState(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def LeaseCommands(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def SubmitCommandResult(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
     def WatchEvents(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
 
 
 def add_NodeAgentServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'GetConfig': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetConfig,
-                    request_deserializer=agent__pb2.ConfigRequest.FromString,
-                    response_serializer=agent__pb2.DesiredConfig.SerializeToString,
-            ),
-            'StreamTraffic': grpc.stream_stream_rpc_method_handler(
-                    servicer.StreamTraffic,
-                    request_deserializer=agent__pb2.TrafficBatch.FromString,
-                    response_serializer=agent__pb2.TrafficAck.SerializeToString,
-            ),
-            'StreamMetrics': grpc.stream_stream_rpc_method_handler(
-                    servicer.StreamMetrics,
-                    request_deserializer=agent__pb2.MetricBatch.FromString,
-                    response_serializer=agent__pb2.Ack.SerializeToString,
-            ),
-            'StreamLogs': grpc.stream_stream_rpc_method_handler(
-                    servicer.StreamLogs,
-                    request_deserializer=agent__pb2.LogBatch.FromString,
-                    response_serializer=agent__pb2.Ack.SerializeToString,
-            ),
-            'ReportConnections': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReportConnections,
-                    request_deserializer=agent__pb2.ConnectionBatch.FromString,
-                    response_serializer=agent__pb2.Ack.SerializeToString,
-            ),
-            'ReportProviderHealth': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReportProviderHealth,
-                    request_deserializer=agent__pb2.ProviderHealthBatch.FromString,
-                    response_serializer=agent__pb2.Ack.SerializeToString,
-            ),
-            'ReportState': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReportState,
-                    request_deserializer=agent__pb2.ReportedState.FromString,
-                    response_serializer=agent__pb2.DriftReport.SerializeToString,
-            ),
-            'LeaseCommands': grpc.unary_unary_rpc_method_handler(
-                    servicer.LeaseCommands,
-                    request_deserializer=agent__pb2.CommandLeaseRequest.FromString,
-                    response_serializer=agent__pb2.CommandLease.SerializeToString,
-            ),
-            'SubmitCommandResult': grpc.unary_unary_rpc_method_handler(
-                    servicer.SubmitCommandResult,
-                    request_deserializer=agent__pb2.CommandResult.FromString,
-                    response_serializer=agent__pb2.CommandResultAck.SerializeToString,
-            ),
-            'WatchEvents': grpc.unary_stream_rpc_method_handler(
-                    servicer.WatchEvents,
-                    request_deserializer=agent__pb2.EventRequest.FromString,
-                    response_serializer=agent__pb2.NodeEvent.SerializeToString,
-            ),
+        "GetConfig": grpc.unary_unary_rpc_method_handler(
+            servicer.GetConfig,
+            request_deserializer=agent__pb2.ConfigRequest.FromString,
+            response_serializer=agent__pb2.DesiredConfig.SerializeToString,
+        ),
+        "StreamTraffic": grpc.stream_stream_rpc_method_handler(
+            servicer.StreamTraffic,
+            request_deserializer=agent__pb2.TrafficBatch.FromString,
+            response_serializer=agent__pb2.TrafficAck.SerializeToString,
+        ),
+        "StreamMetrics": grpc.stream_stream_rpc_method_handler(
+            servicer.StreamMetrics,
+            request_deserializer=agent__pb2.MetricBatch.FromString,
+            response_serializer=agent__pb2.Ack.SerializeToString,
+        ),
+        "StreamLogs": grpc.stream_stream_rpc_method_handler(
+            servicer.StreamLogs,
+            request_deserializer=agent__pb2.LogBatch.FromString,
+            response_serializer=agent__pb2.Ack.SerializeToString,
+        ),
+        "ReportConnections": grpc.unary_unary_rpc_method_handler(
+            servicer.ReportConnections,
+            request_deserializer=agent__pb2.ConnectionBatch.FromString,
+            response_serializer=agent__pb2.Ack.SerializeToString,
+        ),
+        "ReportProviderHealth": grpc.unary_unary_rpc_method_handler(
+            servicer.ReportProviderHealth,
+            request_deserializer=agent__pb2.ProviderHealthBatch.FromString,
+            response_serializer=agent__pb2.Ack.SerializeToString,
+        ),
+        "ReportState": grpc.unary_unary_rpc_method_handler(
+            servicer.ReportState,
+            request_deserializer=agent__pb2.ReportedState.FromString,
+            response_serializer=agent__pb2.DriftReport.SerializeToString,
+        ),
+        "LeaseCommands": grpc.unary_unary_rpc_method_handler(
+            servicer.LeaseCommands,
+            request_deserializer=agent__pb2.CommandLeaseRequest.FromString,
+            response_serializer=agent__pb2.CommandLease.SerializeToString,
+        ),
+        "SubmitCommandResult": grpc.unary_unary_rpc_method_handler(
+            servicer.SubmitCommandResult,
+            request_deserializer=agent__pb2.CommandResult.FromString,
+            response_serializer=agent__pb2.CommandResultAck.SerializeToString,
+        ),
+        "WatchEvents": grpc.unary_stream_rpc_method_handler(
+            servicer.WatchEvents,
+            request_deserializer=agent__pb2.EventRequest.FromString,
+            response_serializer=agent__pb2.NodeEvent.SerializeToString,
+        ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'xlink.agent.v1.NodeAgent', rpc_method_handlers)
+        "xlink.agent.v1.NodeAgent", rpc_method_handlers
+    )
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('xlink.agent.v1.NodeAgent', rpc_method_handlers)
+    server.add_registered_method_handlers("xlink.agent.v1.NodeAgent", rpc_method_handlers)
 
 
- # This class is part of an EXPERIMENTAL API.
+# This class is part of an EXPERIMENTAL API.
 class NodeAgent:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def GetConfig(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def GetConfig(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/xlink.agent.v1.NodeAgent/GetConfig',
+            "/xlink.agent.v1.NodeAgent/GetConfig",
             agent__pb2.ConfigRequest.SerializeToString,
             agent__pb2.DesiredConfig.FromString,
             options,
@@ -238,23 +252,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def StreamTraffic(request_iterator,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def StreamTraffic(
+        request_iterator,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.stream_stream(
             request_iterator,
             target,
-            '/xlink.agent.v1.NodeAgent/StreamTraffic',
+            "/xlink.agent.v1.NodeAgent/StreamTraffic",
             agent__pb2.TrafficBatch.SerializeToString,
             agent__pb2.TrafficAck.FromString,
             options,
@@ -265,23 +282,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def StreamMetrics(request_iterator,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def StreamMetrics(
+        request_iterator,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.stream_stream(
             request_iterator,
             target,
-            '/xlink.agent.v1.NodeAgent/StreamMetrics',
+            "/xlink.agent.v1.NodeAgent/StreamMetrics",
             agent__pb2.MetricBatch.SerializeToString,
             agent__pb2.Ack.FromString,
             options,
@@ -292,23 +312,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def StreamLogs(request_iterator,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def StreamLogs(
+        request_iterator,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.stream_stream(
             request_iterator,
             target,
-            '/xlink.agent.v1.NodeAgent/StreamLogs',
+            "/xlink.agent.v1.NodeAgent/StreamLogs",
             agent__pb2.LogBatch.SerializeToString,
             agent__pb2.Ack.FromString,
             options,
@@ -319,23 +342,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def ReportConnections(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def ReportConnections(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/xlink.agent.v1.NodeAgent/ReportConnections',
+            "/xlink.agent.v1.NodeAgent/ReportConnections",
             agent__pb2.ConnectionBatch.SerializeToString,
             agent__pb2.Ack.FromString,
             options,
@@ -346,23 +372,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def ReportProviderHealth(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def ReportProviderHealth(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/xlink.agent.v1.NodeAgent/ReportProviderHealth',
+            "/xlink.agent.v1.NodeAgent/ReportProviderHealth",
             agent__pb2.ProviderHealthBatch.SerializeToString,
             agent__pb2.Ack.FromString,
             options,
@@ -373,23 +402,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def ReportState(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def ReportState(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/xlink.agent.v1.NodeAgent/ReportState',
+            "/xlink.agent.v1.NodeAgent/ReportState",
             agent__pb2.ReportedState.SerializeToString,
             agent__pb2.DriftReport.FromString,
             options,
@@ -400,23 +432,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def LeaseCommands(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def LeaseCommands(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/xlink.agent.v1.NodeAgent/LeaseCommands',
+            "/xlink.agent.v1.NodeAgent/LeaseCommands",
             agent__pb2.CommandLeaseRequest.SerializeToString,
             agent__pb2.CommandLease.FromString,
             options,
@@ -427,23 +462,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def SubmitCommandResult(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def SubmitCommandResult(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/xlink.agent.v1.NodeAgent/SubmitCommandResult',
+            "/xlink.agent.v1.NodeAgent/SubmitCommandResult",
             agent__pb2.CommandResult.SerializeToString,
             agent__pb2.CommandResultAck.FromString,
             options,
@@ -454,23 +492,26 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def WatchEvents(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def WatchEvents(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_stream(
             request,
             target,
-            '/xlink.agent.v1.NodeAgent/WatchEvents',
+            "/xlink.agent.v1.NodeAgent/WatchEvents",
             agent__pb2.EventRequest.SerializeToString,
             agent__pb2.NodeEvent.FromString,
             options,
@@ -481,4 +522,5 @@ class NodeAgent:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )

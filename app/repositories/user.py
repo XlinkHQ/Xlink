@@ -73,9 +73,7 @@ class UserRepository(BaseRepository[User]):
         owner_id: uuid.UUID | None = None,
         search: str | None = None,
     ) -> list[ColumnElement[bool]]:
-        conditions: list[ColumnElement[bool]] = (
-            [] if include_removed else [User.removed.is_(False)]
-        )
+        conditions: list[ColumnElement[bool]] = [] if include_removed else [User.removed.is_(False)]
         if role is not None:
             conditions.append(User.role == role)
         if is_active is not None:
@@ -83,7 +81,9 @@ class UserRepository(BaseRepository[User]):
         if owner_id is not None:
             conditions.append(User.owner_id == owner_id)
         if search:
-            esc = search.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            esc = (
+                search.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             needle = f"%{esc}%"
             conditions.append(
                 or_(

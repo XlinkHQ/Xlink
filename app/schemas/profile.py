@@ -14,9 +14,7 @@ from app.schemas.base import APIModel, InputModel
 NAME_MAX_LEN = 255
 PROTOCOL_MAX_LEN = 64
 
-VALID_PROTOCOLS = frozenset(
-    spec.name for spec in _PROTOCOL_SPECS if spec.providers
-)
+VALID_PROTOCOLS = frozenset(spec.name for spec in _PROTOCOL_SPECS if spec.providers)
 
 
 class _ProtocolValidatorMixin:

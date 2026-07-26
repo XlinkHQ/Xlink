@@ -102,9 +102,7 @@ async def report_connections(
 ) -> StreamAck:
     await agent.authenticate(node_id, x_agent_token)
     service = IpLimitService(db, cache)
-    await service.report(
-        ((s.assignment_id, s.source_ip) for s in payload.samples), node_id=node_id
-    )
+    await service.report(((s.assignment_id, s.source_ip) for s in payload.samples), node_id=node_id)
     return StreamAck(accepted=len(payload.samples), dropped=0)
 
 
@@ -135,9 +133,7 @@ async def node_events(
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> StreamingResponse:
     async with db.session() as session:
-        await NodeHeartbeatService(NodeRepository(session)).authenticate(
-            node_id, x_agent_token
-        )
+        await NodeHeartbeatService(NodeRepository(session)).authenticate(node_id, x_agent_token)
     channel = cache.node_channel(node_id)
 
     async def stream() -> AsyncIterator[str]:

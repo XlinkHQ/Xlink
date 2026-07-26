@@ -276,9 +276,7 @@ async def test_retention_keeps_rollup_drops_raw(app_state: AppState):
     async with app_state.db.session() as session:
         await TrafficService(session).rollup_hourly(now=now)
     async with app_state.db.session() as session:
-        await TrafficRetention(
-            session, retention_days=90, raw_retention_days=7
-        ).purge(now=now)
+        await TrafficRetention(session, retention_days=90, raw_retention_days=7).purge(now=now)
     async with app_state.db.session() as session:
         repo = TrafficRepository(session)
         assert await repo.count() == 0
@@ -298,8 +296,6 @@ async def test_retention_never_drops_raw_past_watermark(app_state: AppState):
         _batch(ids["node_id"], ids["assignment_id"], count=2, start=old, batch_id="unrolled"),
     )
     async with app_state.db.session() as session:
-        await TrafficRetention(
-            session, retention_days=90, raw_retention_days=7
-        ).purge(now=now)
+        await TrafficRetention(session, retention_days=90, raw_retention_days=7).purge(now=now)
     async with app_state.db.session() as session:
         assert await TrafficRepository(session).count() == 2

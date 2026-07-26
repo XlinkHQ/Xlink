@@ -47,9 +47,7 @@ class GroupRepository(BaseRepository[Group]):
         result = await self.session.execute(select(Group).order_by(Group.created_at.desc()))
         return result.scalars().all()
 
-    async def set_profiles(
-        self, group_id: uuid.UUID, profile_ids: Iterable[uuid.UUID]
-    ) -> None:
+    async def set_profiles(self, group_id: uuid.UUID, profile_ids: Iterable[uuid.UUID]) -> None:
         """Replace a group's profile membership in the join table. Indexed
         delete-then-insert instead of rewriting a JSON blob."""
         await self.session.execute(
@@ -63,29 +61,29 @@ class GroupRepository(BaseRepository[Group]):
         """Drop a profile from every group that contains it, returning the
         affected group ids. Replaces the full-table JSON scan on profile delete."""
         affected = (
-            await self.session.execute(
-                select(group_profiles.c.group_id).where(
-                    group_profiles.c.profile_id == profile_id
+            (
+                await self.session.execute(
+                    select(group_profiles.c.group_id).where(
+                        group_profiles.c.profile_id == profile_id
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if affected:
             await self.session.execute(
                 delete(group_profiles).where(group_profiles.c.profile_id == profile_id)
             )
         return affected
 
-    async def profile_ids_for_groups(
-        self, group_ids: Iterable[uuid.UUID]
-    ) -> set[uuid.UUID]:
+    async def profile_ids_for_groups(self, group_ids: Iterable[uuid.UUID]) -> set[uuid.UUID]:
         """Union of profile ids across the given groups — one indexed query
         instead of loading every group and unioning JSON in Python."""
         ids = list(group_ids)
         if not ids:
             return set()
         rows = await self.session.execute(
-            select(group_profiles.c.profile_id)
-            .where(group_profiles.c.group_id.in_(ids))
-            .distinct()
+            select(group_profiles.c.profile_id).where(group_profiles.c.group_id.in_(ids)).distinct()
         )
         return set(rows.scalars().all())

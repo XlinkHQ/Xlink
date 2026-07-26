@@ -106,12 +106,16 @@ class TrafficRepository:
         dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
         values = {"node_id": node_id, "batch_id": batch_id}
         if dialect == "sqlite":
-            stmt = sqlite_insert(ProcessedBatch).values(values).on_conflict_do_nothing(
-                index_elements=["node_id", "batch_id"]
+            stmt = (
+                sqlite_insert(ProcessedBatch)
+                .values(values)
+                .on_conflict_do_nothing(index_elements=["node_id", "batch_id"])
             )
         else:
-            stmt = pg_insert(ProcessedBatch).values(values).on_conflict_do_nothing(
-                constraint="uq_processed_batches_node_batch"
+            stmt = (
+                pg_insert(ProcessedBatch)
+                .values(values)
+                .on_conflict_do_nothing(constraint="uq_processed_batches_node_batch")
             )
         result = await self.session.execute(stmt)
         await self.session.flush()
@@ -237,14 +241,8 @@ class TrafficRepository:
 
         deleted = 0
         while True:
-            sub = (
-                select(TrafficRecord.id)
-                .where(TrafficRecord.collected_at < cutoff)
-                .limit(batch)
-            )
-            stmt = delete(TrafficRecord).where(
-                TrafficRecord.id.in_(sub.scalar_subquery())
-            )
+            sub = select(TrafficRecord.id).where(TrafficRecord.collected_at < cutoff).limit(batch)
+            stmt = delete(TrafficRecord).where(TrafficRecord.id.in_(sub.scalar_subquery()))
             result = await self.session.execute(stmt)
             n = result.rowcount or 0
             deleted += n
@@ -374,9 +372,7 @@ class TrafficRepository:
     async def delete_hourly_before(self, cutoff: datetime, *, batch: int = 10000) -> int:
         deleted = 0
         while True:
-            sub = (
-                select(TrafficHourly.id).where(TrafficHourly.hour_bucket < cutoff).limit(batch)
-            )
+            sub = select(TrafficHourly.id).where(TrafficHourly.hour_bucket < cutoff).limit(batch)
             stmt = delete(TrafficHourly).where(TrafficHourly.id.in_(sub.scalar_subquery()))
             result = await self.session.execute(stmt)
             n = result.rowcount or 0
@@ -387,9 +383,7 @@ class TrafficRepository:
             await asyncio.sleep(0)
         return deleted
 
-    async def usage_sum_by_user(
-        self, user_ids: Sequence[uuid.UUID]
-    ) -> dict[uuid.UUID, int]:
+    async def usage_sum_by_user(self, user_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, int]:
         from app.domain.client_assignment import ClientAssignment
 
         if not user_ids:
@@ -406,9 +400,7 @@ class TrafficRepository:
         ).all()
         return {r[0]: int(r[1] or 0) for r in rows}
 
-    async def resync_user_usage_for_assignments(
-        self, assignment_ids: Sequence[uuid.UUID]
-    ) -> None:
+    async def resync_user_usage_for_assignments(self, assignment_ids: Sequence[uuid.UUID]) -> None:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.user import User
 
@@ -453,9 +445,7 @@ class TrafficRepository:
                 ).where(User.id.in_(list(user_ids)))
             )
         ).all()
-        return {
-            r[0]: (int(r[1] or 0), int(r[2] or 0), r[2] is None) for r in rows
-        }
+        return {r[0]: (int(r[1] or 0), int(r[2] or 0), r[2] is None) for r in rows}
 
     _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 

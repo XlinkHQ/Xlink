@@ -53,8 +53,16 @@ def test_page_boxes_are_rounded() -> None:
 
 def test_empty_page_shows_status_message():
     html = render_subscription_page(
-        title="X", username="u", status="Disabled", status_tone="muted",
-        used=0, total=100, expire_ts=None, sub_url="http://x", configs=[], support="",
+        title="X",
+        username="u",
+        status="Disabled",
+        status_tone="muted",
+        used=0,
+        total=100,
+        expire_ts=None,
+        sub_url="http://x",
+        configs=[],
+        support="",
     )
     assert "disabled" in html.lower()
     assert "vless://" not in html
@@ -62,9 +70,16 @@ def test_empty_page_shows_status_message():
 
 def test_nonempty_page_has_configs():
     html = render_subscription_page(
-        title="X", username="u", status="Active", status_tone="ok",
-        used=0, total=100, expire_ts=None, sub_url="http://x",
-        configs=["vless://u@h:443#k"], support="",
+        title="X",
+        username="u",
+        status="Active",
+        status_tone="ok",
+        used=0,
+        total=100,
+        expire_ts=None,
+        sub_url="http://x",
+        configs=["vless://u@h:443#k"],
+        support="",
     )
     assert 'class="empty"' not in html
     assert ">k<" in html

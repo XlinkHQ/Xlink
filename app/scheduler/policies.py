@@ -19,12 +19,16 @@ class WeightedPolicy(SchedulerPolicy):
     name = SchedulerPolicyName.CUSTOM_WEIGHTED
 
     def __init__(self, weights: dict[str, float] | None = None) -> None:
-        self._weights = weights if weights is not None else {
-            "load": 0.35,
-            "capacity": 0.35,
-            "region": 0.2,
-            "traffic": 0.1,
-        }
+        self._weights = (
+            weights
+            if weights is not None
+            else {
+                "load": 0.35,
+                "capacity": 0.35,
+                "region": 0.2,
+                "traffic": 0.1,
+            }
+        )
 
     def score(self, node: Node, *, preferred_region: str | None = None) -> NodeScore:
         values = score_inputs(node, preferred_region)
