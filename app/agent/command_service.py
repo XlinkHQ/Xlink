@@ -21,10 +21,6 @@ from app.events.bus import EventBus
 from app.events.models import NodeCommandIssued
 
 _TOKEN_HASH_KEY = "agent_token_hash"
-# Must exceed the agent's longest single command runtime (core upgrade, up to
-# _UPGRADE_TIMEOUT=900s in xlink-agent.py). If the lease expires mid-upgrade the
-# panel frees the command, re-leases it to the next poll, and the original
-# result POST is rejected as a stale lease → the SAME upgrade runs twice.
 _LEASE_SECONDS = 960
 
 
@@ -124,8 +120,6 @@ class CommandService:
         command = await self._repo.get(command_id)
         if command is None:
             raise NotFoundError("Command not found.", code="command_not_found")
-        # A node may only report results for its OWN commands — never another
-        # node's, even if it somehow learns the lease token.
         if command.node_id != node_id:
             raise NotFoundError("Command not found.", code="command_not_found")
         if command.lease_token != lease_token:

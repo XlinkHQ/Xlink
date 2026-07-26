@@ -27,8 +27,6 @@ router = APIRouter(prefix="/profiles", tags=["profiles"])
 
 
 def _read(profile, actor: User) -> ProfileRead:
-    # Mask secret settings (reality/wg private keys, passwords) for non-sudo
-    # resellers so they can't harvest other tenants' credentials via list/get.
     read = ProfileRead.model_validate(profile)
     read.settings = redact_settings(read.settings, actor)
     return read

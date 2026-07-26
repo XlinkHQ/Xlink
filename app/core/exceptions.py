@@ -92,8 +92,6 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def _handle_http_exception(_: Request, exc: HTTPException) -> JSONResponse:
-        # Re-wrap FastAPI's default {"detail": ...} into the same {"error": {...}}
-        # envelope every other error uses, so the frontend has ONE shape to parse.
         code = {
             400: "bad_request",
             401: "authentication_error",

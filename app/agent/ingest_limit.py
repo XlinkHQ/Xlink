@@ -13,10 +13,6 @@ _WINDOW_SECONDS = 60
 
 
 def _window_key(node_id: uuid.UUID, now: float) -> str:
-    # Fixed 60s window keyed by the AUTHENTICATED node id (never the client IP):
-    # agents behind one egress NAT must not share a bucket, and distinct-IP
-    # agents must not each get their own full quota. The window index rolls the
-    # key every minute so the counter self-expires without a sweep.
     return f"agent:ingest:{node_id}:{int(now // _WINDOW_SECONDS)}"
 
 

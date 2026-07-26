@@ -92,9 +92,6 @@ async def backup_export_db(_admin: SudoAdminUser, settings: SettingsDep) -> Resp
     out, err = await _communicate(proc)
     if proc.returncode != 0:
         raise HTTPException(status_code=500, detail=f"pg_dump failed: {err.decode()[:300]}")
-    # gzip the dump: SQL text compresses ~5-10x, so the download transfers far
-    # faster (the main "backup is slow" complaint) and the file on disk is small.
-    # import-db transparently gunzips it back.
     gzipped = await anyio.to_thread.run_sync(gzip.compress, out, 6)
     return Response(
         content=gzipped,
@@ -113,8 +110,6 @@ async def backup_import_db(
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file.")
-    # Transparently accept gzipped dumps (new .sql.gz export) as well as plain
-    # .sql (older exports / hand-made dumps): sniff the gzip magic bytes.
     if data[:2] == b"\x1f\x8b":
         data = await anyio.to_thread.run_sync(gzip.decompress, data)
 
@@ -137,9 +132,6 @@ async def backup_import_db(
         settings.postgres_user,
         "-d",
         settings.postgres_db,
-        # Fail the whole restore atomically on the FIRST error instead of applying
-        # a partial dump and still exiting 0 (psql's default is to log each error,
-        # continue, and return success — a silently half-restored database).
         "-v",
         "ON_ERROR_STOP=1",
         "--single-transaction",

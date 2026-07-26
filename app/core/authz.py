@@ -12,7 +12,7 @@ class Permission(StrEnum):
     SUDO = "sudo"
     WRITE_USERS = "write_users"
     MANAGE_USER = "manage_user"
-    MANAGE_INFRA = "manage_infra"  # nodes / groups / profiles / settings (sudo only)
+    MANAGE_INFRA = "manage_infra"
 
 
 def has_permission(actor: User, permission: Permission, *, target: User | None = None) -> bool:
@@ -56,18 +56,10 @@ def owner_scope(actor: User) -> uuid.UUID | None:
     return None if actor.is_sudo else actor.id
 
 
-# Substrings marking a settings key as server-side secret material (reality/wg
-# private keys, protocol passwords, uuids). Profile/outbound `settings` are raw
-# dicts holding these; a non-sudo (reseller) admin must never read them.
-# NOTE: deliberately NOT a bare "key" marker — that masks reality's *public*
-# key (publicKey/pbk), which the client legitimately needs, and would break the
-# subscription/config a reseller sees. Only genuinely private material is listed.
 _SECRET_SETTING_MARKERS = (
     "private", "privatekey", "secret", "password", "presharedkey",
     "preshared", "uuid", "psk",
 )
-# Explicit keys that ARE public and must never be masked even if a future marker
-# would catch them.
 _PUBLIC_SETTING_KEYS = {"publickey", "pbk", "shortid", "sid", "spiderx"}
 
 
@@ -79,17 +71,12 @@ def _is_secret_setting(key: str) -> bool:
 
 
 def redact_settings(settings: dict, actor: User) -> dict:
-    # sudo sees the full settings (they author profiles/outbounds); a scoped
-    # reseller gets secret values masked so cross-tenant private keys/passwords
-    # don't leak through list/get endpoints.
     if actor.is_sudo or not isinstance(settings, dict):
         return settings
     return {k: ("***" if _is_secret_setting(k) else v) for k, v in settings.items()}
 
 
 def assert_group_in_scope(actor: User, group_id: uuid.UUID | None, scoped_ids: set[uuid.UUID]) -> None:
-    # sudo or all-groups admins may use any group; a scoped reseller may only
-    # assign users into groups explicitly granted to them.
     if actor.is_sudo or actor.all_groups_access:
         return
     if group_id is None:

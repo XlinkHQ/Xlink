@@ -40,12 +40,6 @@ def _single_protocol_feed(
                 code="subscription_format_incompatible",
                 details={"protocol": protocols[0]},
             )
-        # Skip an individual config with bad stored data instead of 422-ing the
-        # whole subscription — one broken assignment must not blank out the
-        # user's other working configs. Mirrors every other renderer (text /
-        # singbox / xray_json all skip-per-entry). If EVERY matching config is
-        # broken, fall through to the "no configs" error rather than an empty
-        # body so the client sees a clear failure.
         rendered = []
         for c in matching:
             try:

@@ -99,8 +99,6 @@ class NodeRead(APIModel):
 
     @field_serializer("metadata")
     def _strip_secret_metadata(self, value: dict[str, Any]) -> dict[str, Any]:
-        # agent_token_hash is server-side auth material; never expose it via the
-        # API (not even to sudo — no client needs it).
         if not isinstance(value, dict):
             return value
         return {k: v for k, v in value.items() if k != "agent_token_hash"}

@@ -83,8 +83,6 @@ class UserRepository(BaseRepository[User]):
         if owner_id is not None:
             conditions.append(User.owner_id == owner_id)
         if search:
-            # Escape LIKE wildcards so a literal % / _ isn't a match-everything
-            # pattern (or an index-defeating scan) on the user table.
             esc = search.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             needle = f"%{esc}%"
             conditions.append(
@@ -103,8 +101,6 @@ class UserRepository(BaseRepository[User]):
         "expiring": (User.expire_at.asc().nulls_last(), User.id.asc()),
     }
 
-    # Keyset spec per sort: (column, is_descending, attribute-name-for-cursor-value).
-    # `expiring` is nullable → handled with a null-aware clause below.
     _KEYSET: ClassVar[dict[str, tuple[Any, bool, str]]] = {
         "newest": (User.created_at, True, "created_at"),
         "oldest": (User.created_at, False, "created_at"),
@@ -163,9 +159,6 @@ class UserRepository(BaseRepository[User]):
         if cursor is not None:
             cval, cid = cursor
             if sort == "expiring":
-                # expire_at ASC NULLS LAST + id ASC. Page forward: rows with a
-                # greater expire_at, or equal expire_at + greater id, or (once the
-                # cursor is in the NULL tail) any NULL row with a greater id.
                 if cval is None:
                     stmt = stmt.where(User.expire_at.is_(None), User.id > cid)
                 else:

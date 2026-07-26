@@ -15,8 +15,6 @@ from app.traffic.retention import TrafficRetention
 from app.traffic.schemas import TrafficBatch, TrafficSample
 from app.traffic.service import TrafficService
 
-# A fixed point well in the past so every ingested sample falls in a CLOSED hour
-# bucket relative to "now" — the rollup only compacts closed hours.
 BASE = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
 
@@ -89,7 +87,6 @@ async def _ingest(app_state, batch):
 
 async def test_rollup_populates_hourly(app_state: AppState):
     ids = await _seed(app_state)
-    # 5 samples in one hour → one hourly bucket for the assignment.
     await _ingest(app_state, _batch(ids["node_id"], ids["assignment_id"], count=5, start=BASE))
     async with app_state.db.session() as session:
         written = await TrafficService(session).rollup_hourly(now=datetime.now(UTC))
@@ -105,24 +102,21 @@ async def test_rollup_is_idempotent(app_state: AppState):
     now = datetime.now(UTC)
     async with app_state.db.session() as session:
         await TrafficService(session).rollup_hourly(now=now)
-    # Re-run the rollup twice more over the same closed window.
     async with app_state.db.session() as session:
         await TrafficService(session).rollup_hourly(now=now)
     async with app_state.db.session() as session:
         await TrafficService(session).rollup_hourly(now=now)
     async with app_state.db.session() as session:
         repo = TrafficRepository(session)
-        # Still exactly one bucket, totals not multiplied.
         assert await repo.hourly_count() == 1
         total = await repo.usage_total_for_profile(ids["profile_id"])
-    assert total == 4 * 300  # 4 samples * (100 up + 200 down)
+    assert total == 4 * 300
 
 
 async def test_rollup_matches_raw_totals(app_state: AppState):
     """A usage query must return the SAME total whether served from raw (before
     rollup) or from the rollup (after rollup + raw purge)."""
     ids = await _seed(app_state)
-    # Two different hours, several samples each.
     await _ingest(
         app_state,
         _batch(ids["node_id"], ids["assignment_id"], count=6, start=BASE, batch_id="h1"),
@@ -138,7 +132,6 @@ async def test_rollup_matches_raw_totals(app_state: AppState):
         ),
     )
 
-    # Before rollup: served entirely from raw (watermark NULL → boundary=now).
     async with app_state.db.session() as session:
         raw_total = await TrafficService(session).usage_total_for_profile(ids["profile_id"])
         raw_by_node = await TrafficService(session).usage_by_node()
@@ -146,11 +139,9 @@ async def test_rollup_matches_raw_totals(app_state: AppState):
     assert raw_total == expected
     assert raw_by_node[ids["node_id"]] == expected
 
-    # Roll up the closed hours.
     async with app_state.db.session() as session:
         await TrafficService(session).rollup_hourly(now=datetime.now(UTC))
 
-    # After rollup, drop ALL raw rows to prove the read is served from the rollup.
     async with app_state.db.session() as session:
         from sqlalchemy import delete
 
@@ -182,7 +173,6 @@ async def test_rollup_coefficient_weighting(app_state: AppState):
         await session.commit()
     async with app_state.db.session() as session:
         by_node = await TrafficService(session).usage_by_node()
-    # raw stored bytes = 3*300 = 900; weighted by coefficient 2.0 → 1800.
     assert by_node[ids["node_id"]] == 1800
 
 
@@ -207,7 +197,6 @@ async def test_reset_user_clears_rollup_not_just_raw(app_state: AppState):
 async def test_rollup_excludes_current_hour(app_state: AppState):
     ids = await _seed(app_state)
     now = datetime.now(UTC)
-    # A sample in the CURRENT (in-progress) hour must not be rolled up.
     await _ingest(
         app_state,
         _batch(ids["node_id"], ids["assignment_id"], count=1, start=now, batch_id="cur"),
@@ -216,7 +205,6 @@ async def test_rollup_excludes_current_hour(app_state: AppState):
         written = await TrafficService(session).rollup_hourly(now=now)
     assert written == 0
     async with app_state.db.session() as session:
-        # But the read still returns it (served from raw, current window).
         total = await TrafficService(session).usage_total_for_profile(ids["profile_id"])
     assert total == 300
 
@@ -227,24 +215,19 @@ async def test_rollup_folds_in_late_arriving_old_bucket(app_state: AppState):
     ids = await _seed(app_state)
     now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
 
-    # First rollup advances the watermark to the current hour (no old raw yet).
     async with app_state.db.session() as session:
         await TrafficService(session).rollup_hourly(now=now)
 
-    # A late batch lands in a bucket 5 hours old — well below watermark-1h.
     late_hour = now - timedelta(hours=5)
     await _ingest(
         app_state,
         _batch(ids["node_id"], ids["assignment_id"], count=3, start=late_hour, batch_id="late"),
     )
 
-    # Re-run the rollup: the old bucket must be folded in despite being far
-    # below the normal (watermark-1h) window.
     async with app_state.db.session() as session:
         written = await TrafficService(session).rollup_hourly(now=now)
     assert written == 1
 
-    # Prove it is in the rollup by dropping raw and reading back.
     async with app_state.db.session() as session:
         from sqlalchemy import delete
 
@@ -261,7 +244,6 @@ async def test_hourly_series_hybrid_raw_and_rollup(app_state: AppState):
     ids = await _seed(app_state)
     now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     old_hour = now - timedelta(hours=3)
-    # One closed-hour sample and one current-hour sample.
     await _ingest(
         app_state,
         _batch(ids["node_id"], ids["assignment_id"], count=2, start=old_hour, batch_id="old"),
@@ -280,7 +262,6 @@ async def test_hourly_series_hybrid_raw_and_rollup(app_state: AppState):
         await TrafficService(session).rollup_hourly(now=datetime.now(UTC))
     async with app_state.db.session() as session:
         rows = await TrafficService(session).usage_hourly_for_node(ids["node_id"], hours=24)
-    # Both hours present, summing to all three samples, no double counting.
     assert sum(up + dn for _, up, dn in rows) == 3 * 300
 
 
@@ -292,20 +273,18 @@ async def test_retention_keeps_rollup_drops_raw(app_state: AppState):
         app_state,
         _batch(ids["node_id"], ids["assignment_id"], count=3, start=old, batch_id="old"),
     )
-    # Roll up (relative to now) so the watermark is past the old samples.
     async with app_state.db.session() as session:
         await TrafficService(session).rollup_hourly(now=now)
-    # raw_retention=7d drops the 30d-old raw; rollup_retention=90d keeps rollup.
     async with app_state.db.session() as session:
         await TrafficRetention(
             session, retention_days=90, raw_retention_days=7
         ).purge(now=now)
     async with app_state.db.session() as session:
         repo = TrafficRepository(session)
-        assert await repo.count() == 0  # raw gone
-        assert await repo.hourly_count() == 1  # rollup kept
+        assert await repo.count() == 0
+        assert await repo.hourly_count() == 1
         total = await repo.usage_total_for_profile(ids["profile_id"])
-    assert total == 3 * 300  # analytics still correct from rollup
+    assert total == 3 * 300
 
 
 async def test_retention_never_drops_raw_past_watermark(app_state: AppState):
@@ -318,7 +297,6 @@ async def test_retention_never_drops_raw_past_watermark(app_state: AppState):
         app_state,
         _batch(ids["node_id"], ids["assignment_id"], count=2, start=old, batch_id="unrolled"),
     )
-    # NO rollup run → watermark is NULL. Retention must not delete raw.
     async with app_state.db.session() as session:
         await TrafficRetention(
             session, retention_days=90, raw_retention_days=7

@@ -102,9 +102,6 @@ async def report_connections(
 ) -> StreamAck:
     await agent.authenticate(node_id, x_agent_token)
     service = IpLimitService(db, cache)
-    # Scope ownership resolution to the reporting node: a node may only report
-    # source IPs for assignments IT hosts, otherwise it could inflate another
-    # node's users' ipset and wrongly trip their device limit.
     await service.report(
         ((s.assignment_id, s.source_ip) for s in payload.samples), node_id=node_id
     )
@@ -119,9 +116,6 @@ async def pull_config(
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
     known_version: str | None = Query(default=None),
 ) -> DesiredConfig:
-    # The agent sends its currently-applied version (If-None-Match header, or a
-    # known_version query param). When it matches the current config the panel
-    # skips the full render and returns an empty "unchanged" body — cheap poll.
     kv = known_version or (if_none_match.strip('"') if if_none_match else None)
     snapshot = await agent.config_snapshot(node_id, token=x_agent_token, known_version=kv)
     return DesiredConfig(
@@ -140,12 +134,6 @@ async def node_events(
     cache: CacheDep,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> StreamingResponse:
-    # Authenticate with a short-lived session that is released immediately — do
-    # NOT depend on a request-scoped session here. This is a never-ending SSE
-    # stream (while True below); a request-scoped DB connection would stay
-    # checked out for the whole life of the stream, and with many nodes/reconnects
-    # that exhausts the connection pool (QueuePool limit reached → every request
-    # 500s). The stream itself needs only Redis pub/sub, no DB.
     async with db.session() as session:
         await NodeHeartbeatService(NodeRepository(session)).authenticate(
             node_id, x_agent_token

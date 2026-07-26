@@ -85,9 +85,6 @@ class UserServiceBase:
             await self._webhooks.dispatch(action, user.username)
 
     async def _apply_notification_overrides(self) -> None:
-        # The dispatcher is built per-request from env Settings only; load the
-        # UI-configured channels (stored in AppSettings) so lifecycle webhooks
-        # honor them, matching the background NotificationJob behavior.
         if self._webhooks is None:
             return
         from app.domain.app_settings import AppSettings
@@ -140,10 +137,6 @@ class UserServiceBase:
         )
         if owner is None:
             return
-        # The user-COUNT cap only applies when adding a user. An update never adds
-        # a user, so gate on is_update — NOT on `old_limit_bytes is None`, which is
-        # also true when updating an existing *unlimited* user and would wrongly
-        # reject that edit once the owner is at their user cap.
         if (
             not is_update
             and owner.admin_user_limit is not None
@@ -253,10 +246,6 @@ class UserServiceBase:
         await self._cache.delete(f"{_USER_CACHE_PREFIX}{user_id}")
 
     async def _invalidate_user_feed(self, user_id: uuid.UUID) -> None:
-        # O(1) invalidation: bump the user's per-subject cache revision so their
-        # cached feed keys (which embed the revision) go stale at once. Replaces the
-        # old SCAN+DEL over subscription:{user_id}:* — that recomputed every feed
-        # for the user in a burst and scanned the keyspace on a hot mutation path.
         try:
             if self._subscription_service is not None:
                 await self._subscription_service.invalidate_subject(user_id)

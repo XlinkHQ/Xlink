@@ -34,21 +34,12 @@ class BackupImporter:
         }
         if dry_run:
             return RestoreResult(dry_run=True, **counts)
-        # Users carry a self-referential owner_id FK with no ORM relationship, so
-        # SQLAlchemy won't order parent-before-child on flush. Insert owners
-        # (owner_id is null) before sub-users, and within sub-users insert an
-        # owner before anyone it owns, so a reseller's own row exists before its
-        # users reference it — otherwise the FK check aborts the whole restore.
         users = _order_users_by_ownership(data.get("users", []))
         for row in users:
             await self._upsert(User, row)
         for model, key in ((Node, "nodes"), (Profile, "profiles")):
             for row in data.get(key, []):
                 await self._upsert(model, row)
-        # group_id points at the groups table, which the backup does not export;
-        # a grouped assignment restored into a DB lacking that group would raise
-        # an FK violation and abort the restore. Groups are optional metadata, so
-        # drop a group_id whose group isn't present rather than fail the restore.
         for row in data.get("assignments", []):
             await self._upsert(ClientAssignment, row, drop_missing_group=True)
         await self._session.flush()
@@ -102,9 +93,6 @@ class BackupImporter:
             return
         for key, value in values.items():
             if key in ("id", "version", "created_at", "updated_at"):
-                # Never let a backup rewrite the row's identity, optimistic-lock
-                # version, or lifecycle timestamps on an UPDATE — created_at is
-                # immutable history and updated_at is managed by the DB onupdate.
                 continue
             if model is User and key == "hashed_password" and value == _REDACTED:
                 continue

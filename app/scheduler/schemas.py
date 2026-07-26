@@ -24,9 +24,6 @@ class SchedulerRequestSchema(BaseModel):
         if self.policy == SchedulerPolicyName.CUSTOM_WEIGHTED and self.weights is None:
             raise ValueError("weights required for CUSTOM_WEIGHTED policy")
         if self.weights is not None:
-            # Reject junk that would invert or collapse scoring: unknown keys,
-            # negative/NaN/inf values, or an all-zero set (→ selection would fall
-            # to the tie-breaker and silently ignore load/capacity).
             bad = set(self.weights) - _WEIGHT_KEYS
             if bad:
                 raise ValueError(f"unknown weight keys: {sorted(bad)}")

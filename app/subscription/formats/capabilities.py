@@ -27,11 +27,7 @@ from __future__ import annotations
 
 from app.subscription.schemas import SubscriptionFormat
 
-# --- Building blocks -------------------------------------------------------
 
-# Every protocol that has a single-line URI form (vless://, ss://, wg://...).
-# Drives TEXT, BASE64 and the URI family. shadowtls has NO URI form (it is a
-# transport wrapper), so it is intentionally absent here.
 _URI_PROTOCOLS = frozenset(
     {
         "vless",
@@ -48,7 +44,6 @@ _URI_PROTOCOLS = frozenset(
     }
 )
 
-# Clash core (stash / original clash) only understands these proxy types.
 _CLASH_PROTOCOLS = frozenset(
     {
         "vless",
@@ -59,17 +54,12 @@ _CLASH_PROTOCOLS = frozenset(
     }
 )
 
-# Clash.Meta / mihomo adds the QUIC-based and proxy protocols plus shadowtls.
 _MIHOMO_PROTOCOLS = _CLASH_PROTOCOLS | frozenset(
     {"hysteria2", "tuic", "socks", "http", "shadowtls"}
 )
 
-# xray_json emits only the classic V2Ray outbounds.
 _XRAY_JSON_PROTOCOLS = frozenset({"vless", "vmess", "trojan"})
 
-# sing-box outbounds: everything Clash.Meta carries EXCEPT it has no wireguard
-# or naive outbound in this feed, and it does support shadowtls (as a paired
-# shadowtls+shadowsocks outbound).
 _SINGBOX_PROTOCOLS = frozenset(
     {
         "vless",
@@ -86,7 +76,6 @@ _SINGBOX_PROTOCOLS = frozenset(
 )
 
 
-# --- The matrix ------------------------------------------------------------
 
 FORMAT_PROTOCOLS: dict[SubscriptionFormat, frozenset[str]] = {
     SubscriptionFormat.TEXT: _URI_PROTOCOLS,

@@ -81,11 +81,6 @@ class NodeService:
 
         node = await self.get(node_id)
         session = self._repo.session
-        # Capture the users whose assignments live on this node BEFORE the delete
-        # cascades those assignment rows away — then recompute each one's
-        # users_data_usage (the maintained SUM of their assignments' used_bytes).
-        # Without this, deleting a node leaves every affected user's aggregate
-        # usage permanently inflated by the now-gone assignments' bytes.
         affected = set(
             (
                 await session.execute(
@@ -120,8 +115,6 @@ class NodeService:
         status: NodeStatus | None = None,
     ) -> Node:
         node = await self.get(node_id)
-        # current_users is DB-authoritative (COUNT of ACTIVE assignments); the
-        # reported value is telemetry only.
         metadata = dict(node.node_metadata)
         metadata["agent_reported_users"] = current_users
         node.node_metadata = metadata

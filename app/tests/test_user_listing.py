@@ -96,7 +96,6 @@ async def test_keyset_sort_by_name_walks_ordered(
         cursor = body["next_cursor"]
         if cursor is None:
             break
-    # All users, no dupes, and globally sorted by username across page boundaries.
     assert len(seen) == 6
     assert len(seen) == len(set(seen))
     assert seen == sorted(seen)

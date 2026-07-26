@@ -96,8 +96,6 @@ class SubscriptionSettingsUpdate(InputModel):
     @field_validator("support_link")
     @classmethod
     def _safe_support_link(cls, v: str | None) -> str | None:
-        # Rendered into an href on the public sub page. html.escape doesn't stop a
-        # javascript:/data: scheme, so allowlist safe schemes.
         if not v or not v.strip():
             return v
         low = v.strip().lower()

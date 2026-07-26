@@ -24,9 +24,6 @@ logger = get_logger("xlink.agent.reconcile")
 _BATCH_SIZE = 100
 
 def _shift_calendar(dt: datetime, *, months: int = 0, years: int = 0) -> datetime:
-    # Subtract calendar months/years with day-of-month clamping (Feb 30 → Feb
-    # 28/29). Avoids the ~5-day/year drift a fixed timedelta(days=30) produces,
-    # so "monthly" resets land on a stable day-of-month.
     total = (dt.year + years) * 12 + (dt.month - 1) + months
     year, month = divmod(total, 12)
     month += 1
@@ -56,8 +53,6 @@ async def _apply_data_resets(session) -> list:
     changed = False
 
     for strategy, cutoff in _reset_cutoffs(now).items():
-        # Only users actually due for a reset (last_reset_at older than the
-        # window), filtered in SQL — no full scan of every reset-enabled user.
         due_stmt = select(User.id).where(
             User.data_reset_strategy == DataResetStrategy(strategy),
             or_(
@@ -99,8 +94,6 @@ async def _apply_data_resets(session) -> list:
         )
 
     if changed and woke_nodes:
-        # LIMITED→ACTIVE on reset restored slots; recompute current_users from a
-        # COUNT of ACTIVE assignments so the node counter doesn't drift.
         active_count = (
             select(func.count())
             .select_from(ClientAssignment)
@@ -137,13 +130,8 @@ async def reconcile_once(
     healed = 0
     upgrades = 0
     async with db.session() as session:
-        # Offline detection is owned solely by NodeAgentScheduler.detect_offline_once
-        # (single source of truth, configurable threshold) to avoid duplicate
-        # NodeOffline events / webhook alerts from two racing scans.
         reset_nodes = await _apply_data_resets(session)
         if reset_nodes and cache is not None:
-            # O(1) broad invalidation: bump the global cache epoch instead of a
-            # SCAN+DEL over subscription:* (which stampeded every user's feed).
             await cache.incr("subscription:rev:__global__")
             for nid in reset_nodes:
                 await cache.publish_node_event(nid, "config_changed")

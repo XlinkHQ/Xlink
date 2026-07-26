@@ -14,11 +14,6 @@ if TYPE_CHECKING:
 
 SLUG_PATTERN = r"^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$"
 
-# Association table linking groups to the profiles they contain. Mirrors the
-# ``admin_groups`` table (see app/domain/user.py): composite PK on the pair,
-# both FKs CASCADE so deleting a group or profile prunes its rows. Replaces the
-# old JSON ``profile_ids`` column, which was unindexable — "which groups contain
-# profile X" now becomes an indexed JOIN instead of a full-table Python scan.
 group_profiles = Table(
     "group_profiles",
     Base.metadata,
@@ -43,9 +38,6 @@ class Group(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
 
-    # Eager (selectin) so the collection is always populated when a Group is
-    # loaded — keeps ``profile_ids`` serialization safe in the async router
-    # context without a lazy-load round-trip.
     profiles: Mapped[list[Profile]] = relationship(
         "Profile", secondary=group_profiles, lazy="selectin"
     )

@@ -120,11 +120,6 @@ async def export_users_csv(
 ) -> StreamingResponse:
     owner_id = _owner_filter(admin)
 
-    # Open a SHORT session per batch inside the generator rather than depending on
-    # a request-scoped session: the response body streams for the whole download,
-    # and a request-scoped DB connection would stay checked out that entire time
-    # (slow clients pin pool connections → QueuePool exhaustion). Batches are
-    # independent reads, so per-batch sessions are fine for a CSV export.
     async def rows() -> AsyncIterator[str]:
         header = io.StringIO()
         writer = csv.writer(header)
@@ -181,9 +176,6 @@ async def create_user(
     assignments: AssignmentServiceDep,
 ) -> UserRead:
     owner_id = None if admin.is_sudo else admin.id
-    # Enforce the SAME profile-scope check the dedicated /assignments endpoint
-    # does — otherwise a reseller could auto-assign an owned user onto a profile/
-    # node outside their scope (capacity theft / cross-tenant) via this shortcut.
     if payload.profile_ids and not admin.is_sudo and not admin.all_groups_access:
         scoped_profiles = await admins.scoped_profile_ids(admin.id)
         for profile_id in payload.profile_ids:
@@ -192,8 +184,6 @@ async def create_user(
                     "This profile is not in your scope.", code="profile_out_of_scope"
                 )
     user = await users.create(payload, owner_id=owner_id)
-    # Optional one-call provisioning: assign the new user to the given profiles so
-    # a raw API client (bot) gets user + working config without a second request.
     for profile_id in payload.profile_ids or []:
         profile = await profiles.get(profile_id)
         await assignments.create(
@@ -238,10 +228,6 @@ async def bulk_user_action(
         raise ValidationError("Unknown bulk action.", code="unknown_bulk_action")
     if len(payload.user_ids) > 1000:
         raise ValidationError("Too many users in one request (max 1000).", code="bulk_too_large")
-    # The single-user endpoints forbid an admin acting destructively on their own
-    # account (_guard_not_self); the bulk path must not be an escape hatch. Reject
-    # a self-targeting destructive bulk action outright rather than silently
-    # skipping it, so the caller notices.
     if payload.action in ("delete", "disable") and admin.id in payload.user_ids:
         _guard_not_self(admin, admin.id)
     return await users.bulk_action(

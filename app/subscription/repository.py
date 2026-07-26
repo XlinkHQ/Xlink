@@ -28,11 +28,6 @@ class SubscriptionRepository:
         self, session: AsyncSession, *, reader_session: AsyncSession | None = None
     ) -> None:
         self._session = session
-        # OPTIONAL replica session for pure, lag-tolerant reads (subscription
-        # SOURCE listings). None when no replica is configured → reads use the
-        # primary session, identical to before. Never used for writes or for
-        # read-after-write-sensitive paths (quota/traffic-stats/on-hold), which
-        # stay on the primary session.
         self._reader = reader_session or session
 
     async def get_status_texts(self) -> dict[str, str] | None:
@@ -67,8 +62,6 @@ class SubscriptionRepository:
             if dl < now:
                 user.expire_at = now
                 user.on_hold = False
-                # flush, not commit: the request-scoped session owns the
-                # transaction and commits at the end (app/db/session.py).
                 await self._session.flush()
                 return
         if user.on_hold_duration_seconds:
@@ -98,12 +91,6 @@ class SubscriptionRepository:
         return list(value) if value else []
 
     async def get_user_quota(self, user_id: uuid.UUID) -> UserTrafficStats:
-        # Use the maintained account total (users_data_usage), NOT a sum over
-        # ACTIVE assignments: once a user hits their limit their assignment flips
-        # to LIMITED, so an ACTIVE-only sum reads 0 — the quota gate would then
-        # think they're under limit and serve them a (filtered-empty) feed while
-        # the status page shows "0 used / active". users_data_usage counts all
-        # statuses, matching every enforcement path.
         user = await self._session.get(User, user_id)
         used = int(user.users_data_usage or 0) if user else 0
         limit = user.data_limit_bytes if user else None
@@ -128,8 +115,6 @@ class SubscriptionRepository:
                 .select_from(TrafficRecord)
                 .join(ClientAssignment, ClientAssignment.id == TrafficRecord.assignment_id)
                 .where(
-                    # All statuses (not ACTIVE-only): a LIMITED user's assignments
-                    # aren't ACTIVE, so filtering would show up/down 0 while used>0.
                     ClientAssignment.user_id == user_id,
                 )
             )
@@ -158,11 +143,6 @@ class SubscriptionRepository:
             .where(*conditions)
             .order_by(ClientAssignment.created_at.desc(), ClientAssignment.id.desc())
         )
-        # Use the PRIMARY, not the replica: a feed is cached under a revision that
-        # invalidation bumps immediately, but the replica may still lag behind the
-        # just-committed primary — reading it here would cache a stale config set
-        # under the new revision key and serve it until TTL. The replica is
-        # reserved for lag-tolerant analytics (SUM/series), not feed content.
         result = await self._session.execute(stmt)
         return tuple(
             SubscriptionSource(assignment=assignment, profile=profile, node=node)

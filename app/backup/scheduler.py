@@ -25,9 +25,6 @@ async def run_backup(db: Database, *, directory: Path, keep: int) -> Path:
     await anyio.to_thread.run_sync(_prepare_dir, directory)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     target = directory / f"xlink-backup-{stamp}.json"
-    # Write to a sibling tmp file then atomically rename: readers/retention never
-    # observe a partially-written backup, and the export streams row-by-row so
-    # memory stays bounded regardless of dataset size (500k+ assignment rows).
     tmp = directory / f".xlink-backup-{stamp}.json.tmp"
 
     await stream_export_to_file(db, target=target, tmp=tmp, scope=BackupScope.FULL)

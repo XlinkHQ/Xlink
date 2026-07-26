@@ -79,13 +79,6 @@ def _wg_key_bytes(settings: dict[str, Any], key: str, label: str) -> bytes:
 def _validate_wireguard(protocol: str, settings: dict[str, Any]) -> None:
     _port(settings)
     _require(settings, "address", "Interface address")
-    # The node terminates the WG tunnel, so profile.settings MUST carry the
-    # SERVER keypair: privateKey drives the node's [Interface] (no key → the
-    # tunnel never comes up), and publicKey becomes the client subscription's
-    # peer PublicKey (no key → the subscription render raises and the client
-    # gets nothing). Neither was previously required, so a WG profile could be
-    # saved broken in two silent ways. Require both, and verify they are a real
-    # matching pair — a mismatched paste is the classic silent WG failure.
     priv = _wg_key_bytes(settings, "privateKey", "Server private key")
     _wg_key_bytes(settings, "publicKey", "Server public key")
 

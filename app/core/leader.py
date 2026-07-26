@@ -12,9 +12,6 @@ logger = get_logger("xlink.leader")
 
 _LEADER_KEY = "xlink:leader"
 
-# Atomic compare-and-extend: renew the TTL only if we still own the key. A plain
-# GET-then-SET can clobber a key another replica acquired in the gap between the
-# two calls, letting two replicas both believe they are leader.
 _RENEW_LUA = """
 if redis.call('get', KEYS[1]) == ARGV[1] then
   return redis.call('pexpire', KEYS[1], ARGV[2])
@@ -22,7 +19,6 @@ else
   return 0
 end
 """
-# Atomic compare-and-delete: only release the key if we still own it.
 _RELEASE_LUA = """
 if redis.call('get', KEYS[1]) == ARGV[1] then
   return redis.call('del', KEYS[1])
@@ -53,7 +49,6 @@ class LeaderElector:
     async def _try_acquire_or_renew(self) -> bool:
         client = self._cache.client
         if self._is_leader:
-            # Atomic compare-and-extend — no GET/SET gap another replica can slip into.
             renewed = await client.eval(_RENEW_LUA, 1, _LEADER_KEY, self._id, self._ttl * 1000)
             if int(renewed) == 1:
                 return True

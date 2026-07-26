@@ -29,17 +29,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ),
     )
 
-    # Private Prometheus registry + metric objects for this app instance. The
-    # middleware records request count/latency into it (in-process only, no I/O);
-    # the /metrics endpoint below serializes it. Stashed on app.state so the
-    # lifespan can start the leader-gated domain-gauge collector against it.
     prometheus = PrometheusMetrics()
     app.state.prometheus = prometheus
 
-    # Starlette runs middleware in REVERSE registration order (last-added is
-    # outermost). We want TrustedHost outermost (cheaply reject spoofed-Host junk
-    # before any DB/Redis work) and RequestContext innermost. So register in the
-    # order they should EXECUTE reversed: innermost first, outermost last.
     app.add_middleware(PrometheusMiddleware, metrics=prometheus)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(AuditMiddleware)
@@ -49,8 +41,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=settings.cors_origins,
-            # Credentials cannot be combined with a wildcard origin (the browser
-            # rejects it, and it is unsafe). Only enable them for explicit origins.
             allow_credentials=not wildcard,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -79,10 +69,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/metrics", include_in_schema=False)
     async def prometheus_metrics(request: Request) -> Response:
-        # Opt-in and OFF by default: with no token configured the scrape
-        # endpoint does not exist (404), so nothing changes for existing
-        # deploys. This path is deliberately separate from the admin API auth
-        # and from the agent /metrics INGEST + admin /monitoring summary.
         cfg = request.app.state.xlink.settings
         token = cfg.metrics_token
         if token is None:
@@ -96,8 +82,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=401,
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        # Cheap: serialize in-memory gauges/counters only. Domain gauges are
-        # refreshed out-of-band by the background collector, not here.
         body = request.app.state.prometheus.render()
         return Response(content=body, media_type=CONTENT_TYPE_LATEST)
 

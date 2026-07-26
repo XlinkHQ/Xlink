@@ -50,9 +50,6 @@ class UserService(UserServiceBase):
     async def update_quota(self, user_id: uuid.UUID, data: UserUpdate) -> User:
         user = await self.get(user_id)
         serviceability_changed = False
-        # Distinguish "field omitted" from "field set to null": an admin clearing a
-        # data-limit/expiry/device-limit sends an explicit null, which must apply.
-        # Using model_fields_set lets null through where `is not None` would drop it.
         provided = data.model_fields_set
         if "full_name" in provided:
             user.full_name = data.full_name
@@ -80,8 +77,6 @@ class UserService(UserServiceBase):
 
         if data.expire_strategy is not None or data.on_hold is not None:
             strategy, on_hold = _resolve_expiry(data.expire_strategy, data.on_hold, user.expire_at)
-            # on_hold_duration is optional (see UserCreate._validate_on_hold); an
-            # on-hold user just can't also carry a fixed expire_at.
             if on_hold and user.expire_at is not None:
                 raise ValidationError(
                     "An on-hold user cannot also have a fixed expiry.",
@@ -203,10 +198,7 @@ class UserService(UserServiceBase):
         if params.cursor is not None:
             try:
                 csort, cval, cid = decode_sort_cursor(params.cursor)
-                # A cursor minted for a different sort is invalid — restart.
                 if csort == sort:
-                    # datetime columns were serialized as ISO strings; coerce back
-                    # so the keyset comparison uses a real datetime, not a string.
                     if attr in ("created_at", "expire_at") and isinstance(cval, str):
                         from datetime import UTC, datetime
 

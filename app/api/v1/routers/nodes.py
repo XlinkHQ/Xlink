@@ -76,7 +76,7 @@ async def node_core_health(
     nodes: NodeServiceDep,
     agent: NodeAgentServiceDep,
 ) -> list[CoreHealthRead]:
-    await nodes.get(node_id)  # 404 if the node does not exist
+    await nodes.get(node_id)
     rows = await agent.provider_health(node_id)
     return [
         CoreHealthRead(

@@ -68,19 +68,11 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     host: str = "0.0.0.0"
     port: int = 8000
-    # Public domain (XLINK_DOMAIN). When set, the edge proxy serves HTTPS via ACME
-    # and Host-header hardening applies. Empty = plain-port / IP-only deployment.
     domain: str = ""
     acme_email: str = ""
     acme_staging: bool = False
-    # Auto-renew ACME certs whose expiry falls within this window. Let's Encrypt
-    # certs live ~90 days; renewing at 30 days out leaves ample retry room.
     acme_renew_window_days: int = 30
     acme_renew_interval_seconds: int = 12 * 3600
-    # The panel usually runs in a container, where auto-detected IP/MAC are the
-    # Docker bridge address (172.x) and a virtual NIC — meaningless to the
-    # operator. Set these to the real server's public IP/MAC to show them in the
-    # dashboard System-info card. Empty = fall back to auto-detection.
     public_ip: str = ""
     public_mac: str = ""
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
@@ -125,16 +117,9 @@ class Settings(BaseSettings):
 
     database_url_override: str | None = None
 
-    # OPTIONAL read-replica. Empty/None by default → NO second engine is created
-    # and every read uses the primary exactly as before. When set, pure read-only
-    # analytics/subscription reads are routed to the replica while all writes and
-    # read-after-write flows stay on the primary. database_url_replica_override
-    # wins over postgres_replica_host, mirroring database_url_override.
     database_url_replica_override: str | None = None
     postgres_replica_host: str = ""
     postgres_replica_port: int | None = None
-    # Replica pool sizing. Falls back to the primary pool settings when unset so
-    # a replica can be enabled with a single host env and no extra tuning.
     db_replica_pool_size: int | None = None
     db_replica_max_overflow: int | None = None
 
@@ -148,9 +133,6 @@ class Settings(BaseSettings):
     jwt_secret_key: SecretStr = SecretStr("insecure-dev-key-change-me")
     jwt_algorithm: Literal["HS256"] = "HS256"
     access_token_expire_minutes: int = 15
-    # 30d refresh window: with the frontend's silent refresh-on-401, an admin who
-    # logs in once stays signed in for a month of activity without re-entering
-    # credentials (each use rotates the refresh token forward).
     refresh_token_expire_days: int = 30
 
     argon2_time_cost: int = 3
@@ -163,14 +145,6 @@ class Settings(BaseSettings):
     rate_limit_fail_open: bool = True
     trusted_proxy_ips: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
-    # Per-node ingest quota (fixed 60s window keyed by the authenticated node id,
-    # NOT the client IP — agents behind one egress IP must not share a bucket, and
-    # distinct-IP agents must not each get a full quota). Bounds a looping or
-    # compromised agent flooding the ingest endpoints (traffic/state/metrics/logs/
-    # provider-health/connections). Generous default: a healthy node polls ~every
-    # 10s across a handful of endpoints, so 300/min leaves wide headroom while
-    # still capping a flood. 0 disables the per-node quota. Fails OPEN on a Redis
-    # outage (a limiter blip must not take real nodes offline).
     agent_ingest_rate_limit_per_minute: int = 300
 
     default_page_size: int = 20
@@ -183,30 +157,17 @@ class Settings(BaseSettings):
     metrics_summary_ttl_seconds: int = 60
     metrics_summary_refresh_seconds: int = 30
 
-    # Prometheus scrape endpoint (GET /metrics), env var XLINK_METRICS_TOKEN.
-    # Opt-in and OFF by default: unset -> the endpoint is disabled (404). Set to
-    # a shared secret and the scraper must send `Authorization: Bearer <token>`.
-    # Kept separate from the admin API auth so a Prometheus server can scrape
-    # without an admin session, and separate from the internal agent /metrics
-    # INGEST and the admin /monitoring summary (different purpose/path).
     metrics_token: SecretStr | None = None
 
     traffic_retention_enabled: bool = True
-    # Rollup horizon: how long hourly aggregates are kept for analytics.
     traffic_retention_days: int = 90
     traffic_retention_interval_seconds: int = 86400
-    # Raw per-sample retention: raw traffic_records exist only for sub-hour/live
-    # precision and are dropped after this many days (never past the rollup
-    # watermark). Rollups carry history for the full traffic_retention_days.
     traffic_raw_retention_days: int = 7
-    # Hourly rollup/compaction job cadence. Runs closed-hour aggregation.
     traffic_rollup_enabled: bool = True
     traffic_rollup_interval_seconds: int = 900
 
     assignment_expiration_enabled: bool = True
     assignment_expiration_interval_seconds: int = 30
-    # Public self-service registration. Off by default — this is an admin panel;
-    # accounts are provisioned by admins, not by anonymous callers.
     registration_enabled: bool = False
 
     auto_backup_enabled: bool = True
@@ -288,9 +249,6 @@ class Settings(BaseSettings):
                     "lower XLINK_DB_POOL_SIZE/XLINK_DB_MAX_OVERFLOW, reduce "
                     "XLINK_WEB_CONCURRENCY, or set XLINK_DB_POOL_MODE=transaction (PgBouncer)"
                 )
-            # Host-header hardening: with a real domain configured, "*" trusted
-            # hosts is a poisoning risk. Warn (not fatal — IP-only deployments
-            # legitimately run without a domain and rely on "*").
             if ("*" in self.trusted_hosts or not self.trusted_hosts) and self.domain:
                 import warnings
 

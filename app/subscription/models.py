@@ -13,9 +13,6 @@ from app.domain.profile import Profile
 from app.protocols import subscription_protocols
 from app.providers.base.models import ProviderKind
 
-# Derived from the single source of truth in ``app.protocols`` (every protocol
-# with ``subscription=True``); do NOT hand-edit. A drift guard lives in
-# ``app/subscription/tests/test_protocol_source.py``.
 SUPPORTED_SUBSCRIPTION_PROTOCOLS = subscription_protocols()
 
 
@@ -25,9 +22,6 @@ def _resolve_host(protocol: str, settings: Mapping[str, Any], node_host: str) ->
     else:
         host = settings.get("address") or node_host
     host = str(host).split("/", 1)[0].strip()
-    # The host is interpolated raw into the URI authority (…@host:port#label).
-    # Strip characters that would break out into userinfo/query/fragment or
-    # inject a second host, so an admin/reseller address can't corrupt links.
     for ch in ("@", "?", "#", " ", "\t", "\r", "\n"):
         host = host.replace(ch, "")
     return host
@@ -39,8 +33,6 @@ _DEFAULT_PORT: dict[str, int] = {"wireguard": 51820}
 def _resolve_port(protocol: str, settings: Mapping[str, Any], node_port: int) -> int:
     port = settings.get("port")
     if port:
-        # A stored non-numeric port must skip just this source, not 500 the whole
-        # feed — the generator catches ValidationError; a raw ValueError would not.
         from app.core.exceptions import ValidationError
 
         try:

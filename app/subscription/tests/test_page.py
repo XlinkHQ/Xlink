@@ -47,15 +47,11 @@ def test_page_boxes_are_rounded() -> None:
         configs=["vless://id@h:443#A"],
         support="",
     )
-    # Rounded surfaces (design-agnostic: don't pin exact px so a restyle can't
-    # break the test — just require the page uses rounded corners).
     assert "border-radius:" in html
     assert "max-width:" in html
 
 
 def test_empty_page_shows_status_message():
-    # An inactive user with no configs gets a status card surfacing the state
-    # ("Disabled"), not a raw/empty config list.
     html = render_subscription_page(
         title="X", username="u", status="Disabled", status_tone="muted",
         used=0, total=100, expire_ts=None, sub_url="http://x", configs=[], support="",

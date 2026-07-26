@@ -18,8 +18,6 @@ class TotpConfirmRequest(InputModel):
 
 
 class TotpEnrollRequest(InputModel):
-    # Required only when re-enrolling an account that already has 2FA active
-    # (proves possession of the current second factor); omitted on first enroll.
     code: str | None = Field(default=None, max_length=12)
 
 

@@ -39,8 +39,6 @@ def get_database(state: Annotated[AppState, Depends(get_state)]) -> Database:
 
 
 def get_dispatcher(state: Annotated[AppState, Depends(get_state)]):
-    # Shared, lifespan-owned dispatcher — its fire-and-forget webhook tasks are
-    # drained on shutdown. Building one per request orphaned those tasks.
     return state.dispatcher
 
 
@@ -54,8 +52,6 @@ async def get_session(
 async def get_reader_session(
     state: Annotated[AppState, Depends(get_state)],
 ) -> AsyncIterator[AsyncSession]:
-    # Read-only session for replica-safe analytics/subscription reads. Falls back
-    # to the primary when no replica is configured (see Database.reader_session).
     async with state.db.reader_session() as session:
         yield session
 
@@ -63,8 +59,6 @@ async def get_reader_session(
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 CacheDep = Annotated[RedisCache, Depends(get_cache)]
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
-# Replica-backed read session (falls back to the primary when no replica is
-# configured). Only wire this into clearly read-only analytics/subscription reads.
 ReaderSessionDep = Annotated[AsyncSession, Depends(get_reader_session)]
 ProvidersDep = Annotated[ProviderRegistry, Depends(get_providers)]
 EventsDep = Annotated[EventBus, Depends(get_events)]

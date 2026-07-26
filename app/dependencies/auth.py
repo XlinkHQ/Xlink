@@ -17,7 +17,6 @@ from app.core.security import TokenType, decode_token
 from app.dependencies.core import CacheDep, DatabaseDep, SettingsDep
 from app.dependencies.services import AuthServiceDep, NodeAgentServiceDep
 
-# Alias so the quota dependency can authenticate the node token before counting.
 AgentServiceForQuota = NodeAgentServiceDep
 from app.domain.api_key import ApiKey
 from app.domain.user import User
@@ -53,8 +52,6 @@ async def _user_from_api_key(
         )
         if row is None:
             raise AuthenticationError("Invalid API key.", code="api_key_invalid")
-        # Throttle the last_used_at write: a write on every request is pure
-        # amplification (and turns GETs into writes). Only bump if stale by >60s.
         now = datetime.now(UTC)
         last = row.last_used_at
         if last is not None and last.tzinfo is None:
@@ -132,10 +129,6 @@ async def enforce_agent_ingest_quota(
     cache: CacheDep,
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> None:
-    # Authenticate the node token FIRST, then count against its per-node window.
-    # Counting only after a valid token means a caller who merely knows a node id
-    # (but has no token) can't burn that node's ingest quota — the request 401s
-    # before it's ever counted. The handler re-authenticates (idempotent).
     await agent.authenticate(node_id, x_agent_token)
     await enforce_ingest_quota(
         cache, node_id, limit=settings.agent_ingest_rate_limit_per_minute

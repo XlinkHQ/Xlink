@@ -15,8 +15,6 @@ IPNetwork = IPv4Network | IPv6Network
 _EXCLUDED_PATH_MARKERS = ("/health/", "/health", "/ready")
 _WINDOW_SECONDS = 60
 
-# Auth endpoints get a much tighter, fail-closed limit to blunt credential
-# brute-force. Keyed per-IP + per-path (not shared with the coarse method bucket).
 _AUTH_PATH_MARKERS = ("/auth/login", "/auth/refresh", "/auth/register")
 _AUTH_LIMIT = 10
 
@@ -68,10 +66,6 @@ def resolve_client_ip(scope: Scope, trusted_proxies: tuple[IPNetwork, ...]) -> s
 
 
 def _normalize_path(path: str) -> str:
-    # Collapse id-like segments (UUIDs, numbers) to a placeholder so a client
-    # can't evade the per-route limit by varying the id, and the keyspace stays
-    # bounded to the number of real routes rather than one bucket per id. The
-    # route template isn't available at outer-middleware time, so approximate it.
     out = []
     for seg in path.split("/"):
         if not seg:
@@ -84,8 +78,6 @@ def _normalize_path(path: str) -> str:
 
 
 def route_rate_limit_key(scope: Scope) -> str:
-    # Route-aware: method + normalized path, so a flood on one route doesn't
-    # exhaust the shared bucket for every other route from the same IP.
     return f"{scope.get('method', '')}:{_normalize_path(scope.get('path', ''))}"
 
 
@@ -163,8 +155,6 @@ class RateLimitMiddleware:
         try:
             count = await incr_window(redis, key)
         except Exception:
-            # Auth endpoints fail CLOSED: a limiter outage must not open the door
-            # to unlimited credential brute-force.
             await self._handle_redis_failure(scope, receive, send, force_closed=auth_path)
             return
 

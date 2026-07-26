@@ -67,8 +67,6 @@ class AdminService(UserServiceBase):
             await self._repo.add(user)
             await self._invalidate(user_id)
             result = user
-        # Suspending/restoring an admin cascades to all users they own so their
-        # configs stop/resume syncing to nodes.
         if cascade_active is not None:
             await self.set_owned_users_active(user_id, active=cascade_active)
         return result
@@ -94,8 +92,6 @@ class AdminService(UserServiceBase):
         for uid in user_ids:
             target = found.get(uid)
             if target is None:
-                # For batch READ endpoints, a user deleted between the list
-                # render and this fetch shouldn't 404 the whole page — just skip.
                 if skip_missing:
                     continue
                 raise NotFoundError("User not found.", code="user_not_found")
@@ -137,10 +133,6 @@ class AdminService(UserServiceBase):
         return {gid for (gid,) in rows.all()}
 
     async def scoped_profile_ids(self, admin_id: uuid.UUID) -> set[uuid.UUID]:
-        # Profiles a scoped admin may use = the union of profile ids across the
-        # groups granted to them. Used to stop a reseller from pinning a user
-        # onto an arbitrary profile/node outside their scope. Now a single
-        # indexed query over the group_profiles join table.
         from app.repositories.group import GroupRepository
 
         group_ids = await self.scoped_group_ids(admin_id)
@@ -152,10 +144,6 @@ class AdminService(UserServiceBase):
         admin = await self.get(admin_id)
         if admin.role is not UserRole.ADMIN:
             raise ValidationError("Not an admin.", code="not_an_admin")
-        # SUSPEND: only touch users currently ENABLED, and stamp them so restore
-        # knows they were cut by the cascade (not by an admin's manual disable).
-        # RESTORE: only re-enable users carrying that stamp — never force-enable a
-        # user an admin disabled individually.
         base = [
             User.owner_id == admin_id,
             User.role == UserRole.USER,
@@ -175,11 +163,6 @@ class AdminService(UserServiceBase):
             .where(User.id.in_(ids))
             .values(is_active=active, suspended_by_owner=not active)
         )
-        # Only flip assignments this cascade owns: on suspend, ACTIVE ones (leaving
-        # any already-DISABLED, e.g. ip-limited, untouched); on restore, only those
-        # we disabled — matched via the profile_disabled/owner marker is not on
-        # assignments here, so restore re-activates the DISABLED set for these users
-        # but skips ip-limited ones (which carry the ip_limited credential marker).
         if active:
             rows = (
                 await self._repo.session.execute(
@@ -191,7 +174,7 @@ class AdminService(UserServiceBase):
             ).scalars().all()
             for a in rows:
                 if (a.credentials or {}).get("ip_limited"):
-                    continue  # disabled by the ip-limit enforcer — leave it
+                    continue
                 a.status = AssignmentStatus.ACTIVE
         else:
             await self._repo.session.execute(

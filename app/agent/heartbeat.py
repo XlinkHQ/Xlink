@@ -69,10 +69,6 @@ class NodeHeartbeatService:
         metadata = dict(node.node_metadata)
         if stats:
             metadata["agent_stats"] = dict(stats)
-        # current_users is DB-authoritative (COUNT of ACTIVE assignments,
-        # maintained by every assignment-status writer). The agent-observed
-        # client count is telemetry only — keep it in metadata, never overwrite
-        # the authoritative counter, or heartbeats clobber the real count.
         metadata["agent_reported_users"] = current_users
         node.node_metadata = metadata
         node.last_seen_at = datetime.now(UTC)
@@ -106,10 +102,6 @@ class NodeHeartbeatService:
         node.status = NodeStatus.OFFLINE
         saved = await self._nodes.save(node)
         if self._events is not None:
-            # Dispatch off the offline-detection path: NodeOffline triggers
-            # auto-failover (many provider create_client calls). Running it inline
-            # blocks the detector loop and holds its DB session open for the whole
-            # migration when a large node drops.
             self._events.publish_background(NodeOffline(node_id=node.id, reason="heartbeat_stale"))
         if self._dispatcher is not None and await self._node_alerts_enabled():
             await self._dispatcher.dispatch(

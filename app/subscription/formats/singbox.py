@@ -28,7 +28,6 @@ def _tls_block(config: ProviderConfig) -> dict[str, Any] | None:
                 code="subscription_missing_fields",
                 details={"missing": missing},
             )
-        # sing-box REALITY needs a uTLS fingerprint; default to chrome if unset.
         block.setdefault("utls", {"enabled": True, "fingerprint": fingerprint or "chrome"})
         block["reality"] = {
             "enabled": True,
@@ -103,10 +102,6 @@ def _shadowtls_outbounds(config: ProviderConfig, tag: str) -> list[dict[str, Any
     }
     inner = {
         "type": "shadowsocks",
-        # The inner-ss password defaults to the per-user credential (an arbitrary
-        # string), which is NOT a valid base64 32-byte 2022-blake3 PSK, and the
-        # agent's shadowtls detour defaults to aes-128-gcm — so the client default
-        # MUST match or the cipher negotiation fails on every out-of-box user.
         "method": str(setting(config, "method", "aes-128-gcm")),
         "password": str(setting(config, "password", config.resolved_password)),
         "detour": st_tag,

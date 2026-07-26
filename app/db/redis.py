@@ -45,9 +45,6 @@ class RedisCache:
             await self._client.delete(*keys)
 
     async def delete_by_pattern(self, pattern: str, *, chunk: int = 500) -> int:
-        # Scan + delete in bounded chunks instead of materializing the whole
-        # matched keyspace into one list and issuing one giant DEL — both grow
-        # unbounded with user/feed count on wildcard patterns (subscription:*).
         deleted = 0
         buf: list[str] = []
         async for key in self._client.scan_iter(match=pattern, count=chunk):
@@ -69,9 +66,6 @@ class RedisCache:
             return None
 
     async def incr(self, key: str) -> int:
-        # INCR is atomic and O(1); a missing key starts at 0 → returns 1. Used as a
-        # monotonic cache-revision counter so invalidation bumps a version instead
-        # of SCAN+deleting a whole keyspace (which triggers a recompute stampede).
         return int(await self._client.incr(key))
 
     async def mget_int(self, keys: list[str]) -> list[int | None]:
@@ -98,10 +92,6 @@ class RedisCache:
         return f"xlink:node-config:{node_id}"
 
     async def publish_node_event(self, node_id: object, event: str) -> None:
-        # A config_changed event means this node's rendered snapshot is now stale —
-        # drop the cached snapshot at the single choke point so the next pull
-        # recomputes (and re-caches) it. Every config-mutation path already fires
-        # this event, so this is the one place invalidation must live.
         if event == "config_changed":
             with contextlib.suppress(Exception):
                 await self._client.delete(self.node_config_key(node_id))

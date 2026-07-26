@@ -152,13 +152,11 @@ def _local_egress_ip() -> str:
 
 
 def _public_ip_lookup() -> str:
-    # Inside a container the egress IP is the docker bridge, not the server's
-    # real address. Ask an external echo service; short timeout, best-effort.
     for url in ("https://api.ipify.org", "https://ifconfig.me/ip"):
         try:
             with urllib.request.urlopen(url, timeout=3) as resp:  # noqa: S310
                 ip = resp.read().decode().strip()
-            ipaddress.ip_address(ip)  # validate
+            ipaddress.ip_address(ip)
             return ip
         except Exception:
             continue
@@ -166,9 +164,6 @@ def _public_ip_lookup() -> str:
 
 
 def _primary_ip() -> str:
-    # Auto-detect the real server IP with no configuration: use the local egress
-    # address unless it is private/loopback (the usual case in Docker), in which
-    # case resolve the actual public IP externally and cache it.
     local = _local_egress_ip()
     try:
         if not ipaddress.ip_address(local).is_private:
@@ -190,9 +185,6 @@ def _host_static() -> dict:
     global _static_host
     if _static_host is None:
         settings = get_settings()
-        # Prefer the operator-configured public IP/MAC over auto-detection: inside
-        # a container the detected values are the Docker bridge IP + a virtual NIC
-        # MAC, which are not the real server's.
         _static_host = {
             "cpu_cores": os.cpu_count() or 1,
             "hostname": socket.gethostname(),

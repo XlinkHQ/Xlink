@@ -178,7 +178,6 @@ class ClientAssignmentService:
     ) -> dict[str, int]:
         target = set(target_profile_ids)
         existing = await self._repo.list_by_group(group_id)
-        # Batch-load all target profiles once instead of per-user-per-id (N+1).
         profiles_by_id: dict[uuid.UUID, object] = {}
         if target:
             from sqlalchemy import select as _select
@@ -323,13 +322,6 @@ class ClientAssignmentService:
                 code="invalid_node",
                 details={"node_id": str(node_id)},
             )
-        # Only a DISABLED node (an admin deliberately took it out of service)
-        # blocks assignment. OFFLINE is temporary — a freshly-added node defaults
-        # to OFFLINE until its first heartbeat, and a live node can drop offline
-        # briefly; assigning to it is fine because config sync delivers the config
-        # once it comes back. Blocking OFFLINE made new nodes un-assignable until
-        # they checked in, and dropped a node out of the assign flow whenever it
-        # blipped.
         if node.status is NodeStatus.DISABLED:
             raise ValidationError(
                 "Node is disabled.",
@@ -379,9 +371,6 @@ class ClientAssignmentService:
     async def _allocate_wireguard_address(
         self, node_id: uuid.UUID, server_address: object
     ) -> str:
-        # Serialize concurrent WG allocations on the same node: lock the node row
-        # so the read-existing-then-pick-free-octet sequence can't race two
-        # creates into the same /32.
         await self._repo.session.execute(
             select(Node.id).where(Node.id == node_id).with_for_update()
         )
@@ -401,15 +390,9 @@ class ClientAssignmentService:
             addr = (creds or {}).get("address") if isinstance(creds, dict) else None
             if isinstance(addr, str) and "." in addr:
                 host = addr.split("/")[0].strip()
-                # Only exclude octets that belong to THIS /24; addresses from a
-                # different WG prefix on the same node (e.g. after a server
-                # address change) must not shrink this subnet's free pool.
                 other_head, _, tail = host.rpartition(".")
                 if other_head == prefix and tail.isdigit():
                     used.add(int(tail))
-        # .255 is the /24 broadcast address and must never be handed out. Fail
-        # loudly on exhaustion instead of returning a colliding/broadcast /32 —
-        # a returned .255 would be reused for every subsequent client.
         for octet in range(2, 255):
             if octet not in used:
                 return f"{prefix}.{octet}/32"

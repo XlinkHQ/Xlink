@@ -26,16 +26,10 @@ from app.subscription.schemas import (
 
 _PLACEHOLDER_UUID = "00000000-0000-0000-0000-000000000000"
 
-# Global cache epoch — bumped instead of SCAN+deleting the whole subscription:*
-# keyspace on a broad invalidation. Every feed key embeds the current epoch, so a
-# single INCR (O(1)) makes every existing key unreachable; the stale keys expire
-# by TTL rather than being deleted in a herd-inducing SCAN.
 _GLOBAL_REV_KEY = "subscription:rev:__global__"
 
 
 def _subject_rev_key(subject_id: uuid.UUID) -> str:
-    # Per-subject monotonic cache revision. Bumping it (INCR, O(1)) invalidates
-    # only that subject's cached feeds without touching anyone else's.
     return f"subscription:rev:{subject_id}"
 
 
@@ -54,10 +48,6 @@ class SubscriptionService:
         self._generator = generator
         self._renderer = renderer
         self._cache = cache
-        # In-process single-flight guards, keyed by cache_key. A cold-cache burst
-        # for the SAME feed (e.g. all of one user's clients reconnecting after an
-        # invalidation) then computes the feed once and the rest await the result
-        # instead of every request re-running the full render (a stampede).
         self._inflight: dict[str, asyncio.Lock] = {}
 
     async def generate_config(self, assignment_id: uuid.UUID) -> ConfigRead:
@@ -87,9 +77,6 @@ class SubscriptionService:
 
     async def feed(self, request: FeedRequest) -> FeedRead:
         if request.scope is FeedScope.USER:
-            # Consuming the on-hold "first use" starts the expiry clock, so only do
-            # it for a genuine client fetch — never for an admin/panel preview,
-            # which would burn the customer's window on a read.
             if request.activate_first_use:
                 await self._repository.activate_on_hold(request.subject_id)
             await self._enforce_user_quota(request.subject_id)
@@ -103,9 +90,6 @@ class SubscriptionService:
         if cached is not None:
             return cached
 
-        # Cold cache: serialize concurrent computations of the SAME key so a burst
-        # recomputes once, not N times. The DB read + render is the expensive part;
-        # the winner writes the cache and the rest re-read it.
         lock = self._inflight.setdefault(cache_key, asyncio.Lock())
         try:
             async with lock:
@@ -116,11 +100,6 @@ class SubscriptionService:
                 await self._cache.set_json(cache_key, response.model_dump(mode="json"))
                 return response
         finally:
-            # Evict the lock once we've released it AND no other coroutine is
-            # queued on it — otherwise the map grows by one Lock per distinct
-            # cache key (each epoch/revision bump mints new keys) and never
-            # shrinks. Checked OUTSIDE the `async with` so the lock is already
-            # released; `_waiters` being falsy means we were the last user.
             if (
                 self._inflight.get(cache_key) is lock
                 and not lock.locked()
@@ -235,18 +214,10 @@ class SubscriptionService:
         return await self._repository.get_user_quota(user_id)
 
     async def invalidate_cache(self, pattern: str = "subscription:*") -> None:
-        # Broad invalidation is now O(1): bump the global cache epoch so every
-        # existing feed key (which embeds the epoch) becomes unreachable at once.
-        # Stale keys expire by TTL instead of a SCAN+DEL over the whole keyspace,
-        # which used to cold-wipe every user's cache and cause a recompute
-        # stampede. `pattern` is accepted for backwards compatibility but ignored.
         rev = await self._cache.incr(_GLOBAL_REV_KEY)
         logger.info("subscription_cache_invalidated", global_rev=rev)
 
     async def invalidate_subjects(self, subject_ids: Sequence[uuid.UUID]) -> None:
-        # Per-subject invalidation is O(1) per subject: bump each subject's cache
-        # revision (INCR). No SCAN, no herd — only the affected subjects' keys go
-        # stale, and they expire by TTL.
         for sid in subject_ids:
             await self._cache.incr(_subject_rev_key(sid))
         if subject_ids:
@@ -259,10 +230,6 @@ class SubscriptionService:
         await self._cache.publish_node_event(node_id, "config_changed")
 
     async def _cache_key(self, request: FeedRequest) -> str:
-        # Embed both the global epoch and the per-subject revision so invalidation
-        # is a counter bump (O(1)) rather than a keyspace SCAN+delete. A read that
-        # races an invalidation simply misses (new rev) and recomputes — never
-        # serves stale.
         global_rev, subject_rev = await self._cache.mget_int(
             [_GLOBAL_REV_KEY, _subject_rev_key(request.subject_id)]
         )

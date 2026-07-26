@@ -52,19 +52,7 @@ class SubscriptionRenderer:
                     reason=str(exc),
                 )
         rendered = tuple(rendered_list)
-        # A protocol the requested FORMAT structurally can't carry (e.g. wireguard
-        # in a clash feed, hysteria2 in xray_json) is a KNOWN skip, not an error.
-        # Compute those drops up front from the single capability matrix and LOG
-        # them once per feed, so the client no longer silently receives fewer
-        # nodes than assigned with no signal. Genuine render errors (bad data)
-        # still surface as FormatRenderError inside the renderers.
         self._log_structural_drops(configs, feed_format)
-        # Build the feed body from the ORIGINAL configs, not the URI-render
-        # survivors: some protocols (e.g. shadowtls) have no single-line URI form
-        # yet are fully renderable by the sing-box / clash format renderers, which
-        # each filter to what they support. Pre-filtering on render_uri here would
-        # silently drop those from every feed. `rendered` still drives per-item
-        # URI metadata below.
         content = self._registry.render(feed_format, configs)
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         return RenderedFeed(
@@ -83,9 +71,6 @@ class SubscriptionRenderer:
     ) -> None:
         allowed = supported_protocols(feed_format)
         if not allowed:
-            # Format has no matrix entry (e.g. a newly-added format): stay silent
-            # rather than reporting every config as dropped. The parity test
-            # guards against a format ever being missing here.
             return
         dropped = Counter(c.protocol for c in configs if c.protocol not in allowed)
         if not dropped:

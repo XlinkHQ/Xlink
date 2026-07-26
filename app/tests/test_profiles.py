@@ -131,9 +131,6 @@ async def test_registered_providers_accepted(client: AsyncClient, ctx: Ctx) -> N
     wg_priv, wg_pub = _generate_keypair()
     cases = {
         "xray": ("vless", {"flow": "vision"}),
-        # WireGuard requires an interface address and the SERVER keypair
-        # (privateKey drives the node interface, publicKey becomes the client
-        # subscription's peer key), and the pair must actually match.
         "wireguard": (
             "wireguard",
             {"address": "10.8.0.2/32", "privateKey": wg_priv, "publicKey": wg_pub},

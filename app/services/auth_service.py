@@ -69,11 +69,6 @@ class AuthService:
     async def begin_totp_enrollment(
         self, user_id: uuid.UUID, *, code: str | None = None
     ) -> tuple[str, str]:
-        # If 2FA is ALREADY active, re-enrolling rotates the secret and (until
-        # confirm) drops totp_enabled — effectively disabling the account's 2FA.
-        # Require the current TOTP code first so a hijacked session can't silently
-        # reset someone's second factor. A first-time enrollment (no active 2FA)
-        # needs no code.
         existing = await self._users.get(user_id)
         already_active = bool(existing.totp_enabled and existing.totp_secret)
         if already_active and (not code or not totp_verify(existing.totp_secret, code)):
@@ -111,9 +106,6 @@ class AuthService:
 
     async def logout_everywhere(self, user_id: uuid.UUID) -> None:
         await self._tokens.revoke_all(user_id)
-        # Also invalidate already-issued (stateless) access tokens: bump the
-        # per-user cutoff so get_authenticated_user rejects any access token
-        # minted before now.
         await self._totp.mark_sessions_revoked(user_id)
 
     async def get_authenticated_user(
@@ -124,13 +116,6 @@ class AuthService:
             raise PermissionDeniedError("Account is disabled.", code="account_disabled")
 
         if token_issued_at is not None:
-            # fudge=1s absorbs clock granularity for password change; logout-all
-            # is a deliberate revocation, so use fudge=0 (reject a token issued in
-            # the same second) — the safe direction for a revocation control.
-            # password change: fudge=1s absorbs clock granularity (a token issued
-            # in the same second as the change stays valid). logout-all is a hard
-            # revocation, so reject a token issued in the SAME second too (<=),
-            # closing a same-second refresh-vs-revoke race.
             for ts, msg, code, reject_equal in (
                 (user.password_changed_at, "Token invalidated by a password change.", "password_changed", False),
                 (user.sessions_revoked_at, "Session was logged out.", "session_revoked", True),

@@ -20,19 +20,6 @@ class ProviderKind(StrEnum):
     WIREGUARD = "wireguard"
 
 
-# Which client protocols each provider can actually create.
-#
-# These are DERIVED from the single source of truth in ``app.protocols``; do
-# NOT hand-edit them. The names ``PROVIDER_PROTOCOLS`` and ``protocols_for`` are
-# kept as public exports here (the profile validator imports them from this
-# module) but the actual data lives in ``app.protocols.PROTOCOLS``. They are
-# resolved lazily via ``__getattr__`` to avoid an import cycle: ``app.protocols``
-# imports ``ProviderKind`` from this module, so this module must be fully
-# initialised before ``app.protocols`` is imported.
-#
-# The web UI's ``protocolsFor()`` (web/.../profiles/util.ts) is a SEPARATE
-# runtime and mirrors this; ``app/subscription/tests/test_protocol_source.py``
-# asserts the two stay in sync.
 
 
 def protocols_for(kind: ProviderKind) -> frozenset[str]:

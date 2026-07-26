@@ -119,9 +119,6 @@ def render_custom_page(
         delta = expire_ts - int(datetime.now(UTC).timestamp())
         days_left = f"{max(0, delta // 86400)} days" if delta > 0 else "expired"
     pct = min(100, round(used / total * 100)) if total else 0
-    # Copy via an execCommand fallback too: navigator.clipboard is undefined on
-    # plain-HTTP origins (non-secure context), which is the common panel setup,
-    # so the bare writeText silently does nothing there.
     configs_html = "".join(
         f'<div class="x-config"><code>{e(c)}</code>'
         f"<button onclick=\"(function(v){{if(navigator.clipboard&&window.isSecureContext)"
@@ -214,8 +211,6 @@ def render_subscription_page(
         is_wg = "[Interface]" in c
         proto = "wg" if is_wg else (c.split("://")[0] if "://" in c else "cfg")
         label = _config_label(c, proto, i, is_wg)
-        # Show the friendly label (server name / host), never the raw URI — the
-        # URI is kept only in the title tooltip and copy/QR/download actions.
         link_display = f"WireGuard config {i + 1}" if is_wg else label
         js_val = e(c.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n"))
         safe_name = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in label)[:32]

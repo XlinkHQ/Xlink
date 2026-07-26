@@ -35,7 +35,6 @@ PASSWORD_PROTOCOLS: frozenset[str] = frozenset(
     {XrayProtocol.SHADOWSOCKS.value, XrayProtocol.SHADOWSOCKS2022.value}
 )
 
-# socks5 authenticates with user+pass but has no AEAD method (unlike shadowsocks).
 SOCKS_PROTOCOLS: frozenset[str] = frozenset({XrayProtocol.SOCKS.value})
 
 SHADOWSOCKS_METHODS: frozenset[str] = frozenset(

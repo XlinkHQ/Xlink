@@ -134,9 +134,6 @@ def test_wireguard_conf_serialization():
 
 
 def test_wireguard_missing_peer_key_is_skipped_not_fatal():
-    # A single config with bad stored data must be skipped, not 422 the whole
-    # feed — a good config alongside it still renders, and an all-bad feed
-    # yields empty rather than blowing up the public endpoint.
     mixed = default_registry().render(
         SubscriptionFormat.WIREGUARD_CONF,
         (_cfg("wireguard", **WG), _cfg("wireguard")),
@@ -243,4 +240,4 @@ def test_bad_int_setting_skips_config_not_feed():
     for fmt in (SubscriptionFormat.CLASH_YAML, SubscriptionFormat.SINGBOX_JSON,
                 SubscriptionFormat.XRAY_JSON):
         out = r.render_feed((good, bad), version=RenderVersion.V1, feed_format=fmt)
-        assert out.content  # good kept, bad skipped, no exception
+        assert out.content

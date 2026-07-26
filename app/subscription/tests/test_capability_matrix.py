@@ -30,9 +30,6 @@ from app.subscription.schemas import SubscriptionFormat
 
 CLIENT = "11111111-1111-1111-1111-111111111111"
 
-# Per-protocol settings that let each renderer succeed on a valid node (so the
-# only reason a protocol is missing from the output is the FORMAT rejecting it,
-# never bad data).
 _SETTINGS: dict[str, dict[str, object]] = {
     "vless": {"security": "tls", "sni": "x.io"},
     "vmess": {"security": "tls", "sni": "x.io"},
@@ -79,11 +76,7 @@ def _protocol_present(fmt: SubscriptionFormat, protocol: str, content: str) -> b
     if fmt in (SubscriptionFormat.XRAY_JSON, SubscriptionFormat.SINGBOX_JSON):
         doc = json.loads(content)
         items = doc if isinstance(doc, list) else doc.get("outbounds", [])
-        # xray_json wraps each config in a full document; sing-box emits a flat
-        # outbound list (plus direct/block for xray). Either way, a rendered
-        # config means at least one non-empty entry.
         return bool(items)
-    # text / base64 / wireguard_conf / *_uri: any content means it rendered.
     return bool(content.strip())
 
 
@@ -102,8 +95,6 @@ def test_matrix_matches_renderer(fmt: SubscriptionFormat, protocol: str):
     try:
         content = registry.render(fmt, (_cfg(protocol),))
     except FormatRenderError:
-        # A hard rejection (single-protocol URI feed, "no compatible proxies").
-        # That is a structural drop -> the matrix must NOT claim support.
         assert not claims_support, (
             f"{fmt.value} matrix claims '{protocol}' but the renderer raised "
             f"FormatRenderError (structural reject)"

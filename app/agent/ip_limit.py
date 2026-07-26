@@ -38,9 +38,6 @@ class IpLimitService:
             stmt = select(ClientAssignment.id, ClientAssignment.user_id).where(
                 ClientAssignment.id.in_(aids)
             )
-            # Only accept reports for assignments the reporting node actually
-            # hosts — a node must not be able to inflate another node's users'
-            # device-count ipset (and thus wrongly trip their device limit).
             if node_id is not None:
                 stmt = stmt.where(ClientAssignment.node_id == node_id)
             rows = (await session.execute(stmt)).all()
@@ -59,8 +56,6 @@ class IpLimitService:
         if not touched:
             return
 
-        # Batch: load device limits for all touched users in one session, then
-        # only the users actually over their limit incur an enforcement pass.
         async with self._db.session() as session:
             limit_rows = (
                 await session.execute(
@@ -77,14 +72,9 @@ class IpLimitService:
                 await self._recover(uid)
 
     async def _recover(self, user_id: uuid.UUID) -> None:
-        # Device count is back under the limit — re-activate assignments that WE
-        # disabled for an ip-limit breach (never touch admin-disabled ones).
         from app.domain.user import User
 
         async with self._db.session() as session:
-            # If an admin disabled the user after the ip-limit trip, do NOT
-            # resurrect their assignments — that would silently override the admin
-            # disable. The ip_limited creds flag alone isn't enough to re-activate.
             user = await session.get(User, user_id)
             if user is None or not user.is_active or user.removed:
                 return
@@ -158,9 +148,6 @@ class IpLimitService:
                 .scalars()
                 .all()
             )
-            # Distinct source IPs exceeded the device limit: disable the oldest
-            # active assignments by the overage, clamped to what exists. rows are
-            # already ACTIVE-only, so rows[:excess] can't disable more than exist.
             excess = count - user.device_limit
             if excess <= 0:
                 return
@@ -170,9 +157,6 @@ class IpLimitService:
             doomed_nodes = sorted({a.node_id for a in doomed if a.node_id is not None})
             for a in doomed:
                 a.status = AssignmentStatus.DISABLED
-                # Mark WHY it was disabled so it can be auto-recovered once the
-                # user's device count drops back under the limit (vs an admin
-                # disable, which must stay disabled).
                 creds = dict(a.credentials or {})
                 creds["ip_limited"] = True
                 a.credentials = creds

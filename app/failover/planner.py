@@ -38,8 +38,6 @@ class FailoverPlanner:
         )
         rows = (await self._session.execute(stmt)).all()
 
-        # Per-target running tally so capacity is consumed as items are planned,
-        # spreading load across nodes instead of piling onto a single target.
         capacity: dict[uuid.UUID, int] = {}
         planned: dict[uuid.UUID, int] = {}
 
@@ -65,15 +63,6 @@ class FailoverPlanner:
                 )
             )
             ordered = [c.node_id for c in decision.candidates] or [decision.node_id]
-            # A pinned user's subscription only serves configs on their pinned
-            # nodes (subscription filters to pinned_node_ids). Migrating them to a
-            # non-pinned node would report success while handing them an empty
-            # feed — so restrict targets to their pins (minus the dead source).
-            # If no pinned target has headroom, skip rather than strand them on
-            # an invisible node.
-            # pinned_node_ids is a JSON list of stringified UUIDs; the scheduler's
-            # candidate node_ids are uuid.UUID — compare by str, like the
-            # subscription filter does.
             pinned = {str(n) for n in (pinned_node_ids or [])}
             if pinned:
                 ordered = [nid for nid in ordered if str(nid) in pinned]

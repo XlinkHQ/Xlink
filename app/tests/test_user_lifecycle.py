@@ -142,9 +142,6 @@ async def test_purge_removes_row(
 
 
 async def test_soft_deleted_username_is_reusable_by_live_user(app_state: AppState) -> None:
-    # A soft-deleted user's username/email must free up for a new LIVE user
-    # (partial unique index WHERE removed = false), while two LIVE users still
-    # can't collide, and lookup resolves to the live row — not the tombstone.
     from app.core.exceptions import ConflictError
     from app.repositories.user import UserRepository
     from app.schemas.user import UserCreate
@@ -154,22 +151,18 @@ async def test_soft_deleted_username_is_reusable_by_live_user(app_state: AppStat
         svc = UserService(UserRepository(session), app_state.cache)
 
         first = await svc.create(UserCreate(username="reuseme", email="reuse@example.com"))
-        await svc.delete(first.id)  # soft delete: removed = True
+        await svc.delete(first.id)
 
-        # Same username + email now succeeds because the old row is removed.
         second = await svc.create(UserCreate(username="reuseme", email="reuse@example.com"))
         assert second.id != first.id
         await session.flush()
 
-        # Lookup resolves to the LIVE row, not the removed tombstone.
         found = await svc.get_by_identifier("reuseme")
         assert found is not None and found.id == second.id and found.removed is False
         found_by_email = await svc.get_by_identifier("reuse@example.com")
         assert found_by_email is not None and found_by_email.id == second.id
 
-        # Two LIVE users still cannot share a username...
         with pytest.raises(ConflictError):
             await svc.create(UserCreate(username="reuseme", email="other@example.com"))
-        # ...nor an email.
         with pytest.raises(ConflictError):
             await svc.create(UserCreate(username="another", email="reuse@example.com"))

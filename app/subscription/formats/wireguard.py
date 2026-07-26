@@ -93,9 +93,6 @@ def render_one(config: ProviderConfig) -> str:
 
 
 def render(configs: tuple[ProviderConfig, ...]) -> str:
-    # Skip a single config with bad stored data (missing key/address) instead of
-    # 422-ing the whole wireguard_conf feed — one broken assignment must not
-    # blank out the user's other working tunnels.
     blocks = []
     for c in configs:
         if c.protocol != PROTOCOL:

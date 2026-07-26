@@ -74,9 +74,6 @@ async def test_refresh_rotates_and_reuse_detected(client: AsyncClient) -> None:
     new_refresh = rotated.json()["refresh_token"]
     assert new_refresh != old_refresh
 
-    # Idempotent grace: replaying the just-rotated token within the grace window
-    # returns the SAME successor (not a new independent family), so a retrying
-    # client is safe and a thief only ever gets the token the client already has.
     grace = await client.post(REFRESH, json={"refresh_token": old_refresh})
     assert grace.status_code == 200
     assert grace.json()["refresh_token"] == new_refresh

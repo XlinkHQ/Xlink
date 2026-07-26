@@ -119,8 +119,6 @@ class MetricsRefreshJob:
                 await asyncio.wait_for(self._stopping.wait(), timeout=self._interval)
             if self._stopping.is_set():
                 break
-            # Only the leader refreshes — otherwise N replicas each run the full
-            # collect + last-writer-wins on one Redis key.
             if not self._is_leader():
                 continue
             try:

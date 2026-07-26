@@ -17,9 +17,6 @@ from app.domain.user import User
 logger = logging.getLogger(__name__)
 
 
-# Canonical JSON separators used for the integrity checksum. Kept as a module
-# constant so the in-memory (``checksum_payload``) and streaming
-# (``StreamingChecksum``) code paths encode bytes identically.
 _CANONICAL_SEPARATORS = (",", ":")
 
 
@@ -48,11 +45,6 @@ class BackupValidator:
         data = document.get("data")
         if not isinstance(data, dict):
             raise ValidationError("Backup data is corrupted.", code="backup_corrupted")
-        # A missing checksum must be rejected, not merely warned about: the
-        # exporter always writes one, so its absence means a hand-edited or
-        # truncated document — accepting it would let a tampered backup restore
-        # unverified. (Integrity is mandatory; there is no legitimate
-        # checksum-less document from this system.)
         checksum = document.get("checksum")
         if checksum is None:
             raise ValidationError(

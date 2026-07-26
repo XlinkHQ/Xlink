@@ -23,9 +23,6 @@ class UserDeviceService(UserServiceBase):
         from app.domain.user import User
         from app.domain.user_device import UserDevice
 
-        # Prefer a real per-hardware id (X-HWID, sent by clients like Happ/v2rayN):
-        # it survives IP changes and is one device = one slot. Fall back to the
-        # coarse UA+IP fingerprint only when the client sends no HWID.
         hwid = (hwid or "").strip()
         fingerprint = hwid if hwid else f"{(user_agent or '').strip().lower()}|{client_ip}"
         device_hash = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:64]
@@ -42,8 +39,6 @@ class UserDeviceService(UserServiceBase):
             await session.flush()
             return True
         if device_limit is not None and device_limit > 0:
-            # Lock the user row so concurrent registrations of distinct devices
-            # serialize on the count check and cannot together exceed the limit.
             await session.execute(
                 select(User.id).where(User.id == user_id).with_for_update()
             )

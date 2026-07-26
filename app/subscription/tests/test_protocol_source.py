@@ -46,9 +46,6 @@ from app.subscription.schemas import SubscriptionFormat
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# Per-protocol settings that let each renderer succeed on a valid node (same set
-# as test_capability_matrix so a protocol only ever "fails" for structural
-# reasons, never bad data).
 _SETTINGS: dict[str, dict[str, object]] = {
     "vless": {"security": "tls", "sni": "x.io"},
     "vmess": {"security": "tls", "sni": "x.io"},
@@ -83,7 +80,6 @@ def _cfg(protocol: str) -> ProviderConfig:
     )
 
 
-# --- Source <-> derived panel constants ------------------------------------
 
 
 def test_provider_protocols_reexport_matches_source():
@@ -127,7 +123,6 @@ def test_every_protocol_belongs_to_a_provider_or_is_http():
     )
 
 
-# --- Subscription surface consistency (in-process) -------------------------
 
 
 def test_provider_registry_only_offers_known_protocols():
@@ -195,7 +190,6 @@ def test_singbox_dispatch_matches_matrix():
         )
 
 
-# --- Separate-runtime mirrors (parsed, not imported) -----------------------
 
 
 def _parse_node_agent_core_protocols() -> dict[str, frozenset[str]]:
@@ -217,7 +211,6 @@ def _parse_node_agent_core_protocols() -> dict[str, frozenset[str]]:
 
 
 def _frozenset_arg(call: ast.expr) -> set[str]:
-    # frozenset({...}) or frozenset([...])
     assert isinstance(call, ast.Call), "expected frozenset(...) literal"
     (arg,) = call.args
     return set(ast.literal_eval(arg))
@@ -241,8 +234,6 @@ def _parse_web_provider_protocols() -> dict[str, frozenset[str]]:
     return result
 
 
-# Map ProviderKind -> the string key used by the separate runtimes (both the
-# node-agent CORES and the web PROVIDERS key cores by ProviderKind's value).
 _KIND_KEY = {kind: kind.value for kind in ProviderKind}
 
 

@@ -117,9 +117,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         metrics_job.start()
 
-    # Prometheus domain-gauge collector: only runs when the scrape endpoint is
-    # opted in (a token is configured). Leader-gated; reads the private metrics
-    # registry created for this app in create_app().
     domain_metrics_collector: DomainMetricsCollector | None = None
     prometheus = getattr(app.state, "prometheus", None)
     if settings.metrics_token is not None and prometheus is not None:

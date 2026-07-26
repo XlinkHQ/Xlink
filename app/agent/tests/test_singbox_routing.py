@@ -75,7 +75,6 @@ async def test_singbox_gets_route_rules(app_state: AppState) -> None:
         route = sb["route"]
         rules = route["rules"]
 
-        # domain rule split into exact + suffix
         dom = next(r for r in rules if r.get("outbound") == "block")
         assert dom["domain"] == ["exact.example.com"]
         assert dom["domain_suffix"] == ["ads.example.com"]
@@ -88,7 +87,6 @@ async def test_singbox_gets_route_rules(app_state: AppState) -> None:
         assert port["port"] == [443]
         assert port["port_range"] == ["8000:9000"]
 
-        # builtin outbounds materialised; direct default present
         tags = {o["tag"] for o in sb["outbounds"]}
         assert "block" in tags
         assert "direct" in tags
@@ -101,8 +99,6 @@ async def test_singbox_geosite_selector_dropped(app_state: AppState) -> None:
     async with app_state.db.session() as session:
         node = await _node(session)
         await _set_template(session, {"sing-box": {"inbounds": []}})
-        # geosite is not expressible inline in sing-box 1.11 -> that selector is
-        # dropped; the plain sibling value survives.
         session.add(
             RoutingRule(
                 name="mixed",
@@ -112,7 +108,6 @@ async def test_singbox_geosite_selector_dropped(app_state: AppState) -> None:
                 enabled=True,
             )
         )
-        # a rule that is ONLY a geosite selector produces no sing-box rule
         session.add(
             RoutingRule(
                 name="only-geo",
@@ -127,7 +122,6 @@ async def test_singbox_geosite_selector_dropped(app_state: AppState) -> None:
 
         sb = (await _templates(session, node))["sing-box"]
         rules = sb["route"]["rules"]
-        # exactly one rule survived, carrying only the plain domain
         assert len(rules) == 1
         assert rules[0]["domain_suffix"] == ["real.example.com"]
         assert "geosite:google" not in json.dumps(rules)
@@ -137,7 +131,6 @@ async def test_singbox_dangling_outbound_rule_dropped(app_state: AppState) -> No
     async with app_state.db.session() as session:
         node = await _node(session)
         await _set_template(session, {"sing-box": {"inbounds": []}})
-        # references a custom outbound tag that has no Outbound row -> dangles
         session.add(
             RoutingRule(
                 name="to-ghost",
@@ -151,7 +144,6 @@ async def test_singbox_dangling_outbound_rule_dropped(app_state: AppState) -> No
 
         sb = (await _templates(session, node))["sing-box"]
         rules = sb["route"]["rules"]
-        # dangling rule removed, but direct default still guaranteed
         assert all(r.get("outbound") != "ghost" for r in rules)
         assert sb["route"]["final"] == "direct"
 
@@ -192,7 +184,6 @@ async def test_singbox_unsupported_custom_outbound_drops_rule(app_state: AppStat
     async with app_state.db.session() as session:
         node = await _node(session)
         await _set_template(session, {"sing-box": {"inbounds": []}})
-        # a raw Xray custom outbound (has "protocol", not sing-box "type")
         session.add(
             Outbound(
                 tag="xray-only",
@@ -213,7 +204,6 @@ async def test_singbox_unsupported_custom_outbound_drops_rule(app_state: AppStat
         await session.flush()
 
         sb = (await _templates(session, node))["sing-box"]
-        # unsupported outbound not present, and its rule dropped
         assert all(o["tag"] != "xray-only" for o in sb["outbounds"])
         assert all(r.get("outbound") != "xray-only" for r in sb["route"]["rules"])
 
@@ -234,7 +224,6 @@ async def test_xray_path_unchanged_when_no_singbox(app_state: AppState) -> None:
         await session.flush()
 
         templates = await _templates(session, node)
-        # no sing-box template -> nothing injected
         assert "sing-box" not in templates
         xray = templates["xray"]
         rule = xray["routing"]["rules"][0]

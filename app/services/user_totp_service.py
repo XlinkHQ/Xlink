@@ -17,9 +17,6 @@ class UserTotpService(UserServiceBase):
             user.password_changed_at = datetime.now(UTC)
         await self._repo.add(user)
         if invalidate_tokens:
-            # Revoke refresh tokens too: bumping password_changed_at only rejects
-            # already-issued access tokens, but a leaked refresh token would keep
-            # minting fresh access tokens (each with a current iat) and bypass it.
             from app.core.config import get_settings
             from app.repositories.refresh_token import RefreshTokenRepository
             from app.services.token_service import TokenService

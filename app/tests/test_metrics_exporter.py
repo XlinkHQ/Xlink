@@ -21,20 +21,17 @@ def _client_for(state: AppState) -> AsyncClient:
 
 @pytest.fixture
 async def metrics_client(app_state: AppState) -> AsyncIterator[AsyncClient]:
-    # Opt in: set the scrape token so GET /metrics is enabled.
     app_state.settings.metrics_token = SecretStr(_TOKEN)
     async with _client_for(app_state) as ac:
         yield ac
 
 
 async def test_metrics_disabled_without_token(client: AsyncClient) -> None:
-    # Default conftest client has no metrics_token -> endpoint is 404.
     resp = await client.get("/metrics")
     assert resp.status_code == 404
 
 
 async def test_metrics_requires_bearer(metrics_client: AsyncClient) -> None:
-    # Enabled but no/incorrect credentials -> 401.
     resp = await metrics_client.get("/metrics")
     assert resp.status_code == 401
     assert resp.headers.get("www-authenticate") == "Bearer"
@@ -50,7 +47,6 @@ async def test_metrics_returns_prometheus_text(metrics_client: AsyncClient) -> N
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/plain")
     body = resp.text
-    # Prometheus exposition format: HELP/TYPE lines and our namespaced series.
     assert "# HELP" in body
     assert "# TYPE" in body
     assert "xlink_http_requests_total" in body
@@ -65,7 +61,6 @@ async def test_request_metrics_increment(metrics_client: AsyncClient) -> None:
                 total += float(line.rsplit(" ", 1)[1])
         return total
 
-    # Drive a known route (the liveness probe) a few times.
     for _ in range(3):
         r = await metrics_client.get("/api/v1/health/live")
         assert r.status_code == 200
@@ -76,6 +71,4 @@ async def test_request_metrics_increment(metrics_client: AsyncClient) -> None:
     count = _scrape_count(scrape.text, "/api/v1/health/live")
     assert count >= 3.0
 
-    # Cardinality control: the route label is the template, so a UUID-ish path
-    # never appears verbatim as its own series.
     assert "route=\"/api/v1/health/live\"" in scrape.text

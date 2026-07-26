@@ -29,9 +29,6 @@ _PASSWORD_PROTOCOLS = frozenset(
     {"trojan", "shadowsocks", "shadowsocks2022", "shadowtls", "hysteria2", "tuic", "naive"}
 )
 
-# Shadowsocks-2022 requires a base64 PSK whose decoded length matches the AEAD
-# key size (16B for aes-128, 32B otherwise). A random urlsafe string is rejected
-# by the core, so mint a correctly-sized key.
 _SS2022_KEY_BYTES = {"2022-blake3-aes-128-gcm": 16}
 
 

@@ -65,10 +65,6 @@ class NodeAgentScheduler:
     async def detect_offline_once(self) -> int:
         async with self._db.session() as session:
             threshold = datetime.now(UTC) - timedelta(seconds=self._offline_after)
-            # An ACTIVE node that has NEVER sent a heartbeat (last_seen_at NULL)
-            # must also be demoted — otherwise a node flipped ACTIVE by hand (or
-            # stuck mid-provision) whose agent never checks in stays ACTIVE
-            # forever and keeps receiving user assignments. Treat NULL as stale.
             stmt = select(Node).where(
                 Node.status == NodeStatus.ACTIVE,
                 or_(Node.last_seen_at.is_(None), Node.last_seen_at < threshold),

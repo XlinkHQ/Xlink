@@ -63,12 +63,6 @@ def _spec(
     )
 
 
-# --- THE source of truth ---------------------------------------------------
-#
-# Order is cosmetic; the derived constants are (frozen)sets. Keep this list
-# alphabetical-ish by "family" for readability. To add a protocol: add ONE row
-# here, then teach the renderer(s) and the capability matrix to emit it — the
-# consistency test will fail loudly until every panel surface agrees.
 XRAY = ProviderKind.XRAY
 SING_BOX = ProviderKind.SING_BOX
 HYSTERIA = ProviderKind.HYSTERIA
@@ -85,10 +79,6 @@ PROTOCOLS: tuple[ProtocolSpec, ...] = (
     _spec("tuic", providers=(SING_BOX,)),
     _spec("naive", providers=(SING_BOX,)),
     _spec("socks", providers=(SING_BOX,)),
-    # http has no provider that provisions it as an inbound today, but the
-    # subscription layer can still render an http:// proxy line (it is carried by
-    # the sing-box/mihomo feeds), so it is a subscription protocol with no
-    # provider. Keep it here so the capability matrix parity test sees it.
     _spec("http", providers=()),
     _spec("wireguard", providers=(WIREGUARD,)),
 )

@@ -112,7 +112,6 @@ class _FakeCache:
 async def test_redis_down_refresh_still_works(
     shared_db: async_sessionmaker, settings: Settings
 ) -> None:
-    # Regression: a cache error must NOT break /refresh — fall through to DB.
     user_id = await _seed_user(shared_db)
     user = await _load_user(shared_db, user_id)
     refresh = await _issue_refresh(shared_db, settings, user)
@@ -138,7 +137,6 @@ async def test_cache_grace_replay_returns_same_successor(
         svc = TokenService(RefreshTokenRepository(session), settings, cache=cache)
         replay = await svc.rotate(refresh, user)
         await session.commit()
-    # Idempotent: replay within grace returns the SAME successor, not a new family.
     assert replay.refresh_token == first.refresh_token
 
 

@@ -22,17 +22,11 @@ from app.backup.models import BackupScope
 from app.backup.validator import _CANONICAL_SEPARATORS, canonical_row
 from app.db.session import Database
 
-# The document's top-level ``data`` keys, in the order the streaming writer emits
-# them. This MUST equal the sorted order that ``json.dumps(..., sort_keys=True)``
-# produces, so the accumulated checksum is byte-identical to ``checksum_payload``
-# over the fully-materialised document.
 _DATA_KEYS_SORTED = ("assignments", "nodes", "profiles", "traffic_metadata", "users")
 
 _FILE_INDENT = 2
 _PAD = " " * _FILE_INDENT
 
-# Flush the human-readable buffer to disk once it exceeds this many chars. Bounds
-# in-memory buffering to a few KB regardless of dataset size.
 _FLUSH_THRESHOLD = 64 * 1024
 
 
@@ -107,7 +101,6 @@ async def stream_export_to_file(
     specs = {key: (model, redacted) for key, model, redacted in table_specs()}
 
     def _open() -> Any:
-        # 0600 from creation — backups carry cleartext node/proxy secrets.
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         return os.fdopen(fd, "w", encoding="utf-8")
 
@@ -169,8 +162,6 @@ async def stream_export_to_file(
     finally:
         await anyio.to_thread.run_sync(fh.close)
 
-    # Atomic publish: rename is atomic on the same filesystem, so a reader never
-    # sees a half-written backup and a crash mid-write leaves only the tmp file.
     await anyio.to_thread.run_sync(functools.partial(os.replace, tmp, target))
     with contextlib.suppress(OSError):
         os.chmod(target, 0o600)

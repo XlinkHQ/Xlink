@@ -203,11 +203,9 @@ async def test_raise_data_limit_reactivates_limited_assignment(app_state: AppSta
             user_kwargs={"data_limit_bytes": 1000, "users_data_usage": 5000},
             assignment_kwargs={"used_bytes": 5000, "status": AssignmentStatus.LIMITED},
         )
-        # Below the old limit the user is not served.
         assert await _client_count(session, node.id) == 0
 
         svc = UserService(UserRepository(session), app_state.cache)
-        # Raise the limit above current usage: recovery must trigger.
         await svc.update_quota(user.id, UserUpdate(data_limit_bytes=10000))
 
         await session.refresh(user)
@@ -266,8 +264,6 @@ async def test_ingest_crossing_account_limit_flips_to_limited(app_state: AppStat
     async with app_state.db.session() as session:
         node, user, assignment = await _seed(
             session,
-            # Account limit 500; per-assignment limit left None so ONLY the
-            # per-user (account) path can trip the transition.
             user_kwargs={"data_limit_bytes": 500, "users_data_usage": 0},
             assignment_kwargs={"used_bytes": 0, "status": AssignmentStatus.ACTIVE},
         )

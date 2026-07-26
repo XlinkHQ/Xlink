@@ -65,10 +65,6 @@ def _issue_blocking(
     csr_pem = crypto_util.make_csr(domain_key_pem, [domain])
     order = acme_client.new_order(csr_pem)
 
-    # Track every challenge token we publish so it is removed from Redis on ANY
-    # exit path — a poll_and_finalize timeout/failure previously left the
-    # validation values dangling in the cache because cleanup ran only on the
-    # success path.
     published_tokens: list[str] = []
     try:
         for authz in order.authorizations:

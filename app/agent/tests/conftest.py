@@ -12,8 +12,6 @@ os.environ.setdefault("XLINK_ARGON2_TIME_COST", "1")
 os.environ.setdefault("XLINK_ARGON2_MEMORY_COST", "8192")
 os.environ.setdefault("XLINK_ARGON2_PARALLELISM", "1")
 
-# Register every ORM model on Base.metadata so create_all builds the full
-# schema (config_sync reads certificates / routing_rules / outbounds, etc.).
 import app.domain.certificate
 import app.domain.outbound
 import app.domain.routing_rule  # noqa: F401

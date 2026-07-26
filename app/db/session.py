@@ -29,10 +29,6 @@ class Database:
             autoflush=False,
         )
 
-        # OPTIONAL read-replica. Built ONLY when a replica URL is configured; with
-        # no replica set, _reader_engine/_reader_sessionmaker stay None and every
-        # read falls back to the primary — behaviour is byte-for-byte the single
-        # engine as before.
         self._reader_engine: AsyncEngine | None = None
         self._reader_sessionmaker: async_sessionmaker[AsyncSession] | None = None
         replica_url = settings.database_url_replica

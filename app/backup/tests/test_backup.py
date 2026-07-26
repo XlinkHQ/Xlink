@@ -145,9 +145,6 @@ async def test_missing_dependency_rejected(db: Database) -> None:
     orphan_node = str(uuid.uuid4())
     for profile in document["data"]["profiles"]:
         profile["node_id"] = orphan_node
-    # Re-checksum the mutated data so it passes the integrity gate and the FK
-    # dependency check is what actually rejects it (a null checksum is now
-    # rejected earlier, so leaving it null would test the wrong guard).
     from app.backup.validator import checksum_payload
 
     document["checksum"] = checksum_payload(document["data"])

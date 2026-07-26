@@ -28,7 +28,7 @@ def _parse_host_port(value: str) -> tuple[str | None, int | None]:
     ([::1]:1080) and bare IPv6 (a:b:c:...:port). Returns (None, None) if
     there is no valid port."""
     value = value.strip()
-    if value.startswith("["):  # [ipv6]:port
+    if value.startswith("["):
         end = value.find("]")
         if end == -1:
             return None, None
@@ -37,7 +37,7 @@ def _parse_host_port(value: str) -> tuple[str | None, int | None]:
         port_str = rest[1:] if rest.startswith(":") else ""
     else:
         host, _, port_str = value.rpartition(":")
-        if ":" in host:  # bare IPv6 (needs brackets) — ambiguous, reject
+        if ":" in host:
             return None, None
     if not host or not port_str.isdigit():
         return None, None
@@ -94,8 +94,6 @@ def _stream_settings(s: dict[str, Any]) -> dict[str, Any] | None:
         ):
             if s.get(k_in):
                 r[k_out] = s[k_in]
-        # xray's reality client requires a uTLS fingerprint; default it so a
-        # config missing the field isn't rejected by the core.
         r.setdefault("fingerprint", "chrome")
         stream["realitySettings"] = r
     return stream
@@ -125,7 +123,6 @@ def _build_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str,
         if user:
             server["users"] = [{"user": user, "pass": settings.get("password", "")}]
         out: dict[str, Any] = {"tag": tag, "protocol": type_, "settings": {"servers": [server]}}
-        # socks/http do not use TLS/REALITY security — transport only.
         stream = _stream_settings({**settings, "security": None})
         if stream:
             out["streamSettings"] = stream
@@ -216,25 +213,7 @@ def _build_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str,
     return None
 
 
-# --- sing-box routing translation ---------------------------------------
-#
-# sing-box has its own routing engine (route.rules + route.final + outbound
-# objects), shaped differently from Xray's. The Xray path above is left
-# untouched; this path mirrors its guards (dangling-outbound drop, direct
-# default) in sing-box's own vocabulary so a sing-box node honours the SAME
-# admin routing rules instead of silently ignoring every one of them.
-#
-# Builtin outbound tag mapping (Xray <-> sing-box):
-#   direct / proxy / freedom  -> {"type": "direct"}
-#   block   / blackhole       -> {"type": "block"}
-#   warp                      -> {"type": "wireguard", ...}  (needs WARP keys)
-# Custom DB outbounds are translated by _build_singbox_outbound where the
-# protocol maps cleanly; anything that can't be expressed is dropped and the
-# rule referencing it is dropped too (with a logged warning), never faked.
 
-# sing-box 1.11 inline route rules do not accept the geosite/geoip/ext:
-# selectors Xray takes (those moved to rule_set); rather than emit a config
-# the core rejects wholesale, we drop those individual selectors and log.
 def _singbox_route_rule(match_type: str, values: list[str], outbound: str) -> tuple[dict[str, Any] | None, list[str]]:
     """Translate one admin RoutingRule into a sing-box route rule.
 
@@ -265,7 +244,7 @@ def _singbox_route_rule(match_type: str, values: list[str], outbound: str) -> tu
             rule["port_range"] = ranges
         if not ports and not ranges:
             return None, dropped
-    else:  # domain
+    else:
         exact: list[str] = []
         suffix: list[str] = []
         for v in values:
@@ -276,8 +255,6 @@ def _singbox_route_rule(match_type: str, values: list[str], outbound: str) -> tu
             elif v.startswith("domain:"):
                 suffix.append(v[len("domain:") :])
             else:
-                # Xray treats a bare domain as a subdomain match; domain_suffix
-                # is the closest sing-box equivalent.
                 suffix.append(v)
         if exact:
             rule["domain"] = exact
@@ -301,8 +278,6 @@ def _build_singbox_outbound(tag: str, type_: str, settings: dict[str, Any]) -> d
         return {"type": "dns", "tag": tag}
     if type_ == "custom":
         raw = settings.get("raw")
-        # A custom outbound authored as raw sing-box (has a sing-box "type")
-        # passes through; a raw Xray outbound (has "protocol") can't be reused.
         if isinstance(raw, dict) and raw.get("type"):
             return {**raw, "tag": tag}
         return None
@@ -351,10 +326,6 @@ def _build_singbox_outbound(tag: str, type_: str, settings: dict[str, Any]) -> d
         if not settings.get("secretKey"):
             return None
         endpoint = settings.get("endpoint", "")
-        # Parse host+port together so a bracketed IPv6 endpoint ([2001:db8::1]:2408)
-        # yields the bare host, not the naive rsplit(":",1)[0] that would keep
-        # "[2001:db8" and break the tunnel. Fall back to the raw endpoint only when
-        # there is no parseable port (host-only endpoints).
         wg_host, _wg_port = _parse_host_port(endpoint)
         return {
             "type": "wireguard",
@@ -390,10 +361,6 @@ def _user_serviceable(now: datetime):
     return and_(
         User.is_active.is_(True),
         User.removed.is_(False),
-        # on-hold accounts haven't started their clock yet — activation happens on
-        # the first subscription pull, not on the node config path. Don't let the
-        # node serve them before that, or an on-hold user gets service with
-        # expire_at never set (effectively unlimited time).
         User.on_hold.is_(False),
         or_(User.expire_at.is_(None), User.expire_at > now),
         or_(
@@ -402,14 +369,6 @@ def _user_serviceable(now: datetime):
         ),
     )
 
-# Per-client auth material the node legitimately needs to build the inbound for
-# this assignment. These ARE secrets, but they are the exact credentials the
-# client presents and the server must match — the node (itself the proxy server)
-# cannot authenticate the user without them. This is why a plain "drop anything
-# that looks like a secret" denylist silently broke every password-based
-# protocol: the node fell back to the assignment UUID as the password and the
-# client (carrying the real password in its subscription link) got zero traffic.
-# Anything NOT in this allowlist (e.g. a panel-only api token) is dropped.
 _AGENT_CRED_ALLOW = frozenset(
     {
         "uuid",
@@ -497,11 +456,6 @@ class ConfigSyncService:
         certs = await self._cert_map()
         for clients in result.values():
             self._attach_certs(clients, certs)
-        # Render core_templates PER NODE, not once for the whole batch: the
-        # per-node socks-out outbound (and its route.final) is injected only when
-        # the node is known. A batch-wide template omitted it, so a SOCKS-enabled
-        # node's reconcile config_version diverged from the one its poll path
-        # ships — permanent false drift and an endless self-heal storm.
         return {
             nid: {
                 "clients": clients,
@@ -637,9 +591,6 @@ class ConfigSyncService:
             .scalars()
             .all()
         )
-        # Xray is first-match-wins. Admin-defined rules must run BEFORE the
-        # template's rules (which may contain a catch-all that would otherwise
-        # shadow every admin rule), so prepend them, preserving priority order.
         db_built: list[dict[str, Any]] = []
         for rr in db_rules:
             values = [v.strip() for v in rr.match_values.split(",") if v.strip()]
@@ -681,17 +632,10 @@ class ConfigSyncService:
                 outbounds.append(built)
                 changed = True
 
-        # Guarantee every outboundTag referenced by a rule actually exists in the
-        # outbounds list. Builtin tags (direct/block/dns) are NOT auto-provided by
-        # Xray — a rule pointing at a missing tag makes Xray reject the ENTIRE
-        # config, so the node silently keeps its old/empty config. Add the
-        # builtins on demand and drop rules that still dangle.
         referenced = {
             r.get("outboundTag") for r in rules if isinstance(r, dict) and r.get("outboundTag")
         }
         present = {o.get("tag") for o in outbounds if isinstance(o, dict)}
-        # proxy is a generic direct-passthrough placeholder; warp must already be
-        # present (needs the node's WARP keys — can't be fabricated here).
         _BUILTIN_FALLBACK = {
             "direct": ("freedom", {}),
             "proxy": ("freedom", {}),
@@ -718,17 +662,6 @@ class ConfigSyncService:
                 rules = kept
                 changed = True
 
-        # Xray routes UNMATCHED traffic through the FIRST outbound. If custom
-        # outbounds exist but no direct/freedom default, the first would be e.g.
-        # a relay ("mirz") and ALL unmatched user traffic would silently exit
-        # through the remote server. Guarantee a `direct` freedom outbound and
-        # put it first as the default (a node-level socks default, below, may
-        # still override it by prepending socks-out).
-        # Ensure a `direct` freedom outbound exists AND is first whenever we are
-        # going to write an outbounds list. Covers the empty case too: if
-        # drop-dangling removed everything (e.g. a rule → warp with WARP
-        # unconfigured), writing outbounds:[] would make xray reject the whole
-        # config — so never emit an empty list; fall back to direct-only.
         if changed or rules:
             if not any(o.get("tag") == "direct" for o in outbounds):
                 direct = _build_outbound("direct", "freedom", {})
@@ -770,15 +703,9 @@ class ConfigSyncService:
             xray["routing"] = routing
             templates["xray"] = xray
 
-        # sing-box has its own routing engine — translate the SAME admin rules /
-        # outbounds into its shape so a sing-box node honours them instead of
-        # silently ignoring every one. Xray path above is untouched.
         if isinstance(templates.get("sing-box"), dict):
             self._merge_singbox_routing(templates, row, db_rules, db_outbounds, node)
 
-        # hysteria / wireguard have no general routing engine — a rule simply
-        # cannot be expressed there. Don't fake it: log ONCE per core per apply
-        # (not per rule) so an admin knows their rules won't reach these nodes.
         if db_rules:
             for core in ("hysteria", "wireguard"):
                 if isinstance(templates.get(core), dict):
@@ -799,8 +726,6 @@ class ConfigSyncService:
 
         present = {o.get("tag") for o in outbounds if isinstance(o, dict)}
 
-        # WARP: sing-box expresses WARP as a wireguard outbound built from the
-        # panel's WARP keys (same source as the Xray path).
         if (
             row is not None
             and row.warp_enabled
@@ -824,8 +749,6 @@ class ConfigSyncService:
                 present.add("warp")
                 changed = True
 
-        # Translate custom DB outbounds. A type that can't be expressed in
-        # sing-box is skipped here and any rule pointing at it is dropped below.
         for ob in db_outbounds:
             if ob.tag in present:
                 continue
@@ -843,8 +766,6 @@ class ConfigSyncService:
             present.add(ob.tag)
             changed = True
 
-        # Build sing-box rules from the same admin RoutingRules. Prepend them so
-        # they run before any template rules (mirrors the Xray first-match order).
         _BUILTIN = {
             "direct": ("direct", {}),
             "proxy": ("direct", {}),
@@ -872,9 +793,6 @@ class ConfigSyncService:
             rules = db_built + rules
             changed = True
 
-        # Provide builtin outbounds on demand and drop rules that still dangle —
-        # a rule pointing at a missing outbound makes sing-box reject the whole
-        # config (so the node keeps its stale config).
         referenced = {r.get("outbound") for r in rules if isinstance(r, dict) and r.get("outbound")}
         for tag in referenced - present:
             spec = _BUILTIN.get(tag)
@@ -896,10 +814,6 @@ class ConfigSyncService:
                 rules = kept
                 changed = True
 
-        # sing-box routes UNMATCHED traffic through route.final (or, absent that,
-        # the first outbound). Guarantee a `direct` outbound exists and is the
-        # default so unmatched user traffic never silently exits through a relay,
-        # and so an empty outbounds list (which sing-box rejects) is never emitted.
         if changed or rules:
             if "direct" not in present:
                 direct = _build_singbox_outbound("direct", "direct", {})
@@ -946,12 +860,6 @@ class ConfigSyncService:
         known_version: str | None = None,
         cache_ttl: int = 300,
     ) -> dict[str, Any]:
-        # Cheap path: a warm Redis snapshot cache lets a poll short-circuit the ~5
-        # full-table SELECTs + template render + SHA256 that desired_config runs.
-        # The cache is dropped on every config_changed event (see
-        # RedisCache.publish_node_event), so a hit is always the current desired
-        # config. When the agent's known_version matches, we return "unchanged"
-        # without even shipping the (cached) config body.
         if cache is not None:
             cached = await self._read_cached_snapshot(cache, node)
             if cached is not None:
@@ -1033,9 +941,6 @@ class ConfigSyncService:
         provider_status: dict[str, str],
     ) -> None:
         metadata = dict(node.node_metadata)
-        # A liveness-only ping (config-pull failed) sends no version — keep the
-        # last known reported version instead of clobbering it with None, which
-        # would otherwise fake a drift.
         if config_version_value is not None:
             metadata[_REPORTED_VERSION_KEY] = config_version_value
         state = {
@@ -1069,10 +974,6 @@ class ConfigSyncService:
         applied = reported_state.get("applied", {}) if isinstance(reported_state, dict) else {}
         locally_limited = int(applied.get("locally_limited", 0)) if isinstance(applied, dict) else 0
 
-        # The agent reports only its applied config_version (not the full config),
-        # so version equality — not a stub-vs-full dict diff — is the true drift
-        # signal. config_version() already excludes volatile fields (used_bytes),
-        # so it does not churn on usage changes and won't trigger a heal storm.
         severity = self._severity(desired_version, reported_version)
         report = NodeDriftReport(
             node_id=node.id,

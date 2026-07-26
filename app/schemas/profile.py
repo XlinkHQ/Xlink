@@ -14,10 +14,6 @@ from app.schemas.base import APIModel, InputModel
 NAME_MAX_LEN = 255
 PROTOCOL_MAX_LEN = 64
 
-# A profile may declare any protocol that at least one provider core can
-# actually provision. Derived from the single source of truth (app.protocols);
-# do NOT hand-edit. (This intentionally excludes subscription-only protocols
-# like ``http`` that no provider provisions as an inbound.)
 VALID_PROTOCOLS = frozenset(
     spec.name for spec in _PROTOCOL_SPECS if spec.providers
 )

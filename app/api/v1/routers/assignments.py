@@ -33,8 +33,6 @@ async def create_assignment(
     if not admin.is_sudo and not admin.all_groups_access:
         scoped = await admins.scoped_group_ids(admin.id)
         assert_group_in_scope(admin, payload.group_id, scoped)
-        # Also ensure the target profile is one the reseller may actually use,
-        # so they can't pin an owned user onto an out-of-scope profile/node.
         scoped_profiles = await admins.scoped_profile_ids(admin.id)
         if payload.profile_id not in scoped_profiles:
             raise PermissionDeniedError(

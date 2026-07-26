@@ -105,7 +105,6 @@ class ProfileService:
 
         flushed = await self._flush(profile)
         if reenabled:
-            # Restore the assignments a prior disable() cut (mirrors set_active).
             await self._restore_profile_disabled_assignments(profile_id)
         await self._invalidate_subscription_cache(flushed.node_id)
         return flushed
@@ -116,8 +115,6 @@ class ProfileService:
         profile.is_active = is_active
         flushed = await self._flush(profile)
         if is_active and not was_active:
-            # Re-enabling: restore the assignments disable() cut, else every user
-            # on this profile stays DISABLED until re-enabled one by one.
             await self._restore_profile_disabled_assignments(profile_id)
         await self._invalidate_subscription_cache(flushed.node_id)
         return flushed
@@ -137,16 +134,12 @@ class ProfileService:
         decrements: dict[uuid.UUID, int] = {}
         for assignment in active_assignments:
             assignment.status = AssignmentStatus.DISABLED
-            # Mark WHY it was disabled so re-enabling the profile can restore
-            # exactly these (and not assignments an admin disabled by hand).
             creds = dict(assignment.credentials or {})
             creds["profile_disabled"] = True
             assignment.credentials = creds
             if assignment.node_id is not None:
                 decrements[assignment.node_id] = decrements.get(assignment.node_id, 0) + 1
         for node_id, count in decrements.items():
-            # Atomic raw UPDATE so the ORM version column is not corrupted and
-            # concurrent counter writes are not lost (see _adjust_node_users_by_id).
             await self._repo.session.execute(
                 update(Node)
                 .where(Node.id == node_id, Node.current_users > 0)
@@ -172,7 +165,7 @@ class ProfileService:
         for assignment in rows:
             creds = dict(assignment.credentials or {})
             if not creds.pop("profile_disabled", None):
-                continue  # disabled for another reason (admin, ip-limit) — leave it
+                continue
             assignment.status = AssignmentStatus.ACTIVE
             assignment.credentials = creds
             if assignment.node_id is not None:
@@ -208,8 +201,6 @@ class ProfileService:
         await self._invalidate_subscription_cache(node_id)
 
     async def _scrub_profile_from_groups(self, profile_id: uuid.UUID) -> None:
-        # Indexed delete on the join table — no longer loads every group and
-        # rewrites its JSON in Python.
         from app.repositories.group import GroupRepository
 
         await GroupRepository(self._repo.session).remove_profile_everywhere(profile_id)

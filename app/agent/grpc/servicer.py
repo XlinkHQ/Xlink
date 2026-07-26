@@ -89,9 +89,6 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
                 )
             except AuthenticationError:
                 await context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid node token")
-        # On "unchanged", config is intentionally empty; the agent short-circuits
-        # by comparing config_version to the version it sent (it keeps its current
-        # config and skips the re-apply), mirroring the HTTP `unchanged` flag.
         return pb.DesiredConfig(
             node_id=str(snap["node_id"]),
             config_version=snap["config_version"],
@@ -280,9 +277,6 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
                     break
                 msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=20.0)
                 if msg is None:
-                    # Heartbeat on idle so a half-dead peer surfaces as a write
-                    # error → the stream exits and the pubsub is released, instead
-                    # of churning a subscription forever.
                     yield pb.NodeEvent(type="keepalive", data_json="")
                     continue
                 data = msg["data"]

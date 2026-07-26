@@ -115,9 +115,6 @@ class XrayGateway:
             self._circuit.opened_at is not None
             and time.monotonic() - self._circuit.opened_at >= cb.reset_timeout_seconds
         ):
-            # Half-open: allow one trial request. Reset the failure count below the
-            # threshold so a single failure doesn't immediately re-open with a fresh
-            # full cooldown; only repeated failures will trip the breaker again.
             self._circuit.open = False
             self._circuit.failures = max(0, cb.failure_threshold - 1)
             return

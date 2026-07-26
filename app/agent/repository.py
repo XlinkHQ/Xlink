@@ -55,8 +55,6 @@ class NodeCommandRepository:
             command.lease_token = lease_token
             command.leased_at = leased_at
             command.lease_expires_at = lease_expires_at
-            # lease_count bounds runaway re-leasing (crash/lost-report); attempts
-            # counts real executions and is bumped only on report_result.
             command.lease_count += 1
         await self.session.flush()
         return commands
@@ -163,11 +161,6 @@ class NodeProviderHealthRepository:
         return len(records)
 
     async def latest_for_node(self, node_id: uuid.UUID) -> Sequence[NodeProviderHealth]:
-        # One row per provider — the most recent check. Without DISTINCT ON the
-        # query returns every historical row, so the UI shows duplicate cores.
-        # Latest row per provider. DISTINCT ON is Postgres-only, so order by
-        # (provider, checked_at desc) and keep the first per provider in Python —
-        # portable across Postgres and the sqlite test backend.
         stmt = (
             select(NodeProviderHealth)
             .where(NodeProviderHealth.node_id == node_id)

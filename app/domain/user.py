@@ -72,10 +72,6 @@ class UserExpireStrategy(StrEnum):
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    # Uniqueness is enforced by PARTIAL unique indexes (WHERE removed = false),
-    # declared in __table_args__ — NOT plain column uniqueness. A soft-deleted
-    # user (removed = true) frees its username/email for reuse by a live user,
-    # while two LIVE users still cannot collide.
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     username: Mapped[str] = mapped_column(String(64), nullable=False)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -88,8 +84,6 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    # True only while disabled by an owner-suspend cascade; lets restore re-enable
-    # exactly these users without clobbering an admin's manual disable.
     suspended_by_owner: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default=text("false")
     )
@@ -177,10 +171,6 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     refresh_tokens: Mapped[list[RefreshToken]] = relationship(back_populates="user", lazy="noload")
 
     __table_args__ = (
-        # Partial unique indexes: uniqueness applies only to live (non-removed)
-        # rows so a soft-deleted user's username/email can be reused. Named to
-        # match the old constraints so IntegrityError-detail conflict mapping
-        # (repositories/user.py::_conflict_from_integrity) still resolves.
         Index(
             "uq_users_username",
             "username",

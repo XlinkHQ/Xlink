@@ -36,9 +36,6 @@ class GrpcServer:
                 ("grpc.max_receive_message_length", 16 * 1024 * 1024),
                 ("grpc.keepalive_time_ms", 30000),
                 ("grpc.keepalive_permit_without_calls", 1),
-                # Every gunicorn worker runs this lifespan and binds the same
-                # port; SO_REUSEPORT lets all of them share it (kernel load-
-                # balances) instead of all-but-one failing to bind.
                 ("grpc.so_reuseport", 1),
             ],
         )

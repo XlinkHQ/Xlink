@@ -142,8 +142,6 @@ class AssignmentExpirationJob:
                             ClientAssignment.expires_at < now,
                         ),
                         and_(User.expire_at.isnot(None), User.expire_at < now),
-                        # On-hold users that were never activated before their
-                        # activation deadline expire instead of being served forever.
                         and_(
                             User.on_hold.is_(True),
                             User.activation_deadline.isnot(None),
@@ -151,8 +149,6 @@ class AssignmentExpirationJob:
                         ),
                     ),
                 )
-                # Cap per run so a large backlog (clock jump / long downtime) doesn't
-                # load the entire expired set into memory; the rest expires next cycle.
                 .limit(5000)
             )
             result = await session.execute(stmt)
@@ -168,10 +164,6 @@ class AssignmentExpirationJob:
                 .where(ClientAssignment.id.in_(ids))
                 .values(status=AssignmentStatus.EXPIRED)
             )
-            # Close the on-hold escape hatch: an on-hold user whose activation
-            # deadline passed must have on_hold cleared + expire_at set to now, or a
-            # later quota/expiry edit re-activates them (expire_at is None → looks
-            # "not expired") and hands out free service. Mirror activate_on_hold.
             await session.execute(
                 update(User)
                 .where(
@@ -227,10 +219,6 @@ class AssignmentExpirationJob:
     async def _wake_nodes(self, node_ids: list) -> None:
         if self._cache is None or not node_ids:
             return
-        # Broad invalidation is O(1): bump the global subscription cache epoch so
-        # every cached feed goes stale at once, instead of a SCAN+DEL over the
-        # whole subscription:* keyspace (which stampeded every user into a
-        # recompute). Stale keys expire by TTL.
         await self._cache.incr("subscription:rev:__global__")
         for nid in node_ids:
             await self._cache.publish_node_event(nid, "config_changed")

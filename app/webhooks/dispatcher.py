@@ -19,8 +19,6 @@ logger = get_logger("xlink.webhooks")
 
 def _is_blocked_ip(raw: str) -> bool:
     ip = ipaddress.ip_address(raw)
-    # Unwrap IPv4-mapped IPv6 (::ffff:169.254.169.254) so the class checks
-    # below see the real IPv4 address rather than a "public" v6 wrapper.
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
     return (
@@ -74,8 +72,6 @@ import http.client
 
 
 def _guarded_connect(conn: http.client.HTTPConnection) -> None:
-    # Close the DNS-rebind TOCTOU: validate the address we ACTUALLY connected to,
-    # not just what getaddrinfo returned during the pre-flight check.
     sock = socket.create_connection(
         (conn.host, conn.port), conn.timeout, conn.source_address
     )
@@ -123,8 +119,6 @@ def _post(url: str, payload: dict, headers: dict[str, str], secret: str | None =
         signature = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
         sent["x-webhook-signature"] = f"sha256={signature}"
     req = urllib.request.Request(url, data=body, headers=sent, method="POST")
-    # No redirects: a 302 to http://169.254.169.254/ would bypass the
-    # pre-flight host check that only validated the original URL.
     with _NO_REDIRECT_OPENER.open(req, timeout=10):
         pass
 
@@ -207,9 +201,6 @@ class WebhookDispatcher:
         return line
 
     async def _send_all(self, payload: dict) -> None:
-        # Do NOT send the raw secret as a header — _post signs the body with it
-        # (x-webhook-signature, HMAC-SHA256). Sending the secret itself would let
-        # any receiver forge valid signatures, defeating the scheme.
         headers: dict[str, str] = {}
         for url in self._urls:
             try:

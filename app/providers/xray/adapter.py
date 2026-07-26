@@ -41,7 +41,6 @@ def _build_client(spec: ClientSpec, protocol: str) -> dict[str, Any]:
         method = str(attrs.get("method", default_method_for(protocol))).strip().lower()
         client["method"] = method if method in valid else default_method_for(protocol)
     if protocol in SOCKS_PROTOCOLS:
-        # socks5 = user + pass, no AEAD method. username defaults to the email tag.
         password = attrs.get("password")
         client["password"] = (
             str(password).strip() if isinstance(password, str) and password.strip()

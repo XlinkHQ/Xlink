@@ -117,8 +117,6 @@ async def test_report_traffic_endpoint_malformed(client: AsyncClient, app_state:
 
 
 async def test_ingest_quota_returns_429_past_limit(client: AsyncClient, app_state: AppState):
-    # Per-node ingest quota: past the configured per-minute limit the node's
-    # ingest requests get a 429, keyed by node id (not IP).
     app_state.settings.agent_ingest_rate_limit_per_minute = 3
     node_id, assignment_id = await _seed(app_state)
     headers = {"X-Agent-Token": TOKEN}
@@ -130,7 +128,6 @@ async def test_ingest_quota_returns_429_past_limit(client: AsyncClient, app_stat
             headers=headers,
         )
         codes.append(resp.status_code)
-    # First 3 within the window succeed, the rest are throttled.
     assert codes[:3] == [200, 200, 200]
     assert codes[3] == 429
     assert codes[4] == 429
@@ -145,8 +142,6 @@ async def test_ingest_quota_returns_429_past_limit(client: AsyncClient, app_stat
 
 
 async def test_ingest_quota_scoped_per_node(client: AsyncClient, app_state: AppState):
-    # Two nodes get independent buckets — one node hitting its cap must not
-    # throttle a different node (proves the key is the node id, not a shared IP).
     app_state.settings.agent_ingest_rate_limit_per_minute = 2
     node_a, assign_a = await _seed(app_state)
     node_b, assign_b = await _seed(app_state)
@@ -156,7 +151,6 @@ async def test_ingest_quota_scoped_per_node(client: AsyncClient, app_state: AppS
             json=_payload(assign_a),
             headers={"X-Agent-Token": TOKEN},
         )
-    # node_a is now over its cap; node_b's first request must still pass.
     resp_b = await client.post(
         f"/api/v1/agent/nodes/{node_b}/traffic",
         json=_payload(assign_b),

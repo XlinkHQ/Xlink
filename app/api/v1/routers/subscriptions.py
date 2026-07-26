@@ -96,8 +96,6 @@ class _BlockedSubscriptionError(Exception):
 
 @lru_cache(maxsize=256)
 def _compiled_rule(pattern: str) -> re.Pattern[str] | None:
-    # Compile once per distinct pattern instead of re.match() recompiling on every
-    # public-subscription hit (highest-traffic endpoint; up to 64 rules/request).
     try:
         return re.compile(pattern)
     except re.error:
@@ -105,9 +103,6 @@ def _compiled_rule(pattern: str) -> re.Pattern[str] | None:
 
 
 def _match_admin_rules(user_agent: str, rules: list[dict[str, str]]) -> SubscriptionFormat | None:
-    # Bound the ReDoS surface: admin patterns run against an attacker-controlled
-    # User-Agent on a public endpoint. Cap both lengths so catastrophic
-    # backtracking can't stall a worker.
     ua = user_agent[:512]
     for rule in rules:
         pattern = rule.get("pattern")
@@ -323,9 +318,6 @@ async def public_subscription(
     x_hwid: str = Header(default=""),
 ) -> Response:
     user_id, scope, token_revision = verify_subscription_token(token, settings)
-    # Only per-USER links are publicly servable. PROFILE/ASSIGNMENT scopes have
-    # no per-user revocation or gating here and a PROFILE token would leak every
-    # user's config on that profile — refuse them on the public endpoint.
     if scope is not FeedScope.USER:
         raise HTTPException(status_code=404)
     cfg = await app_settings.get_subscription()
@@ -342,16 +334,9 @@ async def public_subscription(
         device_ok = await device_svc.register_device(
             user_id, user_agent, client_ip, owner.device_limit, hwid=x_hwid
         )
-        # A non-browser client over the limit is rejected outright. A browser
-        # preview isn't hard-rejected (so the user can still see their status
-        # page), but it must NOT be handed working configs — otherwise a forged
-        # "Mozilla" UA is an unlimited-device bypass. device_ok gates the embed.
         if not device_ok and not is_browser_preview:
             raise HTTPException(status_code=403, detail="Device limit reached.")
 
-    # Gate once, up front (lightweight quota read — no heavy TrafficRecord join),
-    # so an expired/limited user still gets the status PAGE in a browser instead
-    # of a raw 422 from the quota-enforcing feed() call below.
     quota = await subscriptions.get_user_quota(user_id)
     now_ts = int(time.time())
     not_servable = (
@@ -365,10 +350,6 @@ async def public_subscription(
 
     if is_browser_preview:
         configs: list[str] = []
-        # device_ok MUST gate the embed: a browser preview isn't hard-rejected, but
-        # an over-device-limit client (incl. a forged "Mozilla" UA) must not receive
-        # working configs on the status page — that would be an unlimited-device
-        # bypass.
         if not not_servable and device_ok:
             text_feed = await subscriptions.feed(
                 _request(scope, user_id, SubscriptionFormat.TEXT, RenderVersion.V1, use_cache=True)
@@ -454,8 +435,6 @@ async def public_subscription(
                 version=RenderVersion.V1,
                 use_cache=not cfg.shuffle_configs,
                 shuffle=cfg.shuffle_configs,
-                # Real client fetch: this is the "first use" that starts an
-                # on-hold user's window.
                 activate_first_use=True,
             )
         )

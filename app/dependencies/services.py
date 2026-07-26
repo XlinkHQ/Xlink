@@ -79,9 +79,6 @@ def get_assignment_repo(session: SessionDep) -> ClientAssignmentRepository:
 def get_subscription_repo(
     session: SessionDep, reader_session: ReaderSessionDep
 ) -> SubscriptionRepository:
-    # reader_session routes only the pure source-listing reads to the replica
-    # (falls back to the primary when no replica is configured). Writes and
-    # read-after-write reads (quota/on-hold) stay on `session`.
     return SubscriptionRepository(session, reader_session=reader_session)
 
 
@@ -117,8 +114,6 @@ def get_user_service(
     subscription_service: SubscriptionServiceDep,
     dispatcher: DispatcherDep = None,
 ) -> UserService:
-    # Use the shared lifespan-owned dispatcher (drained on shutdown); fall back to
-    # a fresh one only if state has none (e.g. some tests).
     disp = dispatcher or WebhookDispatcher(settings)
     return UserService(repo, cache, disp, subscription_service=subscription_service)
 
@@ -223,8 +218,6 @@ def get_traffic_service(
     cache: CacheDep,
     reader_session: ReaderSessionDep,
 ) -> TrafficService:
-    # reader_session carries the analytics SUM/series reads to the replica when
-    # configured; ingest/reset/rollup writes always use `session`.
     return TrafficService(session, events=events, cache=cache, reader_session=reader_session)
 
 

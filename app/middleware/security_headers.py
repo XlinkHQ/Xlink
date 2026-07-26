@@ -11,9 +11,6 @@ _BASE_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"content-security-policy", b"default-src 'none'; frame-ancestors 'none'"),
 )
 _HSTS = (b"strict-transport-security", b"max-age=31536000; includeSubDomains; preload")
-# Swagger UI / ReDoc HTML pages load assets from the jsdelivr CDN and run an
-# inline init script, so the strict default-src 'none' policy breaks them. These
-# docs routes only exist in non-production.
 _DOCS_PATHS = ("/docs", "/redoc")
 _DOCS_CSP = (
     b"content-security-policy",

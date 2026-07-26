@@ -180,8 +180,6 @@ def render(configs: tuple[ProviderConfig, ...]) -> str:
     for c in configs:
         if c.protocol not in allowed:
             continue
-        # Skip a single config with bad data (e.g. non-numeric alterId) instead
-        # of 500-ing the whole feed on the public endpoint.
         try:
             out.append(render_one(c))
         except FormatRenderError:

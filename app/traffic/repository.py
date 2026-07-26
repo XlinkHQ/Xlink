@@ -37,22 +37,12 @@ def _as_hour_datetime(value) -> datetime:
 
 
 class TrafficRepository:
-    # Minimum lifetime for the idempotency ledger (ProcessedBatch), in days.
-    # Floors the ledger GC so a node offline up to this long cannot re-deliver a
-    # WAL batch whose ledger row was already purged (→ double-count). MUST stay
-    # comfortably ABOVE the agent's WAL age cap (XLINK_WAL_MAX_AGE_DAYS, default
-    # 30d): the WAL can never hold a batch older than its cap, and the ledger
-    # always remembers batches at least this long, so the windows never cross.
     _LEDGER_MIN_RETENTION_DAYS = 90
 
     def __init__(
         self, session: AsyncSession, *, reader_session: AsyncSession | None = None
     ) -> None:
         self.session = session
-        # OPTIONAL replica session for pure, lag-tolerant analytics reads (the
-        # SUM/series/by-node aggregations). None when no replica is configured →
-        # these reads use the primary session, identical to before. NEVER used
-        # for writes, ingest, rollup, or read-after-write-sensitive reads.
         self.reader = reader_session or session
 
     async def apply_usage_deltas(self, deltas: dict[uuid.UUID, int]) -> None:
@@ -61,10 +51,6 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
 
         ordered = sorted(deltas)
-        # Single UPDATE with a per-id CASE delta instead of one round-trip per
-        # assignment: this is the traffic-ingest hot path (runs on every agent
-        # report), so N sequential UPDATEs held the connection and scaled badly
-        # with assignments-per-node. One statement, one round-trip.
         delta_case = case(
             {aid: deltas[aid] for aid in ordered},
             value=ClientAssignment.id,
@@ -151,12 +137,6 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
-        # Read from the rollup+raw union so all-time / since totals stay correct
-        # even after raw rows older than the rollup have been purged (otherwise a
-        # raw-only scan would silently undercount purged history). record_count
-        # here counts SOURCE rows (rolled hour-buckets + raw samples), not raw
-        # samples — a full raw sample count is no longer meaningful once rolled
-        # buckets replace the samples that produced them.
         boundary = await self._read_boundary(reader=True)
         src = self._unified_usage_ts_cte(boundary)
         coeff = func.coalesce(Node.usage_coefficient, 1.0)
@@ -255,10 +235,6 @@ class TrafficRepository:
     async def delete_before(self, cutoff: datetime, *, batch: int = 10000) -> int:
         from app.traffic.models import ProcessedBatch
 
-        # Delete in bounded chunks rather than one unbounded DELETE: a full-table
-        # purge otherwise takes a long transaction + wide lock on traffic_records,
-        # which is also the ingest hot-path table. Each chunk is a small statement;
-        # committing per chunk keeps locks short and WAL bounded.
         deleted = 0
         while True:
             sub = (
@@ -275,22 +251,7 @@ class TrafficRepository:
             await self.session.commit()
             if n < batch:
                 break
-            # Yield between chunks so a large backlog purge doesn't monopolize the
-            # event loop / a DB connection back-to-back.
             await asyncio.sleep(0)
-        # Keep the idempotency ledger LONGER than the records it guards. If a node
-        # is offline past the record-retention window and still holds buffered WAL,
-        # purging both the records AND its batch_ids at the same cutoff lets the
-        # re-delivered batch look brand-new → double-count.
-        #
-        # `cutoff` here is the RAW cutoff (min(raw_retention, rollup watermark)),
-        # which collapses to a few hours once rollups run steadily — so a naive
-        # "2×(now-cutoff)" ledger window can shrink to hours and stop protecting
-        # against a long-offline node. Floor the ledger horizon at a fixed minimum
-        # (_LEDGER_MIN_RETENTION_DAYS) so a node offline up to that many days can
-        # never re-deliver a batch whose ledger row was already GC'd. The agent's
-        # WAL age cap (XLINK_WAL_MAX_AGE_DAYS, default 30d) is kept well under this
-        # floor, so the two windows can never cross.
         now = datetime.now(UTC)
         two_x_cutoff = cutoff - (now - cutoff)
         floor_cutoff = now - timedelta(days=self._LEDGER_MIN_RETENTION_DAYS)
@@ -307,9 +268,6 @@ class TrafficRepository:
     async def hourly_count(self) -> int:
         return int(await self.session.scalar(select(func.count()).select_from(TrafficHourly)) or 0)
 
-    # ------------------------------------------------------------------
-    # Hourly rollup / compaction
-    # ------------------------------------------------------------------
     async def get_rollup_watermark(self) -> datetime | None:
         state = await self.session.get(TrafficRollupState, 1)
         wm = state.hourly_watermark if state is not None else None
@@ -484,11 +442,6 @@ class TrafficRepository:
     ) -> dict[uuid.UUID, tuple[int, int, bool]]:
         from app.domain.user import User
 
-        # Report the ACCOUNT-level figures the panel actually enforces on:
-        # used = User.users_data_usage (the maintained coefficient-adjusted total),
-        # limit = User.data_limit_bytes, unlimited = data_limit_bytes IS NULL.
-        # (Summing per-assignment traffic_limit_bytes produced an incoherent
-        # "limit=X but unlimited=true" contract.)
         if not user_ids:
             return {}
         rows = (
@@ -504,20 +457,6 @@ class TrafficRepository:
             r[0]: (int(r[1] or 0), int(r[2] or 0), r[2] is None) for r in rows
         }
 
-    # ------------------------------------------------------------------
-    # Rollup-aware analytics reads
-    #
-    # The raw/rollup boundary is the rollup watermark: the first hour bucket the
-    # rollup job has NOT yet aggregated. Everything strictly before it lives in
-    # traffic_hourly (closed buckets); everything at/after it is still only in
-    # traffic_records (the current + not-yet-rolled window). Reads below UNION a
-    # rollup slice (traffic_hourly, hour_bucket < boundary) with a raw slice
-    # (traffic_records, collected_at >= boundary) so the two never overlap and
-    # never double-count, regardless of when the rollup job last ran. If the
-    # rollup has never run (watermark NULL) the boundary is the epoch so the
-    # rollup slice is empty and EVERYTHING is read from raw — behaviour is then
-    # identical to the pre-rollup code.
-    # ------------------------------------------------------------------
     _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
     async def _read_boundary(self, *, reader: bool = False) -> datetime:
@@ -553,9 +492,6 @@ class TrafficRepository:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
-        # Weight by the node's usage_coefficient so reported usage matches the
-        # enforced counters (ClientAssignment.used_bytes is coefficient-adjusted
-        # at ingest, while stored bytes are raw). Reads from the rollup+raw union.
         src = self._unified_usage_cte(await self._read_boundary(reader=True))
         weighted = func.coalesce(
             func.sum(src.c.total_bytes * func.coalesce(Node.usage_coefficient, 1.0)), 0
@@ -618,9 +554,6 @@ class TrafficRepository:
     ) -> list[tuple[str, int, int]]:
         from app.domain.client_assignment import ClientAssignment
 
-        # Hourly series: closed hours come pre-bucketed from traffic_hourly, the
-        # current/not-yet-rolled window from raw records bucketed in Python. The
-        # boundary keeps the two disjoint so no hour is counted from both.
         boundary = await self._read_boundary(reader=True)
         buckets: dict[datetime, list[int]] = {}
 
@@ -701,10 +634,6 @@ class TrafficRepository:
     ) -> list[tuple[str, int, int]]:
         from app.domain.client_assignment import ClientAssignment
 
-        # Daily series derived by grouping the hourly rollup (closed hours) plus
-        # the raw open window by calendar day. The boundary keeps the two
-        # disjoint. Day grouping is done in Python so the two source shapes
-        # (hour_bucket vs collected_at) fold into the same day key uniformly.
         boundary = await self._read_boundary(reader=True)
         days: dict[str, list[int]] = {}
 
@@ -791,10 +720,6 @@ class TrafficRepository:
         await self.session.execute(
             delete(TrafficRecord).where(TrafficRecord.assignment_id.in_(ids))
         )
-        # Also drop the hourly rollup rows: every analytics read (totals,
-        # usage_by_node, usage_series, usage_hourly_*) serves from the rollup+raw
-        # UNION, so deleting only raw would leave the pre-reset usage visible from
-        # the retained rollup buckets and contradict the zeroed used_bytes.
         await self.session.execute(
             delete(TrafficHourly).where(TrafficHourly.assignment_id.in_(ids))
         )

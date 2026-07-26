@@ -15,8 +15,6 @@ from app.subscription.formats.capabilities import supported_protocols
 from app.subscription.models import ProviderConfig
 from app.subscription.schemas import SubscriptionFormat
 
-# Kept as module-level names for back-compat; sourced from the single capability
-# matrix so the allow-set can no longer drift from what the renderer emits.
 CLASH_PROTOCOLS = supported_protocols(SubscriptionFormat.CLASH_YAML)
 MIHOMO_PROTOCOLS = supported_protocols(SubscriptionFormat.MIHOMO_YAML)
 
@@ -120,8 +118,6 @@ def build_proxy(config: ProviderConfig, *, allowed: frozenset[str]) -> dict[str,
         proxy["password"] = config.resolved_password
     elif protocol == "shadowtls":
         proxy["type"] = "ss"
-        # Match the agent's shadowtls detour default (aes-128-gcm): the ss password
-        # is the arbitrary per-user credential, not a base64 2022-blake3 PSK.
         proxy["cipher"] = str(setting(config, "method", "aes-128-gcm"))
         proxy["password"] = str(setting(config, "password", config.resolved_password))
         proxy["plugin"] = "shadow-tls"

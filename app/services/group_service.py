@@ -18,8 +18,6 @@ class GroupService:
         group = Group(name=data.name, slug=data.slug)
         group = await self._repo.create_group(group)
         await self._repo.set_profiles(group.id, data.profile_ids)
-        # Reload the eager ``profiles`` collection so GroupRead serializes the
-        # freshly-linked profile ids.
         await self._repo.session.refresh(group, attribute_names=["profiles"])
         return group
 
@@ -40,11 +38,6 @@ class GroupService:
             group.name = data.name
         if data.profile_ids is not None:
             await self._repo.set_profiles(group.id, data.profile_ids)
-            # The membership lives in the join table, so a profiles-only change
-            # doesn't dirty the ``groups`` row on its own. Re-set a mapped column
-            # to itself to mark the row dirty; the UPDATE then lets version_id_col
-            # bump the version and refresh updated_at, preserving the old
-            # optimistic-locking behaviour.
             group.name = group.name
 
         async def _save(g: Group) -> Group:

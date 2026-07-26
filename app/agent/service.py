@@ -129,13 +129,6 @@ class NodeAgentService:
         node = await self.authenticate(node_id, token)
 
         node.last_seen_at = datetime.now(UTC)
-        # A config report is a liveness signal, but liveness of the AGENT is not
-        # health of the node: if the agent is up while every installed core is
-        # unhealthy (e.g. xray crashed), flipping OFFLINE→ACTIVE would route new
-        # users onto a node that serves no traffic and fire a false NodeRecovered.
-        # Only recover when at least one core reports healthy. An empty
-        # provider_status (no cores report, e.g. a brand-new node) keeps the prior
-        # liveness-only behaviour so it isn't stuck offline.
         cores_all_unhealthy = bool(provider_status) and all(
             str(v) != "healthy" for v in provider_status.values()
         )

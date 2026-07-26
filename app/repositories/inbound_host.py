@@ -58,7 +58,6 @@ class InboundHostRepository:
         if not rows:
             return {}
 
-        # Build per-profile index + universal list in a single pass (was O(n*m)).
         universal: list[dict[str, Any]] = []
         by_profile: dict[uuid.UUID, list[dict[str, Any]]] = {}
         for h in rows:

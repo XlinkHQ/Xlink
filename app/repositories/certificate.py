@@ -18,8 +18,6 @@ class CertificateRepository:
         return list((await self.session.execute(stmt)).scalars().all())
 
     async def list_acme_due(self, *, before: datetime) -> list[Certificate]:
-        # ACME certs whose expiry is within the renewal window (or unknown).
-        # MANUAL certs are never auto-renewed — the operator owns them.
         stmt = select(Certificate).where(
             Certificate.source == CertificateSource.ACME,
             or_(Certificate.not_after.is_(None), Certificate.not_after < before),

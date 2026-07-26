@@ -15,14 +15,12 @@ from prometheus_client.platform_collector import PlatformCollector
 from prometheus_client.process_collector import ProcessCollector
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-# Re-exported for the /metrics response's Content-Type.
 __all__ = [
     "CONTENT_TYPE_LATEST",
     "PrometheusMetrics",
     "PrometheusMiddleware",
 ]
 
-# Latency buckets (seconds) tuned for an API panel: sub-ms .. ~10s.
 _LATENCY_BUCKETS = (
     0.005,
     0.01,
@@ -50,14 +48,10 @@ class PrometheusMetrics:
     def __init__(self) -> None:
         self.registry = CollectorRegistry(auto_describe=True)
 
-        # Standard process/runtime collectors (CPU, RSS, open fds, GC, python
-        # build info). Cheap; sampled at scrape time by the client library.
         ProcessCollector(registry=self.registry)
         PlatformCollector(registry=self.registry)
         GCCollector(registry=self.registry)
 
-        # --- HTTP request metrics (bounded cardinality: route TEMPLATE, not the
-        # raw path, so /users/{id} collapses one series rather than one per UUID).
         self.http_requests_total = Counter(
             "xlink_http_requests_total",
             "Total HTTP requests processed.",
@@ -78,8 +72,6 @@ class PrometheusMetrics:
             registry=self.registry,
         )
 
-        # --- Domain gauges. Refreshed cheaply from the Redis metrics summary
-        # (see DomainMetricsCollector); NOT computed per scrape.
         self.users_total = Gauge(
             "xlink_users_total",
             "Total users.",
@@ -132,8 +124,6 @@ def _route_template(scope: Scope) -> str:
     path = getattr(route, "path", None)
     if isinstance(path, str) and path:
         return path
-    # Unmatched (404) or a Mount without a leaf template: collapse to a single
-    # bucket so a scanner hitting random paths can't explode cardinality.
     return "__unmatched__"
 
 

@@ -144,8 +144,6 @@ async def test_heartbeat_update(client: AsyncClient, admin_headers: dict) -> Non
     )
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    # current_users is DB-authoritative (COUNT of ACTIVE assignments); a
-    # heartbeat updates liveness/status but never overwrites the counter.
     assert body["current_users"] == 0
     assert body["status"] == "active"
     assert body["last_seen_at"] is not None

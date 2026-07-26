@@ -85,8 +85,6 @@ class NotificationJob:
         try:
             was_set = await self._cache.client.set(key, b"1", nx=True, ex=_DEDUP_TTL_SECONDS)
         except Exception as exc:
-            # Redis outage: fail closed (suppress) to avoid a duplicate-storm on
-            # every scan cycle, but log loudly so silent sent=0 scans are visible.
             logger.warning("notifications_dedup_redis_error", key=key, error=str(exc))
             return True
         return not was_set
@@ -115,10 +113,6 @@ class NotificationJob:
         async with self._db.session() as session:
             if not await self._load_settings(session):
                 return 0
-            # Use the maintained account total (users_data_usage) — the SAME number
-            # enforcement and the UI use — NOT a sum over ACTIVE assignments: a user
-            # who crossed their limit flips to LIMITED, so an ACTIVE-only sum reads
-            # low and the "N% used" warning would fire late or never.
             stmt = select(User, User.users_data_usage).where(
                 User.role == UserRole.USER,
                 User.is_active.is_(True),

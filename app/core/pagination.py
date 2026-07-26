@@ -25,8 +25,6 @@ def decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
 
 
 def encode_sort_cursor(sort: str, value, id_: uuid.UUID) -> str:
-    # Generic keyset cursor: the sort key + the row's sort-column value (as a
-    # JSON-safe scalar) + the tiebreak id. `value` may be None (nullable column).
     if isinstance(value, datetime):
         v = value.isoformat()
     else:

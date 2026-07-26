@@ -139,10 +139,6 @@ class CertificateService:
         window_days: int = 30,
         now: datetime | None = None,
     ) -> int:
-        # Re-issue every ACME cert whose expiry is within window_days. On failure
-        # the currently-served cert is left UNTOUCHED (only last_error is noted),
-        # so a transient ACME outage never takes a still-valid cert out of
-        # service — it just retries next cycle. Returns how many were renewed.
         from datetime import timedelta
 
         from app.services.acme_issuer import AcmeError, issue_certificate
@@ -186,12 +182,6 @@ class CertificateService:
         existing.source = CertificateSource.ACME
         existing.status = CertificateStatus.PENDING
         existing.last_error = ""
-        # Commit the PENDING state BEFORE the multi-minute blocking ACME flow so
-        # it is durable: if the client disconnects or the worker restarts mid-
-        # issuance, the row shows PENDING (visibly in-progress) instead of being
-        # rolled back to its prior state with no trace that issuance was ever
-        # attempted. The request session otherwise commits only when the handler
-        # returns, which never happens on a mid-flight disconnect.
         await self._repo.session.commit()
 
         try:

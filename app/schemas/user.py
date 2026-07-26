@@ -48,20 +48,12 @@ class UserCreate(InputModel):
     subscription_url_prefix: str | None = Field(default=None, max_length=512)
     admin_user_limit: int | None = Field(default=None, ge=0)
     admin_traffic_limit_bytes: int | None = Field(default=None, ge=0)
-    # Optional: auto-assign the new user to these profiles (user+config in one
-    # call). Xlink needs an explicit user→profile→node assignment before a user
-    # gets any config; a raw API client (bot) would otherwise create a user with
-    # an empty subscription.
     profile_ids: list[uuid.UUID] | None = Field(default=None)
 
     @model_validator(mode="after")
     def _validate_on_hold(self) -> UserCreate:
         on_hold = self.on_hold or self.expire_strategy == UserExpireStrategy.START_ON_FIRST_USE
         if on_hold:
-            # on_hold_duration_seconds is OPTIONAL: with a duration the account
-            # expires that long after first use; without one it simply activates
-            # on first use and never auto-expires (legacy behavior). Only a fixed
-            # expire_at is contradictory with on-hold.
             if self.expire_at is not None:
                 raise ValueError("An on-hold user cannot also have a fixed expire_at.")
         return self

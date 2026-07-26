@@ -24,18 +24,13 @@ def _audit_query(
     date_to: datetime | None,
     limit: int,
 ):
-    # One place builds the audit filter for both the JSON and CSV endpoints.
     stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
     if actor:
-        # Escape LIKE wildcards so a literal % / _ in the search term isn't
-        # treated as a pattern (match-everything / index-defeating scan).
         needle = actor.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         stmt = stmt.where(AuditLog.actor_username.ilike(f"%{needle}%", escape="\\"))
     if date_from:
         stmt = stmt.where(AuditLog.created_at >= date_from)
     if date_to:
-        # A date-only "to" parses to that day's midnight; make it inclusive of the
-        # whole day so From=8th/To=8th isn't an empty range missing the latest day.
         end = date_to
         if end.hour == 0 and end.minute == 0 and end.second == 0:
             end = end + timedelta(days=1)

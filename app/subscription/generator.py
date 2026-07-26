@@ -134,9 +134,6 @@ class SubscriptionGenerator:
     ) -> tuple[ProviderConfig, ...]:
         configs: list[ProviderConfig] = []
 
-        # Use the per-user account total (users_data_usage) for the displayed
-        # usage/remaining, matching the quota gate — summing per-assignment
-        # used_bytes over only the ACTIVE sources under-reports a LIMITED user.
         used_total = 0
         if sources:
             user = sources[0].assignment.user

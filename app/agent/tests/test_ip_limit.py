@@ -93,11 +93,8 @@ async def test_ip_limit_auto_recovers_when_devices_drop(app_state: AppState):
     ids = await _seed(app_state, device_limit=2)
     svc = IpLimitService(app_state.db, app_state.cache)
     aid = ids["assignment_id"]
-    # Over the limit → disabled.
     await svc.report([(aid, "1.1.1.1"), (aid, "2.2.2.2"), (aid, "3.3.3.3")])
     assert await _status(app_state, aid) is AssignmentStatus.DISABLED
-    # Devices drop back under the limit (IP set expires/clears) → next report
-    # re-activates the assignment we disabled.
     await app_state.cache.client.delete(_key(ids["user_id"]))
     await svc.report([(aid, "1.1.1.1")])
     assert await _status(app_state, aid) is AssignmentStatus.ACTIVE

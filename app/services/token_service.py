@@ -56,13 +56,7 @@ class TokenService:
     async def rotate(self, refresh_token: str, user: User) -> TokenPair:
         payload = decode_token(refresh_token, self._settings, TokenType.REFRESH)
         jti = payload.get("jti", "")
-        # Idempotent grace replay: if this exact token was already rotated within
-        # the grace window, return the SAME successor pair (cached ephemerally) —
-        # not a new independent family. A thief replaying gets only the token the
-        # legitimate client already holds, so theft can't mint a live family.
         if self._cache is not None and jti:
-            # Redis being down must NOT break refresh — fall through to the DB
-            # path (which still tolerates a grace replay) on any cache error.
             with __import__("contextlib").suppress(Exception):
                 cached = await self._cache.get_json(self._grace_key(jti))
                 if cached:
@@ -116,11 +110,6 @@ class TokenService:
                 if revoked_at is not None and revoked_at.tzinfo is None:
                     revoked_at = revoked_at.replace(tzinfo=UTC)
                 grace_cutoff = datetime.now(UTC) - timedelta(seconds=_REUSE_GRACE_SECONDS)
-                # DB grace-mint is the always-on correctness fallback for legit
-                # concurrent double-submits / mid-rotate crashes that miss the
-                # Redis idempotency cache (which only exists AFTER the first
-                # rotate commits). grace_used guards against a true replay minting
-                # twice; only genuine reuse past the window revokes the family.
                 if revoked_at is not None and revoked_at >= grace_cutoff:
                     if existing.grace_used:
                         await self._repo.revoke_all_for_user(existing.user_id)

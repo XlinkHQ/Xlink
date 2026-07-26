@@ -8,9 +8,6 @@ from app.middleware.audit_writer import AuditEntry
 
 _AUDITED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 _SKIP_PREFIXES = ("/api/v1/agent/", "/api/v1/auth/refresh")
-# Read-only endpoints that use POST only to carry a request body. They are
-# polled on every page load, so auditing them floods the log with noise and
-# mislabels reads as mutations.
 _SKIP_SUFFIXES = (
     "/traffic/users/usage",
     "/traffic/users/last-seen",
@@ -63,14 +60,10 @@ def _action_for(method: str, path: str) -> str:
     parts = [p for p in path.split("/") if p and p not in ("api", "v1")]
     if not parts:
         return method.lower() + " request"
-    # Resource = path with id segments dropped, e.g. routing/outbounds/{id}/ping
-    # → "routing/outbounds"; keep it readable and specific instead of just the
-    # first segment (which made every routing action read "create routing").
     named = [p for p in parts if not _looks_like_id(p)]
     verb = {"POST": "create", "PUT": "update", "PATCH": "update", "DELETE": "delete"}.get(
         method, method.lower()
     )
-    # A trailing (or pre-id) known action segment names the verb precisely.
     if named and named[-1] in _KNOWN_ACTIONS:
         verb = named[-1]
         resource = "/".join(named[:-1]) or named[-1]

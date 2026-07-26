@@ -35,9 +35,6 @@ class TrafficService:
         reader_session: AsyncSession | None = None,
     ) -> None:
         self._session = session
-        # reader_session (when a replica is configured) carries only the pure
-        # analytics reads; None → the repo uses the primary session for them,
-        # identical to before. Writes/ingest/rollup always use `session`.
         self._repo = TrafficRepository(session, reader_session=reader_session)
         self._events = events
         self._collector = collector or TrafficCollector()
@@ -61,9 +58,6 @@ class TrafficService:
         raise RuntimeError("unreachable")
 
     async def _ingest_once(self, batch: TrafficBatch) -> TrafficIngestResult:
-        # Idempotency gate: a resent or concurrently-duplicated batch (same
-        # deterministic batch_id) is claimed once; a repeat is a no-op so usage
-        # deltas are never double-applied.
         if batch.batch_id and not await self._repo.claim_batch(batch.node_id, batch.batch_id):
             logger.info(
                 "traffic_batch_duplicate", node_id=str(batch.node_id), batch_id=batch.batch_id
@@ -79,13 +73,6 @@ class TrafficService:
         owned = await self._owned_assignment_ids(batch)
         filtered = self._filter_to_owned(batch, owned)
         prepared = self._collector.prepare(filtered)
-        # bulk_insert applies ON CONFLICT DO NOTHING and returns the per-assignment
-        # sum of bytes for the rows it ACTUALLY inserted (RETURNING). Usage deltas
-        # come from that, not a pre-insert existing-keys snapshot: a snapshot
-        # races two concurrent batches that carry the same sample under different
-        # batch_ids (both see it absent → both count it, but only one row
-        # survives → double-count). RETURNING attributes each row's bytes to the
-        # one transaction that inserted it.
         deltas, inserted = await self._repo.bulk_insert(prepared.rows)
         duplicates = len(prepared.rows) - inserted + prepared.deduped
         skipped = prepared.skipped + (len(batch.samples) - len(filtered.samples))
@@ -95,10 +82,6 @@ class TrafficService:
         if coeff != 1.0:
             deltas = {aid: round(d * coeff) for aid, d in deltas.items()}
         await self._repo.apply_usage_deltas(deltas)
-        # Refresh the just-updated columns in ONE query instead of a per-assignment
-        # session.refresh() (which issued one SELECT each on this hot path). The
-        # UPDATE ran with synchronize_session=False, so the ORM copies are stale;
-        # pull fresh values with a single IN and write them back in-memory.
         owned_ids = [aid for aid in deltas if aid in owned]
         if owned_ids:
             fresh = (
@@ -146,18 +129,7 @@ class TrafficService:
         reference = now or datetime.now(UTC)
         floor_hour = reference.replace(minute=0, second=0, microsecond=0)
         watermark = await self._repo.get_rollup_watermark()
-        # Re-aggregate from one hour before the watermark to absorb any raw rows
-        # that landed late for the boundary hour; ON CONFLICT recompute makes the
-        # overlap safe (no double-count). On first run (no watermark) aggregate
-        # everything closed.
         since = (watermark - timedelta(hours=1)) if watermark is not None else None
-        # A node re-delivering hours/days-old WAL lands raw rows in buckets BELOW
-        # that window. Because the rollup upsert RECOMPUTES each bucket's SUM
-        # (idempotent), it is safe to lower `since` to the oldest such late row so
-        # its usage is folded into traffic_hourly before the raw rows are purged —
-        # otherwise it is lost from the rollup permanently. Bounded by raw
-        # retention: no raw exists older than the purge cutoff, so the widened
-        # window can never scan unbounded history.
         if since is not None:
             oldest_late = await self._repo.min_raw_collected_at_before(since)
             if oldest_late is not None:
@@ -184,7 +156,6 @@ class TrafficService:
         node_ids: list[uuid.UUID] = []
         if user.is_active and not user.removed:
             node_ids = await self._repo.reactivate_disabled_assignments(user_id)
-            # LIMITED→ACTIVE brought slots back; recompute so current_users is right.
             await self._resync_node_counts(node_ids)
         await self._session.flush()
         await self._wake_nodes(node_ids, user_ids=[user_id])
@@ -278,8 +249,6 @@ class TrafficService:
         owned: dict[uuid.UUID, ClientAssignment],
         deltas: dict[uuid.UUID, int],
     ) -> None:
-        # Persist user usage to the DB first so both the per-assignment and the
-        # per-user limit checks below decide from the same, freshly-written view.
         await self._bump_user_usage(owned, deltas)
         for assignment_id in deltas:
             assignment = owned.get(assignment_id)
@@ -317,8 +286,6 @@ class TrafficService:
         if not user_ids:
             return
         totals = await self._repo.usage_sum_by_user(user_ids)
-        # One UPDATE with a per-user CASE instead of a UPDATE per user on the
-        # ingest hot path.
         ids = list(user_ids)
         await self._session.execute(
             update(User)
@@ -380,9 +347,6 @@ class TrafficService:
         return True
 
     async def _resync_node_counts(self, node_ids: Sequence[uuid.UUID]) -> None:
-        # Recompute current_users from a COUNT of ACTIVE assignments rather than
-        # maintaining fragile ±1 deltas that drift when transitions are missed
-        # (e.g. LIMITED→ACTIVE on reset never re-incremented).
         ids = [nid for nid in node_ids if nid is not None]
         if not ids:
             return
@@ -408,8 +372,6 @@ class TrafficService:
     ) -> None:
         if self._cache is None:
             return
-        # Invalidate only the affected users' cached feeds (subscription:{uid}:*)
-        # instead of scanning/wiping the entire keyspace on the traffic hot path.
         for uid in set(user_ids):
             keys = [
                 key async for key in self._cache.client.scan_iter(match=f"subscription:{uid}:*")

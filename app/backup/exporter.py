@@ -16,14 +16,8 @@ from app.domain.user import User
 
 _REDACTED = "<redacted>"
 
-# How many ORM rows to fetch per network round-trip when streaming. Bounds the
-# number of rows resident in memory at any moment (server-side cursor / yield_per)
-# so a 500k-row export never materialises the whole table.
 _STREAM_BATCH = 1000
 
-# The five top-level arrays of a backup document, in the order they are exported.
-# Each entry is (json_key, ORM model, redact_secrets). ``traffic_metadata`` is
-# derived from nodes and handled separately.
 _TABLES: tuple[tuple[str, Any, bool], ...] = (
     ("users", User, True),
     ("nodes", Node, False),
@@ -39,12 +33,6 @@ def serialize_row(row, *, redacted: bool = False) -> dict[str, Any]:
         output_key = "metadata" if key == "node_metadata" else key
         data[output_key] = getattr(row, key)
     if redacted:
-        # User auth secrets are NOT restorable material (hashes/TOTP are reset
-        # on restore), so redact them. Node/profile/assignment secrets
-        # (socks_password, settings private keys, assignment credentials) ARE
-        # required to restore a working config, so they stay in the payload —
-        # confidentiality of the backup is enforced at the transport/storage
-        # layer instead (sudo-only export endpoint + 0600 backup files).
         for secret_key in ("hashed_password", "totp_secret"):
             if data.get(secret_key):
                 data[secret_key] = _REDACTED

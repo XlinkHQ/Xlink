@@ -77,17 +77,11 @@ class FailoverExecutor:
         )
 
     async def _wake_after_migration(self, plan: FailoverPlan) -> None:
-        # A migration moves clients between nodes, so any cached subscription
-        # feed is stale. Invalidate once per batch and push a live config change
-        # to the affected nodes.
         if self._cache is None:
             return
         node_ids = {plan.source_node_id}
         node_ids.update(i.target_node_id for i in plan.items if i.target_node_id is not None)
         try:
-            # Invalidate only the migrated users' feeds, not the entire
-            # subscription keyspace (a single-user failover shouldn't cold-wipe
-            # every user's cache → thundering herd).
             for uid in {i.user_id for i in plan.items}:
                 await self._cache.incr(f"subscription:rev:{uid}")
             for nid in node_ids:
@@ -193,8 +187,6 @@ class FailoverExecutor:
 
             target_node = await session.get(Node, ctx.target_node_id)
             if target_node is not None:
-                # Atomic check-and-increment: the capacity guard lives in the
-                # WHERE clause so a concurrent failover cannot overfill the node.
                 stmt = update(Node).where(Node.id == ctx.target_node_id)
                 if target_node.max_users is not None:
                     stmt = stmt.where(Node.current_users < target_node.max_users)
@@ -211,10 +203,6 @@ class FailoverExecutor:
                     )
                     return False
 
-            # Remove any stale (non-ACTIVE) assignment on the SAME triplet first —
-            # the unique constraint (user_id, profile_id, node_id) spans all
-            # statuses, so an old DISABLED/EXPIRED row from a prior failover-back
-            # would otherwise make this INSERT fail and strand the user.
             await session.execute(
                 delete(ClientAssignment).where(
                     ClientAssignment.user_id == ctx.user_id,
@@ -231,13 +219,6 @@ class FailoverExecutor:
                 node_id=ctx.target_node_id,
                 provider_kind=ctx.provider_kind,
                 provider_client_id=provider_client_id,
-                # Carry the provider's freshly-minted per-client secrets
-                # (WireGuard keys, Shadowsocks/VMess password/uuid, …). Without
-                # this the new assignment's credentials defaulted to {}, so the
-                # migrated user's subscription and the node config both lost the
-                # key/password and the user could not connect on the new node —
-                # an outage on the very event meant to keep them online. Mirrors
-                # client_assignment_service (assignment.credentials = raw).
                 credentials=dict(credentials) if isinstance(credentials, dict) else {},
                 status=AssignmentStatus.ACTIVE,
                 expires_at=ctx.expires_at,
@@ -247,9 +228,6 @@ class FailoverExecutor:
             session.add(new_assignment)
             await session.flush()
 
-            # Recompute both nodes' current_users from the live ACTIVE count
-            # rather than ±1, so this never drifts against the COUNT-based resync
-            # that traffic ingest / reconcile / jobs also run on this column.
             for node_id in {ctx.target_node_id, assignment.node_id}:
                 if node_id is None:
                     continue
@@ -275,10 +253,6 @@ class FailoverExecutor:
     async def _already_migrated(
         self, session, assignment: ClientAssignment, target_node_id: uuid.UUID
     ) -> bool:
-        # Only a LIVE (ACTIVE) assignment on the target blocks a migration. A
-        # stale DISABLED/EXPIRED row from an earlier failover-back must NOT strand
-        # the user — the triplet unique constraint spans all statuses, so that
-        # stale row is deleted just before the new INSERT (see _commit_migration).
         stmt = select(ClientAssignment.id).where(
             ClientAssignment.user_id == assignment.user_id,
             ClientAssignment.profile_id == assignment.profile_id,

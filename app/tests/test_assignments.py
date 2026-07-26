@@ -187,8 +187,6 @@ async def _set_node_status(app_state: AppState, node_id: uuid.UUID, status: Node
 async def test_assign_to_offline_node_is_allowed(
     client: AsyncClient, ctx: Ctx, app_state: AppState
 ) -> None:
-    # A node offline (temporary, or freshly added before its first heartbeat)
-    # must still be assignable — config sync delivers the config when it returns.
     await _set_node_status(app_state, ctx.node_id, NodeStatus.OFFLINE)
     resp = await _create(client, ctx)
     assert resp.status_code == 201, resp.text
@@ -197,7 +195,6 @@ async def test_assign_to_offline_node_is_allowed(
 async def test_assign_to_disabled_node_is_blocked(
     client: AsyncClient, ctx: Ctx, app_state: AppState
 ) -> None:
-    # A DISABLED node was deliberately taken out of service by an admin — reject.
     await _set_node_status(app_state, ctx.node_id, NodeStatus.DISABLED)
     resp = await _create(client, ctx)
     assert resp.status_code == 422
