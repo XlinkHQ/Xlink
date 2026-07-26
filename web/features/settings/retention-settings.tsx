@@ -29,7 +29,6 @@ export function RetentionSettingsScreen() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    // One-time latch so a background refetch can't clobber an in-progress edit.
     if (q.data && !loaded) {
       setDays(q.data.retention_days);
       setLoaded(true);

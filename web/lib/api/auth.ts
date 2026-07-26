@@ -53,7 +53,6 @@ export async function logout(): Promise<void> {
         body: JSON.stringify({ refresh_token: refresh }),
       });
     } catch {
-      // best-effort; tokens are cleared regardless
     }
   }
   clearTokens();

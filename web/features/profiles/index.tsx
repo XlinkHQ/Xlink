@@ -53,7 +53,6 @@ export function ProfilesScreen() {
   const [editingInbound, setEditingInbound] = useState<ProfileRead | "new" | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editInline, setEditInline] = useState(false);
-  // resolve the open detail from live query data so edits reflect in the view
   const detail = detailId ? (profiles.find((p) => p.id === detailId) ?? null) : null;
 
   const refreshInbounds = () => {
@@ -209,9 +208,7 @@ function HostsDrawer({
   nodeName: string;
   onClose: () => void;
   onEdit: () => void;
-  /** whether the inline edit box is open (drives the Edit button state) */
   editing?: boolean;
-  /** inline edit form rendered below the content when editing */
   editForm?: React.ReactNode;
 }) {
   const qc = useQueryClient();

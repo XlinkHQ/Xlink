@@ -37,7 +37,6 @@ function fmtUptime(s: number): string {
 
 const ICON_STROKE = 1.8;
 
-/** DefGuard-style flat hairline card with a header row + divider. */
 function OverviewCard({
   title,
   right,
@@ -59,7 +58,6 @@ function OverviewCard({
   );
 }
 
-/** A single stat tile inside the vertical-hairline stat track. */
 function Stat({
   icon,
   label,
@@ -103,7 +101,6 @@ function FootRow({ k, v }: { k: string; v: string }) {
   );
 }
 
-/** Resource card (CPU/RAM/Disk) restyled as a hairline card with a progress bar. */
 function ResourceCard({
   icon,
   title,
@@ -155,9 +152,6 @@ export function DashboardScreen() {
   const cpuPct = Math.round(s?.cpu_percent ?? 0);
 
   const WINDOW = 60;
-  // Start EMPTY, not with 60 fake zero points — a pre-seeded zero line drew a flat
-  // graph even when no traffic had ever been sampled ("chart makes up a line with
-  // no traffic"). Points are appended only from real successive-poll deltas.
   const [down, setDown] = useState<{ x: number; y: number }[]>([]);
   const [up, setUp] = useState<{ x: number; y: number }[]>([]);
   const prevTotals = useRef<{ d: number; u: number; at: number } | null>(null);
@@ -168,8 +162,6 @@ export function DashboardScreen() {
     const uBytes = t.upload_bytes;
     const prev = prevTotals.current;
     prevTotals.current = { d: dBytes, u: uBytes, at: now };
-    // The first poll only establishes a baseline — a rate needs two samples, so
-    // don't plot anything until we have a real delta between two polls.
     if (!prev) return;
     const dt = Math.max(1, (now - prev.at) / 1000);
     const dMbps = +((Math.max(0, dBytes - prev.d) * 8) / 1e6 / dt).toFixed(2);
@@ -205,7 +197,6 @@ export function DashboardScreen() {
   const fmtRate = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(2)} Gbps` : `${v.toFixed(1)} Mbps`);
   const chartBase = baseAreaOptions(dark, {
     height: 250,
-    // Download = accent, Upload = danger red (semantic up-vs-down).
     colors: [CHART_COLORS.accent, CHART_COLORS.danger],
   });
   const chartOptions: ApexOptions = {

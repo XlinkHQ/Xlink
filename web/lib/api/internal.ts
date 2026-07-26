@@ -1,7 +1,5 @@
 import type { CursorPage } from "./core";
 
-// Internal helpers shared across domain modules. NOT re-exported from the
-// barrel (@/lib/api) — these are implementation details, not public API.
 
 export function query(params: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();
@@ -14,8 +12,6 @@ export function query(params: Record<string, string | number | undefined>): stri
   return qs ? `?${qs}` : "";
 }
 
-// The backend clamps page size to max_page_size (100), so "give me everything"
-// callers must walk the cursor. Capped so a huge install can't spin forever.
 const MAX_LIST_PAGES = 50;
 
 export async function fetchAllPages<T>(

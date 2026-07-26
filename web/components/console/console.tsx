@@ -65,9 +65,6 @@ export function ConsoleV2() {
   const qc = useQueryClient();
 
   useEffect(() => {
-    // Clear ALL cached queries when auth is lost, so the next admin to log in on
-    // this tab never sees the previous (possibly differently-scoped) admin's
-    // users/nodes/traffic served instantly from a stale cache.
     setAuthLostHandler(() => {
       qc.clear();
       setAuthed(false);

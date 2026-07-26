@@ -7,7 +7,6 @@ import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/lib/icons";
 import { useTheme } from "@/lib/theme";
 
-// exact DefGuard "menu" (3 horizontal dots) icon
 function DotsMenu({ size = 20 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden>

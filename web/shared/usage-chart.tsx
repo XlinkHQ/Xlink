@@ -6,17 +6,12 @@ import { useTheme } from "@/lib/theme";
 
 const ReactApexChart = dynamic(() => import("react-apexcharts"), { ssr: false });
 
-// Shared chart palette. Primary series is the XLink accent; the secondary is a
-// coherent muted indigo/slate. Danger red is only for semantic upload-vs-download.
 export const CHART_COLORS = {
   accent: "#3961DB",
   slate: "#7C86A5",
   danger: "#CC3C3C",
 };
 
-// Theme-aware chart chrome: apex defaults to dark axis text + near-black grid
-// lines, which vanish on our dark surface (and its light-themed tooltip renders
-// as a white box on dark). Drive all of it from the active theme instead.
 function chartTheme(dark: boolean) {
   return {
     mode: (dark ? "dark" : "light") as "dark" | "light",
@@ -27,13 +22,6 @@ function chartTheme(dark: boolean) {
   };
 }
 
-/**
- * One professional, consistent ApexOptions foundation that every area chart in
- * the console spreads from. Linear/Stripe-grade: thin smooth stroke, a single
- * faint horizontal-only gridline, muted small axis labels, light gradient wash.
- * Each chart overrides only what is genuinely chart-specific (yaxis
- * unit/formatter, series colors, tooltip y formatter, single-point markers).
- */
 export function baseAreaOptions(
   dark: boolean,
   opts?: { height?: number; colors?: string[]; singlePoint?: boolean; showLegend?: boolean },
@@ -181,7 +169,6 @@ export function UsageAreaChart({
 
   const base = baseAreaOptions(dark, {
     height,
-    // Download = accent, Upload = danger red (semantic up-vs-down).
     colors: [CHART_COLORS.accent, CHART_COLORS.danger],
     singlePoint: valid.length === 1,
   });

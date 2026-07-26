@@ -61,8 +61,6 @@ export function NodeInfo({ node }: { node: NodeRead }) {
     if (!drainPlan) return;
     setDrainBusy(true);
     try {
-      // Plan was built with dry_run:true (preview); execute for real or the
-      // backend short-circuits and migrates nobody.
       const res = await failoverExecute({ ...drainPlan, dry_run: false });
       toast("success", `${res.migrated} migrated, ${res.skipped} skipped.`);
       setDrainPlan(null);

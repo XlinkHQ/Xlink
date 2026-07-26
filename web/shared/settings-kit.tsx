@@ -5,13 +5,6 @@ import type { LucideIcon } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-/**
- * DefGuard-style "marked section" primitives for XLink settings.
- * Structure copied from DefGuard MarkedSection + MarkedSectionHeader + SectionMarker
- * (icon tile 32px accent-muted radius-full, icon 20px accent; title 16/600 fg-default,
- * description 14/400 fg-muted). Sizing/spacing resolved to px from DefGuard tokens.
- * lucide strokeWidth 1.8.
- */
 
 
 export function SettingsSection({
@@ -24,7 +17,6 @@ export function SettingsSection({
   icon: LucideIcon;
   title: string;
   description?: string;
-  /** render a divider above this section (between groups) */
   divider?: boolean;
   children: ReactNode;
 }) {
@@ -47,12 +39,6 @@ export function SettingsSection({
   );
 }
 
-/**
- * Inline edit panel — a bordered `warp-settings-card` that hosts an edit form
- * directly below a list on the same screen (no modal / no drawer). Mirrors the
- * Modal shell (title bar, scrolling body, footer) so dialogs can reuse their
- * fields verbatim by swapping this shell in for `Modal` when rendered inline.
- */
 export function InlineEditPanel({
   title,
   onClose,
@@ -67,7 +53,6 @@ export function InlineEditPanel({
   footer?: ReactNode;
   children: ReactNode;
   className?: string;
-  /** accepted for shell-swap parity with Modal; not used inline */
   width?: string;
 }) {
   return (

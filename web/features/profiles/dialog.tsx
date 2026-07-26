@@ -129,7 +129,6 @@ export function ProfileDialog({
       try {
         Object.assign(parsed, JSON.parse(advanced));
       } catch {
-        /* preview ignores invalid json */
       }
     }
     return parsed;
@@ -197,7 +196,6 @@ export function ProfileDialog({
               port: node.port,
             });
           } catch {
-            /* default address is optional */
           }
         }
       }

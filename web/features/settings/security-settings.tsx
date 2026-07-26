@@ -147,9 +147,6 @@ export function SecuritySettingsScreen() {
               setSigningOut(true);
               try {
                 await logoutAll();
-                // logoutAll revokes THIS session's refresh token too, so clear
-                // local tokens and bounce to login — otherwise this tab keeps
-                // working until the access token silently expires.
                 clearTokens();
                 toast("success", "Signed out of all sessions.");
                 window.location.href = "/";

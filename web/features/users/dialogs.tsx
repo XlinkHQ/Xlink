@@ -63,8 +63,6 @@ export function EditUserDialog({
       await updateUser(user.id, {
         full_name: fullName.trim() || null,
         data_limit_bytes: limitGib ? fromGiB(Number(limitGib)) : null,
-        // An on-hold user cannot also carry a fixed expiry (backend rejects it),
-        // so clear expire_at whenever on-hold is checked.
         expire_at: onHold ? null : dateToIso(expire, user.expire_at),
         data_reset_strategy: reset,
         device_limit: devices ? Number(devices) : null,

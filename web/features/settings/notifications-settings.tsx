@@ -46,8 +46,6 @@ export function NotificationsSettingsScreen() {
   };
 
   useEffect(() => {
-    // One-time latch: only seed the form from the first fetch, so a background
-    // refetch (refetchOnReconnect) can't clobber in-progress edits.
     if (q.data && !loaded) {
       setForm(q.data);
       setLoaded(true);

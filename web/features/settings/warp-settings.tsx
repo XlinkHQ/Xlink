@@ -30,7 +30,6 @@ export function WarpSettingsScreen() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    // One-time latch so a background refetch can't clobber in-progress edits.
     if (q.data && !loaded) {
       setForm(q.data);
       setLoaded(true);

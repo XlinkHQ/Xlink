@@ -101,9 +101,6 @@ export function DatePicker({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  // Parse the "YYYY-MM-DD" value as a LOCAL date, not UTC midnight — new Date(str)
-  // treats it as UTC, so the label/highlight shows the previous day in any
-  // UTC-negative timezone.
   const selected = (() => {
     if (!value) return null;
     const [y, m, d] = value.split("-").map(Number);

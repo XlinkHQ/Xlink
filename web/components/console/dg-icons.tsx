@@ -1,6 +1,3 @@
-// DefGuard icon set — path data copied verbatim from DefGuard's Icon components.
-// Source: defguard/web/src/shared/defguard-ui/components/Icon/icons/*.tsx
-// All use fill="currentColor" so surrounding CSS controls the color.
 
 type IconProps = { size?: number };
 

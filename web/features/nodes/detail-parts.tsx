@@ -74,10 +74,6 @@ export const INSTALLABLE_CORES = ["xray", "singbox", "hysteria", "wireguard"] as
 
 export function installCommand(nodeId: string, token: string, cores: string[]): string {
   const base = apiOrigin();
-  // No env-var prefix before sudo — it sets the var on the sudo process (often
-  // stripped by sudoers) not the child bash. The installer derives the agent URL
-  // from the panel URL positional arg, so it's redundant anyway.
-  // Pass --cores only when it's a strict subset, so the default (all) stays clean.
   const all = INSTALLABLE_CORES.length;
   const flag =
     cores.length && cores.length < all ? ` --cores=${cores.join(",")}` : "";

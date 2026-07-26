@@ -34,7 +34,6 @@ export function GroupsScreen() {
   const query = useQuery({ queryKey: ["groups"], queryFn: () => listGroups() });
   const profilesQuery = useQuery({ queryKey: ["profiles"], queryFn: () => listProfiles() });
   const nodesQuery = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes() });
-  // listAllAssignments walks the cursor — a single page misses members past 100.
   const assignmentsQuery = useQuery({ queryKey: ["assignments"], queryFn: () => listAllAssignments() });
   const groups = query.data ?? [];
   const profiles = (profilesQuery.data?.items ?? []) as ProfileRead[];
@@ -53,7 +52,6 @@ export function GroupsScreen() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editInline, setEditInline] = useState(false);
   const [search, setSearch] = useState("");
-  // resolve the open detail from live query data so renames/saves reflect here
   const detail = detailId ? (groups.find((g) => g.id === detailId) ?? null) : null;
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["groups"] });

@@ -32,7 +32,6 @@ import { UsageAreaChart } from "@/shared/usage-chart";
 import { bytes, fromGiB } from "@/lib/format";
 
 
-/** Map a status string to a .warp-badge variant class. */
 function badgeClassForStatus(status: string): string {
   switch (toneForStatus(status)) {
     case "success": return "success";
@@ -133,8 +132,6 @@ export function AccessManager({ userId }: { userId: string }) {
         profile_id: prof.id,
         node_id: prof.node_id,
         provider_kind: prof.provider_kind,
-        // End-of-day, matching the user Edit/bulk dialogs — new Date(expiry) alone
-        // is start-of-day UTC and would expire the access ~24h early.
         expires_at: expiry ? new Date(`${expiry}T23:59:59Z`).toISOString() : null,
         traffic_limit_bytes: limitGiB && gib > 0 ? fromGiB(gib) : null,
       });

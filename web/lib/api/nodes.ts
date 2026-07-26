@@ -19,8 +19,6 @@ export type NodeRead = {
 };
 
 export function listNodes(opts: { size?: number; cursor?: string } = {}) {
-  // Default matches the backend max_page_size clamp (100) so the requested size
-  // isn't a silent lie. Callers that need >100 must page via cursor.
   return apiFetch<CursorPage<NodeRead>>(
     `/nodes${query({ size: opts.size ?? 100, cursor: opts.cursor })}`,
   );

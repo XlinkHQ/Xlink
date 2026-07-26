@@ -4,7 +4,7 @@ export function readPref(k: string): string | null {
 }
 export function writePref(k: string, v: string): void {
   if (typeof window === "undefined") return;
-  try { window.localStorage.setItem(`xlink.${k}`, v); } catch { /* ignore */ }
+  try { window.localStorage.setItem(`xlink.${k}`, v); } catch {  }
 }
 
 export function relTimeShort(iso: string | null | undefined): string {

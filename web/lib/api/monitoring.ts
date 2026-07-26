@@ -36,7 +36,5 @@ export function restartPanel() {
 }
 
 export function monitoringMetrics() {
-  // /monitoring/metrics returns a bare MetricRead[]; the snapshot shape
-  // ({metrics, collected_at}) the screen reads lives at /monitoring/summary.
   return apiFetch<MetricsSnapshotRead>("/monitoring/summary");
 }

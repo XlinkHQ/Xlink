@@ -195,9 +195,6 @@ function CoreConfig({ node, core }: { node: NodeRead; core: string }) {
   const remoteRaw = q.data?.templates?.[core] ?? "";
   const remote =
     remoteRaw.trim() && remoteRaw.trim() !== "{}" ? remoteRaw : CORE_DEFAULTS[core] ?? "{}";
-  // Seed the editor from the remote template ONCE per core, then leave it alone.
-  // Without this, a background refetch of the template query re-ran setText and
-  // wiped whatever the admin was typing — the config appeared to reset itself.
   const loadedCore = useRef<string | null>(null);
   useEffect(() => {
     if (q.data && loadedCore.current !== core) {

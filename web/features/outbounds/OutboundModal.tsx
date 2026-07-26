@@ -90,8 +90,6 @@ export function OutboundModal({
       const r = await importOutbound(importText.trim());
       const s = r.settings as Record<string, string>;
       setType(r.type);
-      // Reset every field first so a second import that omits a field doesn't
-      // silently keep the previous value.
       setAddress(s.address ?? "");
       setId(s.id ?? "");
       setPassword(s.password ?? "");
@@ -163,8 +161,6 @@ export function OutboundModal({
   const submit = async () => {
     const settings = buildSettings();
     if (settings === null) return;
-    // Validate the rule inputs BEFORE creating the outbound, so we don't persist
-    // an outbound then fail the rule and leave an orphan.
     if (!editing && makeRule && ruleMatch !== "all" && !ruleValues.trim()) {
       toast("error", "Enter match values for the routing rule (or pick All traffic).");
       return;
@@ -190,8 +186,6 @@ export function OutboundModal({
             });
             toast("success", "Outbound + routing rule added.");
           } catch (e) {
-            // Outbound was created; surface the rule failure without losing it or
-            // implying the whole save failed (retry would duplicate the outbound).
             toast(
               "error",
               `Outbound added, but the routing rule failed: ${e instanceof ApiError ? e.message : "unknown error"}`,

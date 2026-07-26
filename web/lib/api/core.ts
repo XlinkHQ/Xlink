@@ -60,10 +60,6 @@ async function performRefresh(): Promise<string | null> {
     setTokens(tokens);
     return tokens.access_token;
   } catch (err) {
-    // A network failure (offline blip) is NOT an auth rejection — rethrow so the
-    // caller surfaces a retryable error instead of clearing a still-valid
-    // refresh token and force-logging the admin out. Only a non-ok response
-    // above (handled) means the refresh token is actually dead.
     throw err;
   }
 }
@@ -90,7 +86,6 @@ async function readError(response: Response): Promise<{ message: string; code?: 
     }
     if (typeof body?.message === "string") return { message: body.message, code };
   } catch {
-    // body is not JSON
   }
   return { message: response.statusText || `Request failed (${response.status})` };
 }
@@ -102,17 +97,12 @@ const REQUEST_TIMEOUT_MS = 45000;
 async function rawFetch(path: string, init: RequestInit, token: string | null): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
-  // Don't force a JSON Content-Type on FormData uploads — the browser must set
-  // the multipart boundary itself.
   if (init.body && !headers.has("Content-Type") && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  // Abort on timeout so a hung backend call rejects instead of leaving mutation
-  // dialogs stuck on their "Adding…"/"Saving…" spinner forever (busy only resets
-  // in finally, which never runs if the promise never settles).
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -148,9 +138,6 @@ async function ensureAuthed(path: string, init: RequestInit): Promise<Response> 
   return response;
 }
 
-// Like apiFetch but returns the raw Response (for blob/CSV downloads and file
-// uploads). Routes through ensureAuthed so a 401 after an idle tab triggers the
-// same token refresh every other request gets, instead of failing outright.
 export async function apiFetchRaw(path: string, init: RequestInit = {}): Promise<Response> {
   return ensureAuthed(path, init);
 }

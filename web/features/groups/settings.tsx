@@ -49,9 +49,7 @@ export function ServiceSettings({
   onClose: () => void;
   onEdit: () => void;
   onSaved: () => void;
-  /** whether the inline edit box is open (drives the Edit button state) */
   editing?: boolean;
-  /** inline edit form rendered below the list when editing */
   editForm?: React.ReactNode;
 }) {
   const [tab, setTab] = useState<"inbounds" | "users">("inbounds");
@@ -140,8 +138,6 @@ function InboundsTab({
       await updateGroup(group.id, { name: group.name, profile_ids: [...next] });
       onSaved();
     } catch (e) {
-      // Roll the checkbox back so the on-screen state matches the server after a
-      // failed save instead of showing the unsaved (optimistic) selection.
       setSelected(prev);
       toast("error", e instanceof ApiError ? e.message : "Update failed.");
     } finally {
@@ -228,7 +224,6 @@ function UsersTab({
   group: GroupRead;
   assignments: AssignmentRead[];
 }) {
-  // listAllUsers walks the cursor — the backend clamps single pages to 100 rows.
   const usersQuery = useQuery({ queryKey: ["users", "all"], queryFn: () => listAllUsers() });
   const onlineQuery = useQuery({ queryKey: ["users-online"], queryFn: () => onlineUsers(), refetchInterval: 30000, refetchIntervalInBackground: false });
   const onlineSet = new Set(onlineQuery.data?.user_ids ?? []);

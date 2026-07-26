@@ -121,7 +121,7 @@ export function HostDialog({
         </>
       }
     >
-      {/* Name (with enable switch + universal, like marzneshin's remark row) */}
+      {}
       <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
         <span className="flex items-center justify-between gap-3">
           Name
@@ -140,7 +140,7 @@ export function HostDialog({
         <Input value={remark} onChange={(e) => setRemark(e.target.value)} autoFocus placeholder="CDN-FRA" />
       </label>
 
-      {/* Address / Port / Weight */}
+      {}
       <div className="grid grid-cols-4 gap-3">
         <div className="col-span-2">
           <Field label="Address">
@@ -155,7 +155,7 @@ export function HostDialog({
         </Field>
       </div>
 
-      {/* Accordion sections — marzneshin order: network, camouflage, mux, security */}
+      {}
       <div>
         <Section title="Network settings" defaultOpen>
           <div className="warp-dlg-2col">

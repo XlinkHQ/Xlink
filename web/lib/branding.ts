@@ -24,7 +24,6 @@ export function setBranding(b: Branding): void {
     window.localStorage.setItem(KEY, JSON.stringify(b));
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch {
-    /* ignore */
   }
 }
 

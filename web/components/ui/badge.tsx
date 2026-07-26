@@ -52,7 +52,6 @@ export function Badge({
   children: ReactNode;
   className?: string;
 }) {
-  // shadcn-style API path (default/secondary/destructive/outline) — our colors.
   if (variant && variant in SHAD_CLASS) {
     return (
       <span className={cn(SHAD_CLASS[variant as ShadVariant], className)}>

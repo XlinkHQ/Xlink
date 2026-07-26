@@ -39,7 +39,6 @@ export function AdminsScreen() {
   const [dialog, setDialog] = useState<UserRead | "new" | null>(null);
 
   const refresh = () => {
-    // enable/disable/demote change the admin's USERS' active state + usage view.
     qc.invalidateQueries({ queryKey: ["admins"] });
     qc.invalidateQueries({ queryKey: ["users"] });
     qc.invalidateQueries({ queryKey: ["admin-usage"] });

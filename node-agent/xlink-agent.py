@@ -21,9 +21,6 @@ PANEL_URL = os.environ.get("XLINK_PANEL_URL", "http://localhost:8000").rstrip("/
 NODE_ID = os.environ.get("XLINK_NODE_ID", "")
 TOKEN = os.environ.get("XLINK_AGENT_TOKEN", "")
 INTERVAL = int(os.environ.get("XLINK_INTERVAL", "10"))
-# Fast data-limit enforcement: a lightweight loop that only reads usage and
-# drops over-limit users, without the full config pull / health round-trip. Cuts
-# over-quota users in ~FAST_INTERVAL instead of a whole INTERVAL cycle.
 FAST_INTERVAL = int(os.environ.get("XLINK_FAST_ENFORCE_INTERVAL", "3"))
 DRY_RUN = os.environ.get("XLINK_DRY_RUN", "") not in ("", "0", "false")
 
@@ -72,8 +69,6 @@ _last_active_kinds: set[str] = set()
 _core_hash: dict[str, str] = {}
 _usage_acc: dict[str, int] = {}
 _over_users: set[str] = set()
-# Last applied config, cached so the fast-enforce loop can re-collect usage and
-# re-apply (dropping over-limit users) without a full config pull.
 _last_clients: list[dict] = []
 _last_kinds: set[str] = set()
 _last_effective_version: str | None = None
@@ -85,28 +80,10 @@ _singbox_core: dict = {}
 _hysteria_core: dict = {}
 _log_offset: int = 0
 
-# Write-ahead log for traffic: deltas are persisted to disk BEFORE the core
-# stats are reset, and only cleared after the panel acks them. Guarantees no
-# byte of usage is lost across agent crashes or network outages.
 WAL_PATH = os.environ.get("XLINK_TRAFFIC_WAL", "/var/lib/xlink/traffic.wal")
-# MUST stay <= the panel's per-batch cap (10000, app/schemas/agent.py) or a
-# backlog >cap makes every delivery 422 → _wal_commit never runs → the WAL grows
-# forever and traffic accounting deadlocks. 5000 leaves headroom.
 _WAL_MAX = 5000
-# Serializes WAL access: the main cycle and the fast-enforce loop both append,
-# and the cycle loads+clears. Without this a clear could drop lines appended by
-# the fast loop after the load, losing usage.
 _wal_lock = threading.Lock()
 
-# Maximum age (days) a WAL entry may reach before it is dropped instead of
-# delivered. Bounds re-delivery against the panel's idempotency ledger: the panel
-# retains each batch_id for at least TrafficRepository._LEDGER_MIN_RETENTION_DAYS
-# (90d). If a node were offline LONGER than the ledger keeps a batch, re-delivering
-# it would look brand-new and DOUBLE-COUNT. Capping the WAL well under that floor
-# makes that impossible — a batch this old can never be delivered. Stale-by-a-month
-# usage is already lost/irrelevant, so dropping it is the safe choice (but we log
-# it, never silently discard). Clamped to [1, 60] so a misconfig can't push the cap
-# up near/over the ledger floor and reopen the double-count window.
 _WAL_MAX_AGE_DAYS = max(1, min(60, int(os.environ.get("XLINK_WAL_MAX_AGE_DAYS", "30"))))
 _WAL_MAX_AGE_SECONDS = _WAL_MAX_AGE_DAYS * 86400
 
@@ -192,11 +169,6 @@ def _read_wal_file(path: str) -> list[dict]:
 
 
 def _wal_rotate() -> list[dict]:
-    # Atomically claim the current WAL for delivery: rename it aside so any
-    # concurrent append lands in a fresh WAL and can't be lost by a later clear.
-    # A leftover .inflight (crash mid-delivery) is folded back in.
-    # Deliver the OLDEST _WAL_MAX lines (FIFO) so a large backlog drains over
-    # several cycles instead of dropping the tail.
     with _wal_lock:
         pending = _read_wal_file(_WAL_INFLIGHT)
         try:
@@ -208,14 +180,7 @@ def _wal_rotate() -> list[dict]:
                 else:
                     os.replace(WAL_PATH, _WAL_INFLIGHT)
         except OSError as exc:
-            # Panel dedups delivered samples, so a partial merge (write ok, remove
-            # failed) only risks a re-send next cycle, not data loss — but surface
-            # it so a persistent disk/permission fault isn't silent.
             _log(f"wal rotate failed: {exc}")
-        # Age-cap the claimed batch: never deliver entries older than the horizon
-        # (they may outlive the panel ledger → double-count). If any were dropped,
-        # rewrite the inflight file so the stale lines are gone for good and the
-        # FIFO index used by _wal_commit stays aligned with what we deliver.
         pending = _read_wal_file(_WAL_INFLIGHT)
         fresh = _drop_stale_wal(pending)
         if len(fresh) != len(pending):
@@ -234,8 +199,6 @@ def _wal_rotate() -> list[dict]:
 
 
 def _wal_commit(delivered: int) -> None:
-    # Drop only the delivered (oldest) lines; keep any remainder for the next
-    # cycle so a >_WAL_MAX backlog is never destroyed.
     with _wal_lock, contextlib.suppress(OSError):
         if not os.path.exists(_WAL_INFLIGHT):
             return
@@ -291,9 +254,6 @@ def _journal_level(line: str) -> str:
 
 
 def read_service_logs(service: str) -> list[str]:
-    # Incremental read of a systemd unit's journal via a per-service cursor file:
-    # journalctl advances the cursor only over lines it emits, so each cycle ships
-    # only new lines with no offset bookkeeping of our own.
     state_dir = os.path.dirname(WAL_PATH) or "/var/lib/xlink"
     with contextlib.suppress(OSError):
         os.makedirs(state_dir, exist_ok=True)
@@ -329,10 +289,6 @@ def _log(msg: str) -> None:
     print(f"[{_now()}] {msg}", flush=True)
 
 
-# Direct opener: urllib's default is proxy-aware (honors http_proxy/https_proxy
-# from the environment). The agent→panel link is node-local and must NEVER go
-# through a shell/system proxy — a stale/broken proxy env made every request
-# time out while a plain `curl` (no -x) worked. Force an empty ProxyHandler.
 _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
@@ -340,8 +296,6 @@ def _http_call(method: str, path: str, body: dict | None = None, known_version: 
     data = json.dumps(body).encode() if body is not None else None
     headers = HEADERS
     if known_version:
-        # Send the currently-applied version so the panel can short-circuit the
-        # render and answer "unchanged" without recomputing the whole config.
         headers = {**HEADERS, "If-None-Match": f'"{known_version}"'}
     req = urllib.request.Request(f"{BASE}{path}", data=data, headers=headers, method=method)
     try:
@@ -353,9 +307,8 @@ def _http_call(method: str, path: str, body: dict | None = None, known_version: 
         return 0, str(exc)
 
 
-# --- gRPC transport (opt-in via XLINK_GRPC=1) --------------------------------
 GRPC_ENABLED = os.environ.get("XLINK_GRPC", "0") in ("1", "true", "True")
-GRPC_ADDR = os.environ.get("XLINK_GRPC_ADDR", "")  # host:port; default derives from PANEL_URL host
+GRPC_ADDR = os.environ.get("XLINK_GRPC_ADDR", "")
 GRPC_TLS = os.environ.get("XLINK_GRPC_TLS", "0") in ("1", "true", "True")
 GRPC_TLS_CA = os.environ.get("XLINK_GRPC_TLS_CA", "")
 GRPC_TLS_CERT = os.environ.get("XLINK_GRPC_TLS_CERT", "")
@@ -504,13 +457,9 @@ def _grpc_call(path: str, body: dict | None, known_version: str | None = None):
                 timeout=15,
             )
             return 200, {"remediated": resp.remediated}
-        # unknown path → signal HTTP fallback
         return None
     except Exception as exc:
         _log(f"grpc call {path} failed, falling back to HTTP: {exc}")
-        # Close the channel before dropping the stub — gRPC channels hold HTTP/2
-        # sockets + completion-queue threads that aren't released on GC, so a
-        # flapping endpoint would leak fds/threads on every rebuild.
         with contextlib.suppress(Exception):
             if _grpc_channel is not None:
                 _grpc_channel.close()
@@ -642,8 +591,6 @@ def build_xray_config(clients: list[dict]) -> dict:
         cid = _client_id(cl)
         email = cl.get("assignment_id")
         if key not in inbounds:
-            # socks5 uses accounts[{user,pass}] + auth=password, not a clients[]
-            # list like the vmess/vless/trojan/ss protocols.
             if protocol == "socks":
                 settings = {"auth": "password", "accounts": [], "udp": True}
             else:
@@ -655,8 +602,6 @@ def build_xray_config(clients: list[dict]) -> dict:
                 if isinstance(s.get("fallbacks"), list) and protocol in ("vless", "trojan"):
                     settings["fallbacks"] = s["fallbacks"]
             network = (s.get("network") or "tcp").lower()
-            # socks has no TLS/REALITY in xray — attaching stream security would make
-            # xray reject the whole config (freezing the node's updates). Force plain.
             stream = (
                 {"network": "tcp", "security": "none"}
                 if protocol == "socks"
@@ -687,11 +632,6 @@ def build_xray_config(clients: list[dict]) -> dict:
     }
     api_rule = {"type": "field", "inboundTag": ["api"], "outboundTag": "api"}
     core = _xray_core if isinstance(_xray_core, dict) else {}
-    # Always force the error-log FILE path onto whatever log block the core
-    # template provides. A template that sets `log` without `error` (or with no
-    # log block at all) would otherwise leave xray writing to stderr/journald,
-    # so /var/log/xray/error.log stays empty and the panel shows "No logs
-    # reported by this node yet." Merge, don't replace.
     log_block = dict(core.get("log") or {})
     log_block.setdefault("loglevel", "warning")
     log_block["error"] = XRAY_ERROR_LOG
@@ -728,29 +668,18 @@ def _singbox_user(protocol: str, cid: str, email: str, s: dict) -> dict:
     if protocol == "vmess":
         return {"uuid": cid, "name": email, "alterId": int(s.get("alterId", 0) or 0)}
     if protocol == "tuic":
-        # tuic auth is uuid + a SEPARATE password (panel emits both distinctly).
-        # cid here is the uuid; pull the real password from credentials/settings.
         pw = s.get("password") or cid
         return {"uuid": cid, "password": pw, "name": email}
     if protocol == "naive":
-        # NaïveProxy authenticates with username:password — these MUST be the same
-        # values the subscription hands the client (settings/credentials
-        # username+password), not the assignment_id/cid, or auth fails. `name`
-        # tags the user for v2ray_api stats (assignment_id).
         return {
             "username": str(s.get("username") or email),
             "password": str(s.get("password") or cid),
             "name": str(email),
         }
     if protocol == "socks":
-        # username/password MUST match what the subscription hands the client
-        # (settings/credentials), falling back to email/cid only when unset.
-        # name= makes the user show up in sing-box v2ray_api stats so byte quota is
-        # actually counted (sing-box tags per-user traffic by the "name" field).
         user = str(s.get("username") or email or cid)
         return {"username": user, "password": str(s.get("password") or cid), "name": str(email)}
     if protocol == "shadowtls":
-        # ShadowTLS v3 user (name+password); the real proxy runs in the ss detour.
         return {"name": str(email), "password": cid}
     return {"password": cid, "name": email}
 
@@ -778,10 +707,6 @@ def _singbox_tls(s: dict) -> dict:
     tls: dict = {"enabled": True}
     if s.get("sni"):
         tls["server_name"] = s["sni"]
-    # Resolve the cert: prefer panel-supplied inline PEM (write it to disk), else
-    # a pre-existing default cert. sing-box `check` reads the cert at load, so
-    # pointing at a missing file makes EVERY tls inbound fail — only set the
-    # paths when real files exist.
     cert_pem, key_pem = s.get("cert_pem"), s.get("key_pem")
     if cert_pem and key_pem:
         try:
@@ -817,10 +742,6 @@ def build_singbox_config(clients: list[dict]) -> dict:
         port = int(s.get("port", 443) or 443)
         sec_mode = (s.get("security") or "none").lower()
         secure = sec_mode in ("tls", "reality")
-        # Key by the RESOLVED security mode (tls/reality/none), not a bool — a tls
-        # client and a reality client on the same port/protocol/method must NOT
-        # collapse into one inbound (the first's handshake would win and the other
-        # can't connect). Also key on SNI so different server_names don't merge.
         key = (
             port, protocol, sec_mode,
             str(s.get("sni") or s.get("serverName") or ""),
@@ -838,24 +759,13 @@ def build_singbox_config(clients: list[dict]) -> dict:
             }
             if protocol in ("shadowsocks", "shadowsocks2022"):
                 ib["type"] = "shadowsocks"
-                # ss2022 needs a 2022 method; default MUST match the panel's
-                # ss2022 default (2022-blake3-aes-256-gcm) or the PSK key size
-                # (32B vs 16B) disagrees and the cipher fails.
                 default_method = (
                     "2022-blake3-aes-256-gcm" if protocol == "shadowsocks2022" else "aes-256-gcm"
                 )
                 ib["method"] = s.get("method", default_method)
             elif protocol == "shadowtls":
-                # ShadowTLS v3 wraps a shadowsocks detour: the public inbound does
-                # the TLS handshake to a real host, then hands the connection to a
-                # loopback shadowsocks inbound that carries the actual proxy. The
-                # detour inbound needs its own listen_port + users, and the ss
-                # method must match the password format (non-2022 for arbitrary pw).
                 sni = s.get("sni") or s.get("handshake") or "www.microsoft.com"
                 ss_tag = f"sstls-ss-{port}-{len(inbounds)}"
-                # Unique loopback port per detour via a monotonic counter, not a
-                # hash of the public port (two public ports could hash to the same
-                # detour → bind conflict → sing-box rejects the whole config).
                 detour_port = 40000 + len(detours)
                 ib["version"] = 3
                 ib["handshake"] = {"server": sni, "server_port": 443}
@@ -870,7 +780,6 @@ def build_singbox_config(clients: list[dict]) -> dict:
                     "_key": key,
                 }
             elif protocol == "naive":
-                # NaïveProxy is HTTP/2 CONNECT over mandatory TLS, no transport.
                 ib["tls"] = _singbox_tls(s)
             else:
                 tls_required = protocol in _SB_TLS_MANDATORY
@@ -881,25 +790,17 @@ def build_singbox_config(clients: list[dict]) -> dict:
                     ib["transport"] = transport
             inbounds[key] = ib
         email = cl.get("assignment_id")
-        # Merge credentials over settings so per-client auth (password, etc.) that
-        # lives in credentials is visible to the user builder, not just profile
-        # settings.
         user_view = {**s, **(cl.get("credentials") or {})}
         inbounds[key]["users"].append(_singbox_user(protocol, cid, email, user_view))
-        # shadowtls: the actual proxy user lives in the ss detour — add it there
-        # too (named, so v2ray_api counts its traffic).
         if protocol == "shadowtls":
             for d in detours.values():
                 if d.get("_key") == key:
                     d["users"].append({"name": str(email), "password": cid})
                     break
     core = _singbox_core if isinstance(_singbox_core, dict) else {}
-    # Strip the internal _key marker before emitting detour inbounds.
     for d in detours.values():
         d.pop("_key", None)
     all_inbounds = list(inbounds.values()) + list(detours.values())
-    # Collect stats user names from BOTH inbounds and detours (shadowtls traffic
-    # flows through the ss detour), so every user is tagged for v2ray_api stats.
     user_names = sorted(
         {
             u["name"]
@@ -908,8 +809,6 @@ def build_singbox_config(clients: list[dict]) -> dict:
             if isinstance(u, dict) and u.get("name")
         }
     )
-    # MERGE the template's experimental — never let it replace the v2ray_api
-    # stats listener, otherwise per-user traffic is never collected.
     experimental: dict = dict(core.get("experimental") or {})
     if _v2ray_enabled():
         experimental["v2ray_api"] = {
@@ -954,9 +853,6 @@ _WG_KEY_RE = re.compile(r"^[A-Za-z0-9+/]{42,44}=?$")
 
 
 def _wg_safe_key(value: str) -> str:
-    # wg0.conf is interpreted by wg-quick, which runs PostUp/PostDown as ROOT. A
-    # key/address carrying an embedded newline could smuggle a `PostUp = <cmd>`
-    # line → root RCE. Reject anything that isn't a real WG base64 key.
     v = (value or "").strip()
     if not _WG_KEY_RE.match(v):
         raise ValueError(f"invalid wireguard key: {v[:16]!r}")
@@ -965,7 +861,6 @@ def _wg_safe_key(value: str) -> str:
 
 def _wg_safe_addr(value: str) -> str:
     v = (value or "").strip()
-    # host or host/cidr, digits+dots+colon(ipv6)+slash only — no shell/newline.
     if not re.match(r"^[0-9a-fA-F:.]+(/[0-9]{1,3})?$", v):
         raise ValueError(f"invalid wireguard address: {v[:32]!r}")
     return v
@@ -981,12 +876,6 @@ def build_wireguard_config(clients: list[dict]) -> str:
         raise RuntimeError("wireguard: no private key in settings or XLINK_WG_PRIVATE_KEY")
     addr = _wg_safe_addr(str(s0.get("address") or "10.8.0.1/24"))
     subnet = _wg_subnet(addr)
-    # Preshared key is interface-wide in this design (stored in profile settings
-    # and handed to every client in the subscription). If the client config
-    # carries a PresharedKey but the server peer omits it, the crypto is
-    # asymmetric and the handshake is silently rejected — the tunnel shows
-    # bytes received but NEVER completes a handshake and no traffic passes. Read
-    # it here so the server peer matches the client.
     psk = str(s0.get("presharedKey") or s0.get("preshared_key") or "").strip()
     try:
         psk = _wg_safe_key(psk) if psk else ""
@@ -1000,9 +889,6 @@ def build_wireguard_config(clients: list[dict]) -> str:
         "sysctl -w net.ipv4.conf.%i.rp_filter=0; "
         "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 2>/dev/null; "
         f"iptables -t nat -A POSTROUTING -s {subnet} -o $WAN -j MASQUERADE; "
-        # Insert (not append) ahead of any Docker DROP/DOCKER-USER jumps on a
-        # host that also runs containers; append would sit after them and never
-        # be reached (tunnel up, no traffic forwarded). See the reload command.
         "iptables -I FORWARD 1 -i %i -j ACCEPT; "
         "iptables -I FORWARD 1 -o %i -j ACCEPT; "
         "if iptables -L DOCKER-USER >/dev/null 2>&1; then "
@@ -1030,7 +916,7 @@ def build_wireguard_config(clients: list[dict]) -> str:
         try:
             pub = _wg_safe_key(str(creds.get("public_key") or ""))
         except ValueError:
-            continue  # skip a peer with a malformed/injection-y key, don't poison the file
+            continue
         if not pub:
             continue
         peer_addr = str(creds.get("address") or "").strip()
@@ -1043,9 +929,6 @@ def build_wireguard_config(clients: list[dict]) -> str:
             continue
         seen_ips.add(ip)
         peer_lines = ["", "[Peer]", f"PublicKey = {pub}"]
-        # Per-client PSK (credentials) if present, else the interface-wide PSK
-        # from profile settings. Must match the client's PresharedKey or the
-        # handshake is rejected.
         peer_psk = str(creds.get("preshared_key") or creds.get("presharedKey") or "").strip()
         try:
             peer_psk = _wg_safe_key(peer_psk) if peer_psk else ""
@@ -1062,19 +945,11 @@ def build_wireguard_config(clients: list[dict]) -> str:
 def build_hysteria_config(clients: list[dict]) -> dict:
     s0 = (clients[0].get("settings") or {}) if clients else {}
     port = int(s0.get("port", 443) or 443)
-    # hysteria is a single-instance daemon: one listen port per node. If profiles
-    # disagree on the port they silently collapse onto the first one — warn so the
-    # operator sees it instead of clients on the other port failing mysteriously.
     other_ports = {int((c.get("settings") or {}).get("port", 443) or 443) for c in clients}
     if len(other_ports) > 1:
         _log(f"hysteria: multiple ports {sorted(other_ports)} collapse onto :{port} "
              "(single-instance daemon) — clients on the other ports will not connect")
     core = _hysteria_core if isinstance(_hysteria_core, dict) else {}
-    # hysteria2 auth matches on the PASSWORD value (the client sends its credential
-    # = cid). trafficStats keys by the USERNAME. Key the userpass map
-    # {assignment_id: cid} so stats report the assignment_id the panel expects —
-    # not the cid, which the panel can't match and which (if non-UUID) would 422
-    # the whole traffic batch.
     userpass = {}
     for c in clients:
         cid = _client_id(c)
@@ -1099,17 +974,9 @@ def build_hysteria_config(clients: list[dict]) -> dict:
     return config
 
 
-# WireGuard interface name. Everything WG-related (config path default, reload
-# syncconf/up/down, ip link, iptables, rp_filter sysctls, the wg-quick@ systemd
-# unit) is parameterized on this so two node instances can co-locate on one host
-# with distinct interfaces (e.g. wg0 / wg1). Default stays wg0 → zero change for
-# existing single-node hosts.
 WG_INTERFACE = os.environ.get("XLINK_WG_INTERFACE", "wg0")
 WG_CONFIG_PATH = os.environ.get("XLINK_WG_CONFIG", f"/etc/wireguard/{WG_INTERFACE}.conf")
 
-# Reload command, built around WG_INTERFACE / WG_CONFIG_PATH. Note: rp_filter uses
-# the systemd %i token for the tunnel iface where the unit expands it, but here we
-# run outside the unit so the literal interface name is substituted directly.
 _WG_RELOAD_DEFAULT = (
     f"if ip link show {WG_INTERFACE} >/dev/null 2>&1; then "
     f"wg syncconf {WG_INTERFACE} <(wg-quick strip {WG_INTERFACE}) || "
@@ -1122,15 +989,8 @@ _WG_RELOAD_DEFAULT = (
     "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
     f"sysctl -w net.ipv4.conf.{WG_INTERFACE}.rp_filter=0 >/dev/null 2>&1; "
     "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
-    # Derive the masquerade subnet from the live wg conf Address line so it
-    # always matches build_wireguard_config (no hardcoded 10.8.0.0/24).
     "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
     f"{WG_CONFIG_PATH} 2>/dev/null | "
-    # Statements are ';'-separated on ONE line — no embedded newlines. A prior
-    # version used literal '\\n' sequences here, which python3 -c received as a
-    # backslash-n and rejected with SyntaxError, so WG_SUBNET was always empty
-    # and every node silently NAT'd the hardcoded 10.8.0.0/24 fallback instead
-    # of its real subnet.
     "python3 -c 'import sys,ipaddress; "
     "a=sys.stdin.read().strip() or \"10.8.0.1/24\"; "
     "a=a if \"/\" in a else a+\"/24\"; "
@@ -1138,13 +998,6 @@ _WG_RELOAD_DEFAULT = (
     "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
     "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
     "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
-    # INSERT the FORWARD accepts at the TOP of the chain, not append. When the
-    # host also runs Docker (e.g. the panel containers), Docker sets the FORWARD
-    # policy to DROP and inserts DOCKER-USER / DOCKER-FORWARD jumps ahead of any
-    # appended rule — so an appended wg accept is never reached and every
-    # forwarded WG packet is dropped (tunnel connects, but no traffic passes).
-    # Also insert the same accepts into DOCKER-USER, which Docker evaluates first
-    # of all and which returns/drops non-Docker forwarded traffic.
     f"iptables -C FORWARD -i {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
     f"iptables -I FORWARD 1 -i {WG_INTERFACE} -j ACCEPT; "
     f"iptables -C FORWARD -o {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
@@ -1158,16 +1011,6 @@ _WG_RELOAD_DEFAULT = (
 )
 
 
-# --- Protocol mirror (SEPARATE RUNTIME) ------------------------------------
-#
-# This daemon runs on the node, standalone, and CANNOT import the panel's
-# Python (app/). The panel's single source of truth for which core provisions
-# which protocol is app/protocols.py (PROTOCOLS -> provider_protocols()). This
-# map MIRRORS it for the node side. If you add/remove a protocol here or there,
-# app/subscription/tests/test_protocol_source.py reads BOTH and fails in CI, so
-# the two can't silently drift.
-#
-# Keyed by CORE name (matches CORES below / the panel's ProviderKind values).
 CORE_PROTOCOLS: dict[str, frozenset[str]] = {
     "xray": frozenset({"vless", "vmess", "trojan", "shadowsocks", "shadowsocks2022"}),
     "sing-box": frozenset(
@@ -1260,18 +1103,12 @@ def _xray_api_ok(retries: int = 6, delay: float = 0.5) -> bool:
 def check_provider_health(
     health_kinds: set[str], serving_kinds: set[str] | None = None
 ) -> dict[str, str]:
-    # serving_kinds = cores that actually have clients this cycle. A core that is
-    # installed but has no clients is intentionally left un-started by apply_one
-    # (systemd unit dead). That is idle, not a fault — don't report it unhealthy
-    # or the panel flags a perfectly fine node as broken.
     serving = serving_kinds if serving_kinds is not None else health_kinds
     status: dict[str, str] = {}
     for kind in health_kinds:
         core = CORES.get(kind)
         if core is None:
             continue
-        # Each core is checked in isolation: a crash while probing one core must
-        # not drop the health report for the others. A failed probe = unhealthy.
         try:
             if not _core_installed(kind, core):
                 status[kind] = "not_installed"
@@ -1289,7 +1126,6 @@ def check_provider_health(
                 active = _systemd_active(core.get("service", ""))
                 healthy = os.path.exists(core["path"]) if active is None else active
             if not healthy and kind not in serving:
-                # Installed, no clients, unit not running → idle, treat as healthy.
                 status[kind] = "healthy"
                 continue
             status[kind] = "healthy" if healthy else "unhealthy"
@@ -1325,10 +1161,6 @@ def _wireguard_traffic(clients: list[dict]) -> list[dict]:
             continue
         rx_b, tx_b = int(rx or 0), int(tx or 0)
         if peer not in _wg_prev:
-            # First sight (incl. after an agent restart): wg counters are
-            # cumulative since the interface came up, so treat the current value
-            # as the baseline and emit NO delta — otherwise the whole lifetime is
-            # re-counted as fresh usage and the user is double-charged.
             _wg_prev[peer] = (rx_b, tx_b)
             continue
         prev_rx, prev_tx = _wg_prev[peer]
@@ -1344,9 +1176,6 @@ def _wireguard_traffic(clients: list[dict]) -> list[dict]:
                     "collected_at": ts,
                 }
             )
-    # Prune counters for peers no longer assigned — otherwise _wg_prev grows for
-    # the life of the process as users/keys churn (unbounded memory). Runs under
-    # _enforce_lock (every collect_traffic caller holds it).
     for dead in set(_wg_prev) - set(peer_to_assignment):
         del _wg_prev[dead]
     return samples
@@ -1414,20 +1243,10 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
         if core_clients:
             _log(f"{kind}: not installed on this node — skipping {len(core_clients)} client(s)")
         return True
-    # No clients for this core this cycle. If the core was NEVER serving (no prior
-    # config on disk) just skip — building an empty config is pointless and the
-    # wireguard builder would raise on an empty client list. But if it WAS serving
-    # (config exists on disk), we must actually TEAR IT DOWN — otherwise the old
-    # users keep being served and an over-quota drop / de-provision silently fails
-    # (the core keeps the stale config forever). See C1.
     path = core["path"]
     if not core_clients:
         if not os.path.exists(path):
             return True
-        # Drain: stop serving. wireguard has no empty-config form (needs a key),
-        # so bring the interface down; the json cores get a real empty config built
-        # by their own builder (keeps api/stats/log/policy blocks so the traffic
-        # gRPC keeps working — a hand-rolled {inbounds:[]} would drop those).
         if kind == "wireguard":
             _run(
                 f"wg-quick down {WG_INTERFACE} 2>/dev/null; "
@@ -1450,10 +1269,6 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
     tmp = f"{root}.tmp{ext}"
     backup = f"{root}.bak{ext}"
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    # xray only writes its error log if the target directory already exists;
-    # without this it silently logs nowhere and the panel shows "No logs
-    # reported by this node yet". Best-effort — a read-only FS just means logs
-    # stay empty, not a failed apply.
     if kind == "xray":
         with contextlib.suppress(OSError):
             os.makedirs(os.path.dirname(XRAY_ERROR_LOG) or ".", exist_ok=True)
@@ -1505,9 +1320,6 @@ def apply_config(clients: list[dict], version: str) -> set[str]:
         if core is None:
             _log(f"unsupported core '{kind}' — skipping {len(core_clients)} client(s)")
             continue
-        # Drained core (no clients): don't build/digest — the wireguard builder
-        # raises on an empty list, which would skip the teardown entirely and wedge
-        # the cycle. apply_one owns the drain (empty config / interface down).
         if not core_clients:
             try:
                 if apply_one(kind, core, []):
@@ -1679,9 +1491,6 @@ def collect_traffic(active_kinds: set[str], clients: list[dict] | None = None) -
         samples += _hysteria_traffic()
     if "sing-box" in active_kinds and _v2ray_enabled():
         samples += _singbox_traffic()
-    # Drop samples whose assignment_id is not a UUID: the panel types it as
-    # uuid.UUID, so one malformed id (e.g. a mis-keyed core stat) would 422 the
-    # ENTIRE batch and stall traffic accounting. Skip the bad one, keep the rest.
     clean = []
     for s in samples:
         try:
@@ -1722,9 +1531,6 @@ def _local_enforce(clients: list[dict], samples: list[dict]) -> list[dict]:
         lim = c.get("data_limit_bytes")
         if lim:
             user_limit[uid] = int(lim)
-        # used_bytes is the per-USER account total (same value on every one of the
-        # user's clients), so SET it once — do NOT sum, or a user with N
-        # assignments on this node counts N× their usage and is dropped early.
         user_base[uid] = int(c.get("used_bytes", 0) or 0)
     for s in samples:
         uid = asg_user.get(s.get("assignment_id"))
@@ -1732,8 +1538,6 @@ def _local_enforce(clients: list[dict], samples: list[dict]) -> list[dict]:
             continue
         used = int(s.get("upload_bytes", 0) or 0) + int(s.get("download_bytes", 0) or 0)
         _usage_acc[uid] = _usage_acc.get(uid, 0) + used
-    # Prune to the current user set so a long panel outage (where the full-cycle
-    # reset at cycle() is skipped) can't grow _usage_acc unbounded with churn.
     live_users = {c.get("user_id") for c in clients}
     for dead in [u for u in _usage_acc if u not in live_users]:
         del _usage_acc[dead]
@@ -1754,14 +1558,11 @@ def _local_enforce(clients: list[dict], samples: list[dict]) -> list[dict]:
 
 _XLINK_CLI = os.environ.get("XLINK_CLI", "/usr/local/bin/xlink")
 _UPGRADE_TIMEOUT = 900
-# Normalize the core name the panel may send ("singbox"/"wg") to the CORES key.
 _CORE_ALIAS = {"singbox": "sing-box", "wg": "wireguard"}
 
 
 def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
-    # Execute an operator command leased from the panel. Returns (success, result).
     if kind == "apply_config":
-        # Config is owned by the normal pull cycle; just wake it.
         _wake.set()
         return True, {"note": "config refresh scheduled"}
     if kind == "restart":
@@ -1772,10 +1573,6 @@ def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
             return False, {"error": f"unknown core {core}"}
         if not _core_installed(core, spec):
             return True, {"core": core, "note": "core not installed — nothing to restart"}
-        # Use the systemd unit restart, NOT the config-reapply reload pipeline:
-        # for wireguard the reload bounces the tunnel + rewrites iptables, far
-        # heavier than an operator "restart" should be. Plain restart is safe and
-        # idempotent even for an idle (no-client) core.
         service = spec.get("service", core)
         rc, out = _run(f"systemctl restart {service}")
         return rc == 0, {"core": core, "rc": rc, "output": out[-500:] if out else ""}
@@ -1786,8 +1583,6 @@ def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
             return False, {"error": f"unknown or missing core {core!r}"}
         alias = {"sing-box": "singbox", "wireguard": "wg"}.get(core, core)
         target = str(payload.get("target_version") or "").strip()
-        # Defense-in-depth: only a version token reaches the CLI (which re-splits
-        # it in a shell). Reject anything else so a crafted command can't inject.
         if target and not re.match(r"^[A-Za-z0-9._-]+$", target):
             return False, {"error": f"invalid target_version: {target[:32]!r}"}
         if not os.path.exists(_XLINK_CLI):
@@ -1817,10 +1612,6 @@ _cmd_lock = threading.Lock()
 
 
 def poll_commands() -> None:
-    # Run command execution in a background thread so a long upgrade (up to the
-    # 900s timeout) never blocks the main cycle — otherwise config pulls and
-    # traffic/liveness reports stall and the node flaps offline mid-upgrade. The
-    # lock lets at most one command batch run at a time (no overlapping upgrades).
     if _cmd_lock.locked():
         return
     threading.Thread(target=_poll_commands_blocking, daemon=True).start()
@@ -1836,8 +1627,6 @@ def _poll_commands_blocking() -> None:
 
 
 def _do_poll_commands() -> None:
-    # Lease operator commands from the panel, run each, report the result. Auth is
-    # the agent token (X-Agent-Token) — the panel is the only authenticated source.
     try:
         sc, resp = _call("POST", "/commands/lease", {})
     except Exception as exc:
@@ -1860,10 +1649,6 @@ def _do_poll_commands() -> None:
             success, result = _run_command(kind, payload)
         except Exception as exc:
             success, result = False, {"error": str(exc)}
-        # Deliver the result with retries: a lost POST leaves the command LEASED,
-        # so it re-leases and re-executes after expiry (at-least-once). Retrying
-        # here makes that rare, and we log a failure so silent double-runs are
-        # visible rather than suppressed.
         delivered = False
         for _ in range(3):
             try:
@@ -1895,23 +1680,17 @@ def cycle() -> None:
     sc, cfg = _call("GET", "/config", known_version=_last_version)
     if sc != 200:
         _log(f"config pull failed ({sc}): {cfg}")
-        # Still report liveness so a transient config-pull failure doesn't flip
-        # the node OFFLINE — the agent + cores are alive, only the pull failed.
         with contextlib.suppress(Exception):
             _call("POST", "/state", {"agent_version": AGENT_VERSION})
         return
     version = cfg.get("config_version")
     conf = cfg.get("config") or {}
-    # "unchanged": the panel confirms our applied version is still current and did
-    # NOT re-render the config (empty body). Keep the current config as-is — do NOT
-    # apply the empty body (that would drain every core). Reuse the last-applied
-    # client set so traffic collection / enforcement still run this cycle.
     unchanged = bool(cfg.get("unchanged")) or (
         version is not None and version == _last_version and not conf.get("clients")
     )
     if unchanged and _last_clients:
         clients = _last_clients
-        cores = None  # signal: don't swap templates
+        cores = None
         _log(f"config unchanged v={version} (short-circuit) clients={len(clients)}")
     else:
         clients = conf.get("clients", [])
@@ -1925,37 +1704,19 @@ def cycle() -> None:
     try:
         with _enforce_lock:
             if cores is not None:
-                # Fresh config. Swap the core templates under the same lock the
-                # fast-enforce loop holds when it reads them (via the config
-                # builders), so it never pairs a new client set with a
-                # stale/half-updated template.
                 _xray_core = cores.get("xray") or {}
                 _singbox_core = cores.get("sing-box") or {}
                 _hysteria_core = cores.get("hysteria") or {}
-                # Fresh config: the panel's used_bytes now already accounts for
-                # every delta reported so far, so rebase the local accumulator to
-                # avoid double-counting (which would falsely keep users over-limit
-                # forever).
                 _usage_acc = {}
                 _over_users = set()
             pre_samples = collect_traffic(kinds_present, clients) if not DRY_RUN else []
-            # Persist immediately: collect_traffic reset the core counters, so a
-            # crash before the WAL write (which used to happen ~50 lines later,
-            # after several network calls) would silently lose this usage.
             _wal_append(pre_samples)
             effective = _local_enforce(clients, pre_samples)
             locally_limited = len(clients) - len(effective)
-            # Internal apply key: vary when the locally-enforced set changes so
-            # apply_config re-runs, WITHOUT mutating the version we report to the
-            # panel (reporting a mangled version = permanent phantom drift).
             effective_version = (
                 f"{version}-local{len(effective)}" if locally_limited else version
             )
             if cores is not None or locally_limited:
-                # Apply on a fresh config, or when local enforcement changed the
-                # served set. An "unchanged" pull with no new drops leaves the
-                # running config exactly as-is (apply_config is a no-op via the
-                # per-core hash anyway, but skipping avoids needless work).
                 active_kinds = apply_config(effective, effective_version)
             else:
                 active_kinds = {_effective_core(c) for c in clients} & set(CORES)
@@ -1967,8 +1728,6 @@ def cycle() -> None:
         active_kinds = {_effective_core(c) for c in clients} & set(CORES)
 
     cpu, mem = read_metrics()
-    # Report health for every installed core, not just the ones with clients, so
-    # the panel shows the full core picture even when one is down or idle.
     def _installed_safe(k: str) -> bool:
         try:
             return _core_installed(k, CORES[k])
@@ -2006,12 +1765,8 @@ def cycle() -> None:
             },
         )
 
-    # pre_samples were already WAL'd under the enforce lock right after
-    # collection; here we just claim the full WAL for delivery.
     samples = _wal_rotate()
     if samples:
-        # Deterministic batch id over the WAL contents so a resend of the same
-        # unacked batch dedups server-side instead of double-counting.
         digest = hashlib.sha256(
             json.dumps(samples, sort_keys=True).encode()
         ).hexdigest()[:32]
@@ -2061,17 +1816,12 @@ def sse_listener() -> None:
             req = urllib.request.Request(
                 url, headers={"X-Agent-Token": TOKEN, "Accept": "text/event-stream"}
             )
-            # Finite read timeout, longer than the panel's ~20s SSE keepalive: a
-            # half-open/stalled stream (LB idle-drop, no RST) then raises instead
-            # of wedging this thread forever with timeout=None.
             with _OPENER.open(req, timeout=90) as resp:
                 _sse_fail = 0
                 for raw in resp:
                     if raw.decode("utf-8", "ignore").startswith("data:"):
                         _wake.set()
         except Exception as exc:  # noqa: BLE001
-            # Log occasionally (not every 5s) so a persistently-dead event stream
-            # (bad token, TLS, DNS) is visible instead of an invisible retry loop.
             _sse_fail += 1
             if _sse_fail == 1 or _sse_fail % 12 == 0:
                 _log(f"event stream reconnecting: {exc}")
@@ -2079,9 +1829,6 @@ def sse_listener() -> None:
 
 
 def fast_enforce_loop() -> None:
-    # Lightweight loop: re-read usage for the last-applied client set and drop any
-    # user that has just crossed their data limit, without waiting for the next
-    # full cycle. Recovery (re-adding a reset user) is owned by the full cycle.
     if DRY_RUN:
         return
     while True:
@@ -2090,18 +1837,12 @@ def fast_enforce_loop() -> None:
             continue
         try:
             with _enforce_lock:
-                # Snapshot the shared trio atomically under the lock so we never
-                # pair a new client set with a stale kinds/version from a cycle
-                # update that is mid-flight.
                 clients = _last_clients
                 kinds = _last_kinds
                 base_version = _last_effective_version
                 if not clients or not kinds:
                     continue
                 prev_over = set(_over_users)
-                # collect_traffic resets the core counters (-reset), so these
-                # deltas MUST be persisted or the usage is lost. WAL them always;
-                # the next full cycle delivers the WAL to the panel.
                 samples = collect_traffic(kinds, clients)
                 _wal_append(samples)
                 effective = _local_enforce(clients, samples)
@@ -2141,16 +1882,10 @@ def main() -> int:
             poll_commands()
         except Exception as exc:
             _log(f"command poll error: {exc}")
-        # Respawn any worker thread that died (a BaseException in the loop
-        # scaffolding would otherwise silently stop fast-enforce / SSE wakes).
         for name, (fn, _) in workers.items():
             if not threads[name].is_alive():
                 _log(f"worker '{name}' died — respawning")
                 threads[name] = _spawn(fn)
-        # Jitter the interval (±20%) so 50 nodes installed/restarted together don't
-        # poll in lockstep and hammer the panel on the same tick (thundering herd).
-        # An SSE wake still fires an immediate re-poll (wait returns early), so a
-        # real config change still propagates promptly.
         jitter = INTERVAL * (1 + random.uniform(-0.2, 0.2))
         _wake.wait(timeout=max(1.0, jitter))
         _wake.clear()

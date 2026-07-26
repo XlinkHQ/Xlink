@@ -19,7 +19,6 @@ export function NodeDetail({
   onClose: () => void;
   onEdit: () => void;
   editing?: boolean;
-  /** inline edit form rendered below the content when editing */
   editForm?: ReactNode;
 }) {
   const [tab, setTab] = useState<"config" | "info" | "inbounds">("config");

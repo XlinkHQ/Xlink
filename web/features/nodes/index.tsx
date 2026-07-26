@@ -64,8 +64,6 @@ export function NodesScreen() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editInline, setEditInline] = useState(false);
   const [search, setSearch] = useState("");
-  // Resolve the open detail node live from the query, so a rename reflects and a
-  // deletion closes the view (was falling back to a stale snapshot).
   const detail = detailId ? (nodes.find((n) => n.id === detailId) ?? null) : null;
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["nodes"] });

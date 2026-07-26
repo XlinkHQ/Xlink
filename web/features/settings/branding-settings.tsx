@@ -32,9 +32,7 @@ export function BrandingSettingsScreen() {
           <input className="warp-set-input" value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="https://…/logo.svg" />
         </SettingsRow>
         <SettingsRow label="Preview" hint="Current logo + name.">
-          {/* Logos are often dark-on-transparent wordmarks that vanish on the
-              dark theme, so preview them on a fixed light chip that keeps them
-              legible in both themes. */}
+          {}
           <span
             className="inline-flex items-center gap-2"
             style={{
