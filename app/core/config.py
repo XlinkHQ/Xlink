@@ -128,6 +128,8 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_password: SecretStr | None = None
     redis_max_connections: int = 50
+    redis_socket_timeout: float = 5.0
+    redis_socket_connect_timeout: float = 3.0
     cache_ttl_seconds: int = 300
 
     jwt_secret_key: SecretStr = SecretStr("insecure-dev-key-change-me")

@@ -284,8 +284,11 @@ class TrafficService:
         user_ids = self._delta_user_ids(owned, deltas)
         if not user_ids:
             return
-        totals = await self._repo.usage_sum_by_user(user_ids)
-        ids = list(user_ids)
+        ids = sorted(user_ids, key=str)
+        await self._session.execute(
+            select(User.id).where(User.id.in_(ids)).with_for_update().order_by(User.id)
+        )
+        totals = await self._repo.usage_sum_by_user(ids)
         await self._session.execute(
             update(User)
             .where(User.id.in_(ids))

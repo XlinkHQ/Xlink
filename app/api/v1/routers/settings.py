@@ -46,7 +46,7 @@ async def update_subscription_settings(
 
 @router.get("/notifications", response_model=NotificationSettingsRead)
 async def get_notification_settings(
-    _admin: AdminUser,
+    _admin: SudoAdminUser,
     settings: SettingsServiceDep,
 ) -> NotificationSettingsRead:
     return NotificationSettingsRead.model_validate(await settings.get_notifications())
@@ -63,7 +63,7 @@ async def update_notification_settings(
 
 @router.get("/warp", response_model=WarpSettingsRead)
 async def get_warp_settings(
-    _admin: AdminUser,
+    _admin: SudoAdminUser,
     settings: SettingsServiceDep,
 ) -> WarpSettingsRead:
     return WarpSettingsRead.model_validate(await settings.get_warp())

@@ -29,10 +29,13 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
         )
         return result.scalars().one_or_none()
 
-    async def mark_grace_used(self, jti: str) -> None:
-        await self.session.execute(
-            update(RefreshToken).where(RefreshToken.jti == jti).values(grace_used=True)
+    async def claim_grace(self, jti: str) -> bool:
+        result = await self.session.execute(
+            update(RefreshToken)
+            .where(RefreshToken.jti == jti, RefreshToken.grace_used.is_(False))
+            .values(grace_used=True)
         )
+        return (result.rowcount or 0) == 1
 
     async def revoke_by_jti(self, jti: str) -> int:
 

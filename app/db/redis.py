@@ -16,6 +16,8 @@ class RedisCache:
             settings.redis_url,
             max_connections=settings.redis_max_connections,
             decode_responses=False,
+            socket_timeout=settings.redis_socket_timeout,
+            socket_connect_timeout=settings.redis_socket_connect_timeout,
         )
         self._client: Redis = Redis(connection_pool=self._pool)
 

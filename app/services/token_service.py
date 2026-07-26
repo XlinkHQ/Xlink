@@ -111,13 +111,12 @@ class TokenService:
                     revoked_at = revoked_at.replace(tzinfo=UTC)
                 grace_cutoff = datetime.now(UTC) - timedelta(seconds=_REUSE_GRACE_SECONDS)
                 if revoked_at is not None and revoked_at >= grace_cutoff:
-                    if existing.grace_used:
+                    if not await self._repo.claim_grace(existing.jti):
                         await self._repo.revoke_all_for_user(existing.user_id)
                         raise AuthenticationError(
                             "Refresh token already replayed during grace period.",
                             code="token_reuse",
                         )
-                    await self._repo.mark_grace_used(existing.jti)
                     return existing
                 await self._repo.revoke_all_for_user(existing.user_id)
                 raise AuthenticationError("Refresh token reuse detected.", code="token_reuse")

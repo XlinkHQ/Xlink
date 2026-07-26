@@ -230,9 +230,13 @@ class SubscriptionService:
         await self._cache.publish_node_event(node_id, "config_changed")
 
     async def _cache_key(self, request: FeedRequest) -> str:
-        global_rev, subject_rev = await self._cache.mget_int(
-            [_GLOBAL_REV_KEY, _subject_rev_key(request.subject_id)]
-        )
+        try:
+            global_rev, subject_rev = await self._cache.mget_int(
+                [_GLOBAL_REV_KEY, _subject_rev_key(request.subject_id)]
+            )
+        except Exception:
+            logger.warning("subscription_cache_key_redis_error")
+            global_rev, subject_rev = None, None
         return (
             "subscription:"
             f"{request.subject_id}:"
