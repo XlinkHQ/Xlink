@@ -898,18 +898,28 @@ def build_wireguard_config(clients: list[dict]) -> str:
         "sysctl -w net.ipv4.conf.default.rp_filter=0; "
         "sysctl -w net.ipv4.conf.%i.rp_filter=0; "
         "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 2>/dev/null; "
-        f"iptables -t nat -A POSTROUTING -s {subnet} -o $WAN -j MASQUERADE; "
+        f"if iptables -t nat -A POSTROUTING -s {subnet} -o \"$WAN\" -j MASQUERADE 2>/dev/null; then "
         "iptables -I FORWARD 1 -i %i -j ACCEPT; "
         "iptables -I FORWARD 1 -o %i -j ACCEPT; "
         "if iptables -L DOCKER-USER >/dev/null 2>&1; then "
         "iptables -I DOCKER-USER 1 -i %i -j ACCEPT; "
-        "iptables -I DOCKER-USER 1 -o %i -j ACCEPT; fi"
+        "iptables -I DOCKER-USER 1 -o %i -j ACCEPT; fi; "
+        "else "
+        "nft add table ip wgnat 2>/dev/null; "
+        "nft 'add chain ip wgnat post { type nat hook postrouting priority 100 ; }' 2>/dev/null; "
+        f"nft add rule ip wgnat post ip saddr {subnet} oifname \"$WAN\" masquerade; "
+        "nft 'add chain ip wgnat fwd { type filter hook forward priority 0 ; }' 2>/dev/null; "
+        "nft add rule ip wgnat fwd iifname %i accept; "
+        "nft add rule ip wgnat fwd oifname %i accept; "
+        "fi"
     )
     post_down = (
         "WAN=$(ip route list default | awk '{print $5; exit}'); "
-        f"iptables -t nat -D POSTROUTING -s {subnet} -o $WAN -j MASQUERADE; "
-        "iptables -D FORWARD -i %i -j ACCEPT; "
-        "iptables -D FORWARD -o %i -j ACCEPT"
+        f"iptables -t nat -D POSTROUTING -s {subnet} -o \"$WAN\" -j MASQUERADE 2>/dev/null; "
+        "iptables -D FORWARD -i %i -j ACCEPT 2>/dev/null; "
+        "iptables -D FORWARD -o %i -j ACCEPT 2>/dev/null; "
+        "nft delete table ip wgnat 2>/dev/null; "
+        "true"
     )
     lines = [
         "[Interface]",
