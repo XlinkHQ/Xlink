@@ -1014,4 +1014,10 @@ export const en = {
   "warp.reservedHint": "Optional comma-separated reserved bytes (e.g. 12,34,56).",
   "warp.saved": "WARP settings saved — nodes apply on next sync.",
   "warp.title": "Cloudflare WARP",
+  "nav.routing": "Routing",
+  "nav.outbounds": "Outbounds",
+  "navgroup.vpn": "VPN",
+  "navgroup.network": "Network",
+  "navgroup.management": "Management",
+  "navgroup.system": "System",
 } as const;

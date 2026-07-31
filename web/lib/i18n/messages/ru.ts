@@ -1014,4 +1014,10 @@ export const ru = {
   "warp.title": "Cloudflare WARP",
   "action.retry": "Повторить",
   "common.loadFailed": "Не удалось загрузить данные. Попробуйте снова.",
+  "nav.routing": "Маршрутизация",
+  "nav.outbounds": "Исходящие",
+  "navgroup.vpn": "VPN",
+  "navgroup.network": "Сеть",
+  "navgroup.management": "Управление",
+  "navgroup.system": "Система",
 } as const;

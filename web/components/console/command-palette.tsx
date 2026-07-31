@@ -33,8 +33,8 @@ export function CommandPalette({ onSelect }: { onSelect: (key: string) => void }
 
   const items = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return NAV_ITEMS.filter((i) => !needle || i.label.toLowerCase().includes(needle));
-  }, [q]);
+    return NAV_ITEMS.filter((i) => !needle || t(i.labelKey).toLowerCase().includes(needle));
+  }, [q, t]);
 
   if (!open) return null;
 
@@ -84,7 +84,7 @@ export function CommandPalette({ onSelect }: { onSelect: (key: string) => void }
                   onClick={() => choose(it.key)}
                 >
                   <ItemIcon size={16} aria-hidden />
-                  {it.label}
+                  {t(it.labelKey)}
                 </button>
               );
             })

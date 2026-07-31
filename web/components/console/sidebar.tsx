@@ -43,7 +43,7 @@ export function Sidebar({
         <nav className="warp-sb-groups">
           {NAV_GROUPS.map((group, i) => (
             <SidebarGroup
-              key={group.title ?? `g${i}`}
+              key={group.titleKey ?? `g${i}`}
               group={group}
               active={active}
               onSelect={onSelect}
@@ -65,9 +65,10 @@ function SidebarGroup({
   onSelect: (key: string) => void;
 }) {
   const [open, setOpen] = useState(true);
+  const t = useT();
   return (
     <div className="warp-nav-group">
-      {group.title ? (
+      {group.titleKey ? (
         <button
           type="button"
           className="warp-nav-track"
@@ -79,7 +80,7 @@ function SidebarGroup({
           ) : (
             <ChevronRight size={20} strokeWidth={2} aria-hidden />
           )}
-          <span>{group.title}</span>
+          <span>{group.titleKey ? t(group.titleKey) : null}</span>
         </button>
       ) : null}
       {open ? (
@@ -91,7 +92,7 @@ function SidebarGroup({
               <button
                 key={item.key}
                 type="button"
-                title={item.label}
+                title={t(item.labelKey)}
                 data-status={isActive ? "active" : undefined}
                 onClick={() => onSelect(item.key)}
                 className="warp-nav-item"
@@ -99,7 +100,7 @@ function SidebarGroup({
                 <span className="warp-nav-ico" aria-hidden>
                   <Icon size={20} />
                 </span>
-                <span>{item.label}</span>
+                <span>{t(item.labelKey)}</span>
               </button>
             );
           })}

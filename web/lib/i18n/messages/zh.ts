@@ -1014,4 +1014,10 @@ export const zh = {
   "warp.title": "Cloudflare WARP",
   "action.retry": "重试",
   "common.loadFailed": "无法加载数据，请重试。",
+  "nav.routing": "路由",
+  "nav.outbounds": "出站",
+  "navgroup.vpn": "VPN",
+  "navgroup.network": "网络",
+  "navgroup.management": "管理",
+  "navgroup.system": "系统",
 } as const;

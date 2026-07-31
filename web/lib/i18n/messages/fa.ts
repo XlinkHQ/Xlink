@@ -1014,4 +1014,10 @@ export const fa = {
   "warp.title": "Cloudflare WARP",
   "action.retry": "تلاش مجدد",
   "common.loadFailed": "بارگذاری داده‌ها ممکن نشد. لطفاً دوباره تلاش کنید.",
+  "nav.routing": "مسیریابی",
+  "nav.outbounds": "خروجی‌ها",
+  "navgroup.vpn": "VPN",
+  "navgroup.network": "شبکه",
+  "navgroup.management": "مدیریت",
+  "navgroup.system": "سیستم",
 } as const;
