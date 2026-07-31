@@ -27,7 +27,7 @@ _CAPABILITIES = frozenset(
     }
 )
 
-_ECHO_KEYS = ("address", "dns", "allowedIPs")
+_ECHO_KEYS = ("address", "dns", "allowedIPs", "presharedKey", "preshared_key")
 
 
 def _generate_keypair() -> tuple[str, str]:
@@ -107,5 +107,8 @@ class WireGuardProvider(Provider):
                 record[key] = str(spec.attributes[key])
             elif existing is not None and key in existing:
                 record[key] = existing[key]
+        psk = record.pop("presharedKey", None)
+        if psk and not record.get("preshared_key"):
+            record["preshared_key"] = psk
         self._clients[spec.client_id] = record
         return ClientResult(client_id=spec.client_id, provider=PROVIDER_NAME, raw=dict(record))

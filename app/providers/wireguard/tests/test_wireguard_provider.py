@@ -25,6 +25,17 @@ async def test_create_returns_real_keypair(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_preshared_key_lands_in_credentials(tmp_path):
+    provider = WireGuardProvider(data_dir=str(tmp_path))
+    psk = base64.b64encode(b"\x02" * 32).decode()
+    result = await provider.create_client(
+        ClientSpec(client_id="cpsk", attributes={"address": "10.0.0.9/32", "presharedKey": psk})
+    )
+    assert result.raw["preshared_key"] == psk
+    assert "presharedKey" not in result.raw
+
+
+@pytest.mark.asyncio
 async def test_get_returns_stored_client(tmp_path):
     provider = WireGuardProvider(data_dir=str(tmp_path))
     created = await provider.create_client(ClientSpec(client_id="c2"))
