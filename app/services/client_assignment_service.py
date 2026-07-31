@@ -10,7 +10,11 @@ from app.core.pagination import decode_cursor, encode_cursor
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.node import Node
 from app.domain.user import User
-from app.providers.base.exceptions import ProviderError, ProviderNotFoundError
+from app.providers.base.exceptions import (
+    ClientNotFoundError,
+    ProviderError,
+    ProviderNotFoundError,
+)
 from app.providers.base.models import ClientSpec, ProviderKind
 from app.providers.base.provider import Provider
 from app.providers.base.registry import ProviderRegistry
@@ -269,6 +273,8 @@ class ClientAssignmentService:
     async def _deprovision(self, provider: Provider, client_id: str) -> None:
         try:
             await provider.delete_client(client_id)
+        except ClientNotFoundError:
+            logger.info("deprovision_client_absent", client_id=client_id)
         except ProviderError:
             raise
         except Exception as exc:
