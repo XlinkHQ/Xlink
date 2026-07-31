@@ -379,17 +379,20 @@ class ClientAssignmentService:
             select(Node.id).where(Node.id == node_id).with_for_update()
         )
         prefix = "10.8.0"
+        used = {1}
         if isinstance(server_address, str) and "." in server_address:
-            head = server_address.split("/")[0].strip().rsplit(".", 1)[0]
+            server_ip = server_address.split("/")[0].strip()
+            head, _, tail = server_ip.rpartition(".")
             if head:
                 prefix = head
+            if tail.isdigit():
+                used.add(int(tail))
         rows = await self._repo.session.execute(
             select(ClientAssignment.credentials).where(
                 ClientAssignment.node_id == node_id,
                 ClientAssignment.provider_kind == ProviderKind.WIREGUARD,
             )
         )
-        used = {1}
         for (creds,) in rows.all():
             addr = (creds or {}).get("address") if isinstance(creds, dict) else None
             if isinstance(addr, str) and "." in addr:

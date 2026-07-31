@@ -16,12 +16,22 @@ from app.providers.base.models import ProviderKind
 SUPPORTED_SUBSCRIPTION_PROTOCOLS = subscription_protocols()
 
 
+def _strip_port(host: str) -> str:
+    host = host.strip()
+    if host.startswith("["):
+        return host[1 : host.index("]")] if "]" in host else host.strip("[]")
+    if host.count(":") == 1:
+        return host.rsplit(":", 1)[0]
+    return host
+
+
 def _resolve_host(protocol: str, settings: Mapping[str, Any], node_host: str) -> str:
     if protocol == "wireguard":
         host = settings.get("endpoint") or node_host
     else:
         host = settings.get("address") or node_host
     host = str(host).split("/", 1)[0].strip()
+    host = _strip_port(host)
     for ch in ("@", "?", "#", " ", "\t", "\r", "\n"):
         host = host.replace(ch, "")
     return host

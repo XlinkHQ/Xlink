@@ -930,8 +930,16 @@ def build_wireguard_config(clients: list[dict]) -> str:
         f"PostDown = {post_down}",
     ]
     server_ip = addr.split("/")[0].strip()
+    server_priv = str(s0.get("privateKey") or s0.get("private_key") or "").strip()
     seen_ips: set[str] = set()
+    skipped_foreign = 0
+    skipped_no_addr = 0
     for cl in clients:
+        cs = cl.get("settings") or {}
+        cl_priv = str(cs.get("privateKey") or cs.get("private_key") or "").strip()
+        if server_priv and cl_priv and cl_priv != server_priv:
+            skipped_foreign += 1
+            continue
         creds = cl.get("credentials") or {}
         try:
             pub = _wg_safe_key(str(creds.get("public_key") or ""))
@@ -941,7 +949,10 @@ def build_wireguard_config(clients: list[dict]) -> str:
             continue
         peer_addr = str(creds.get("address") or "").strip()
         ip = peer_addr.split("/")[0].strip()
-        if not ip or ip == server_ip or ip in seen_ips:
+        if not ip:
+            skipped_no_addr += 1
+            continue
+        if ip == server_ip or ip in seen_ips:
             continue
         try:
             _wg_safe_addr(ip)
@@ -959,6 +970,13 @@ def build_wireguard_config(clients: list[dict]) -> str:
             peer_lines.append(f"PresharedKey = {effective_psk}")
         peer_lines.append(f"AllowedIPs = {ip}/32")
         lines += peer_lines
+    if skipped_foreign:
+        _log(
+            f"wireguard: {skipped_foreign} client(s) belong to a different WG server "
+            "profile on this node and were skipped (one wg0 interface per node)"
+        )
+    if skipped_no_addr:
+        _log(f"wireguard: {skipped_no_addr} client(s) skipped — no tunnel address in credentials")
     return "\n".join(lines) + "\n"
 
 
@@ -1323,7 +1341,7 @@ def _effective_core(cl: dict) -> str:
     return cl.get("provider_kind", "xray")
 
 
-def apply_config(clients: list[dict], version: str) -> set[str]:
+def apply_config(clients: list[dict], version: str, server_version: str | None = None) -> set[str]:
     global _last_version, _last_active_kinds
     by_core: dict[str, list[dict]] = {}
     for cl in clients:
@@ -1375,7 +1393,7 @@ def apply_config(clients: list[dict], version: str) -> set[str]:
             ok = False
             _log(f"{kind} apply error: {exc}")
     if ok:
-        _last_version = version
+        _last_version = server_version if server_version is not None else version
         _last_active_kinds = active_kinds
     return active_kinds
 
@@ -1739,7 +1757,7 @@ def cycle() -> None:
                 f"{version}-local{len(effective)}" if locally_limited else version
             )
             if cores is not None or locally_limited:
-                active_kinds = apply_config(effective, effective_version)
+                active_kinds = apply_config(effective, effective_version, server_version=version)
             else:
                 active_kinds = {_effective_core(c) for c in clients} & set(CORES)
             _last_clients = clients
@@ -1862,6 +1880,7 @@ def fast_enforce_loop() -> None:
                 clients = _last_clients
                 kinds = _last_kinds
                 base_version = _last_effective_version
+                clean_version = _last_version
                 if not clients or not kinds:
                     continue
                 prev_over = set(_over_users)
@@ -1870,7 +1889,11 @@ def fast_enforce_loop() -> None:
                 effective = _local_enforce(clients, samples)
                 newly_over = _over_users - prev_over
                 if newly_over:
-                    apply_config(effective, f"{base_version}-fast{len(effective)}")
+                    apply_config(
+                        effective,
+                        f"{base_version}-fast{len(effective)}",
+                        server_version=clean_version,
+                    )
                     _log(f"fast-enforce dropped {len(newly_over)} over-limit user(s)")
         except Exception as exc:
             _log(f"fast-enforce error: {exc}")

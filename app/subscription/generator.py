@@ -159,7 +159,11 @@ class SubscriptionGenerator:
         self, source: SubscriptionSource, used_total: int, texts: dict[str, str] | None = None
     ) -> dict[str, Any]:
         user = source.assignment.user
-        limit = source.assignment.traffic_limit_bytes or getattr(user, "data_limit_bytes", None)
+        if source.assignment.traffic_limit_bytes:
+            limit = source.assignment.traffic_limit_bytes
+            used_total = int(source.assignment.used_bytes or 0)
+        else:
+            limit = getattr(user, "data_limit_bytes", None)
         status_text, status_emoji = _user_status(user, used_total, limit, texts)
         expire = getattr(user, "expire_at", None)
         days_left = ""
@@ -193,6 +197,14 @@ class SubscriptionGenerator:
         global_remark = (texts or {}).get("remark")
         if global_remark and not base.get("remark"):
             base["remark"] = global_remark
+
+        if source.profile.protocol.strip().lower() == "wireguard":
+            creds = source.assignment.credentials or {}
+            client_addr = creds.get("address") if isinstance(creds, dict) else None
+            if client_addr:
+                base["address"] = str(client_addr)
+            else:
+                base.pop("address", None)
         return base
 
     def _build_configs(
@@ -205,10 +217,11 @@ class SubscriptionGenerator:
         self._validate_source(source)
         provider = self._get_provider(source.assignment.provider_kind)
         base = self._base_settings(source, used_total, texts)
+        is_wireguard = source.profile.protocol.strip().lower() == "wireguard"
         hosts: Any = None
-        if host_overrides:
+        if host_overrides and not is_wireguard:
             hosts = host_overrides.get(source.profile.id)
-        if not hosts:
+        if not hosts and not is_wireguard:
             hosts = source.profile.settings.get("hosts")
         if not isinstance(hosts, list) or not hosts:
             return [ProviderConfig.build(source=source, provider_name=provider.name, settings=base)]
