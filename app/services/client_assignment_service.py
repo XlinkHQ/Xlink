@@ -375,18 +375,29 @@ class ClientAssignmentService:
         await self._repo.session.flush()
 
     async def _allocate_wireguard_address(self, node_id: uuid.UUID, server_address: object) -> str:
+        import ipaddress
+
         await self._repo.session.execute(
             select(Node.id).where(Node.id == node_id).with_for_update()
         )
-        prefix = "10.8.0"
-        used = {1}
-        if isinstance(server_address, str) and "." in server_address:
-            server_ip = server_address.split("/")[0].strip()
-            head, _, tail = server_ip.rpartition(".")
-            if head:
-                prefix = head
-            if tail.isdigit():
-                used.add(int(tail))
+        raw = server_address if isinstance(server_address, str) and "/" in server_address else None
+        try:
+            network = ipaddress.ip_network(raw, strict=False) if raw else None
+        except ValueError:
+            network = None
+        if network is None:
+            network = ipaddress.ip_network("10.8.0.0/24")
+        server_ip = None
+        if raw:
+            try:
+                server_ip = ipaddress.ip_address(raw.split("/")[0].strip())
+            except ValueError:
+                server_ip = None
+        used: set[int] = set()
+        if server_ip is not None:
+            used.add(int(server_ip))
+        else:
+            used.add(int(next(network.hosts(), network.network_address)))
         rows = await self._repo.session.execute(
             select(ClientAssignment.credentials).where(
                 ClientAssignment.node_id == node_id,
@@ -395,17 +406,17 @@ class ClientAssignmentService:
         )
         for (creds,) in rows.all():
             addr = (creds or {}).get("address") if isinstance(creds, dict) else None
-            if isinstance(addr, str) and "." in addr:
-                host = addr.split("/")[0].strip()
-                other_head, _, tail = host.rpartition(".")
-                if other_head == prefix and tail.isdigit():
-                    used.add(int(tail))
-        for octet in range(2, 255):
-            if octet not in used:
-                return f"{prefix}.{octet}/32"
+            if isinstance(addr, str):
+                try:
+                    used.add(int(ipaddress.ip_address(addr.split("/")[0].strip())))
+                except ValueError:
+                    continue
+        for host in network.hosts():
+            if int(host) not in used:
+                return f"{host}/32"
         raise ValidationError(
             "WireGuard address pool for this node is exhausted "
-            f"({prefix}.0/24 has no free host address).",
+            f"({network} has no free host address).",
             code="wireguard_pool_exhausted",
         )
 

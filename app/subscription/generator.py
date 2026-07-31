@@ -134,13 +134,11 @@ class SubscriptionGenerator:
     ) -> tuple[ProviderConfig, ...]:
         configs: list[ProviderConfig] = []
 
-        used_total = 0
-        if sources:
-            user = sources[0].assignment.user
-            used_total = int(getattr(user, "users_data_usage", 0) or 0)
-        if used_total == 0:
-            used_total = sum(int(s.assignment.used_bytes or 0) for s in sources)
         for source in sources:
+            user = source.assignment.user
+            used_total = int(getattr(user, "users_data_usage", 0) or 0)
+            if used_total == 0:
+                used_total = int(source.assignment.used_bytes or 0)
             try:
                 configs.extend(
                     self._build_configs(source, used_total, status_texts, host_overrides)

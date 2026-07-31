@@ -13,13 +13,10 @@ PROTOCOL = "wireguard"
 
 
 def _ini_value(raw: object) -> str:
-    """INI keys are single-line; strip CR/LF so a value containing a newline
-    can't forge extra directives (e.g. a rogue AllowedIPs)."""
     return str(raw).replace("\r", " ").replace("\n", " ").strip()
 
 
 def _int_setting(config: ProviderConfig, key: str, default: int, lo: int, hi: int) -> int:
-    """Coerce a setting to int with range validation; raise on bad input."""
     raw = setting(config, key)
     if raw in (None, ""):
         return default

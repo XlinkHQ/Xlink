@@ -95,8 +95,6 @@ _WAL_MAX_AGE_SECONDS = _WAL_MAX_AGE_DAYS * 86400
 
 
 def _sample_age_seconds(sample: dict, now: float) -> float | None:
-    """Age of a WAL sample in seconds, or None if it has no parseable timestamp
-    (older records / test fixtures may lack `collected_at`)."""
     ts = sample.get("collected_at")
     if not ts:
         return None
@@ -110,10 +108,6 @@ def _sample_age_seconds(sample: dict, now: float) -> float | None:
 
 
 def _drop_stale_wal(samples: list[dict]) -> list[dict]:
-    """Drop WAL entries older than the age horizon so a long-offline node can never
-    re-deliver a batch past the panel's ledger retention. Samples with no/unparseable
-    timestamp are KEPT (fail-safe: never discard usage we can't date). Logs a summary
-    of what was dropped so stale-usage loss is visible, not silent."""
     if not samples:
         return samples
     now = time.time()
@@ -840,12 +834,6 @@ def build_singbox_config(clients: list[dict]) -> dict:
 
 
 def _wg_subnet(addr: str) -> str:
-    """Derive the network CIDR from a WireGuard interface address.
-
-    Accepts 'X.X.X.Y/NN' (defaults to /24 if no prefix). Uses ipaddress so
-    non-/24 and malformed inputs don't produce garbage iptables rules. Falls
-    back to 10.8.0.0/24 on anything non-IPv4 or unparseable.
-    """
     import ipaddress
     try:
         a = addr.strip()

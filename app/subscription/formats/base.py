@@ -126,13 +126,6 @@ def normalize_alpn(config: ProviderConfig, key: str = "alpn") -> list[str]:
 
 
 def setting_int(config: ProviderConfig, key: str, default: int = 0) -> int:
-    """Coerce a numeric setting, turning bad data into a per-config skip.
-
-    A stored non-numeric value (e.g. alterId="x") must NOT crash the whole feed
-    with a raw ValueError — the renderers only catch FormatRenderError, and the
-    public /sub endpoint would otherwise 500. Raising FormatRenderError here lets
-    the per-config loop skip just that entry.
-    """
     value = config.settings.get(key, default)
     if value is None or value == "":
         return default

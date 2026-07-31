@@ -24,9 +24,6 @@ _DESIRED_VERSION_KEY = "desired_config_version"
 
 
 def _parse_host_port(value: str) -> tuple[str | None, int | None]:
-    """Parse "host:port" into (host, port), handling bracketed IPv6
-    ([::1]:1080) and bare IPv6 (a:b:c:...:port). Returns (None, None) if
-    there is no valid port."""
     value = value.strip()
     if value.startswith("["):
         end = value.find("]")
@@ -38,8 +35,12 @@ def _parse_host_port(value: str) -> tuple[str | None, int | None]:
     else:
         host, _, port_str = value.rpartition(":")
         if ":" in host:
-            return None, None
-    if not host or not port_str.isdigit():
+            return (value, None) if value else (None, None)
+    if not host:
+        return None, None
+    if not port_str:
+        return host, None
+    if not port_str.isdigit():
         return None, None
     port = int(port_str)
     if not (1 <= port <= 65535):
@@ -216,10 +217,6 @@ def _build_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str,
 def _singbox_route_rule(
     match_type: str, values: list[str], outbound: str
 ) -> tuple[dict[str, Any] | None, list[str]]:
-    """Translate one admin RoutingRule into a sing-box route rule.
-
-    Returns (rule, dropped_selectors). rule is None when nothing survived the
-    translation (e.g. every value was a geosite/geoip selector)."""
     rule: dict[str, Any] = {"outbound": outbound}
     dropped: list[str] = []
     if match_type == "ip":
@@ -269,10 +266,6 @@ def _singbox_route_rule(
 def _build_singbox_outbound(
     tag: str, type_: str, settings: dict[str, Any]
 ) -> dict[str, Any] | None:
-    """Translate a DB Outbound (or a builtin spec) to a sing-box outbound.
-
-    Returns None when the type can't be expressed in sing-box — the caller
-    drops any rule pointing at it and logs, rather than faking a passthrough."""
     if type_ in ("direct", "freedom", "proxy"):
         return {"type": "direct", "tag": tag}
     if type_ in ("block", "blackhole"):
