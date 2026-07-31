@@ -908,9 +908,9 @@ def build_wireguard_config(clients: list[dict]) -> str:
         "nft add table ip wgnat 2>/dev/null; "
         "nft 'add chain ip wgnat post { type nat hook postrouting priority 100 ; }' 2>/dev/null; "
         f"nft add rule ip wgnat post ip saddr {subnet} oifname \"$WAN\" masquerade; "
-        "nft 'add chain ip wgnat fwd { type filter hook forward priority 0 ; }' 2>/dev/null; "
-        "nft add rule ip wgnat fwd iifname %i accept; "
-        "nft add rule ip wgnat fwd oifname %i accept; "
+        "nft 'add chain ip wgnat wgfwd { type filter hook forward priority 0 ; }' 2>/dev/null; "
+        "nft add rule ip wgnat wgfwd iifname %i accept; "
+        "nft add rule ip wgnat wgfwd oifname %i accept; "
         "fi"
     )
     post_down = (
