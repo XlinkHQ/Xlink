@@ -652,7 +652,7 @@ ul {
 
 .btn-red {
   background-color: var(--red);
-  color: var(--white);
+  color: var(--on-primary);
 }
 
 .btn-light-green {
@@ -662,7 +662,7 @@ ul {
 
 .btn-dark-green {
   background-color: var(--primary);
-  color: var(--white);
+  color: var(--on-primary);
 }
 
 .btn-wide {
@@ -1433,7 +1433,7 @@ input.switch:focus-visible {
   padding: var(--space-xxs) var(--space-sm);
   border-radius: 1rem;
   background: var(--primary);
-  color: var(--white);
+  color: var(--on-primary);
   font-size: var(--font-sm);
   font-weight: 500;
   text-transform: uppercase;
@@ -2700,7 +2700,7 @@ input.switch:focus-visible {
 .login .form input[type="submit"]:active {
   background-color: var(--primary);
   border-color: var(--primary);
-  color: var(--white);
+  color: var(--on-primary);
 }
 
 .login .credits {
@@ -3517,7 +3517,7 @@ input.switch:focus-visible {
 
 .btn-dark-green:hover {
   background-color: var(--primary);
-  color: var(--white);
+  color: var(--on-primary);
 }
 
 .btn-light-green:hover {
@@ -3527,7 +3527,7 @@ input.switch:focus-visible {
 
 .btn-red:hover {
   background-color: var(--red);
-  color: var(--white);
+  color: var(--on-primary);
 }
 
 .create-panel .empty-recommendation,
@@ -3858,10 +3858,10 @@ input.switch:focus-visible {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: #7e8794;
+  color: var(--fg-muted);
   cursor: pointer;
 }
-.warp-sb-collapse:hover { background: var(--bg-emphasis); color: #4a5059; }
+.warp-sb-collapse:hover { background: var(--bg-emphasis); color: var(--fg-neutral); }
 .warp-topbar-hamburger {
   display: inline-flex;
   align-items: center;
@@ -3911,9 +3911,8 @@ input.switch:focus-visible {
   font-weight: 500;
   letter-spacing: 0.01em;
   text-transform: none;
-  color: #939ca9;
+  color: var(--fg-subtle);
 }
-.warp-nav-track svg { color: #7E8794; }
 .warp-nav-items {
   display: flex;
   flex-direction: column;
@@ -4086,7 +4085,6 @@ input.switch:focus-visible {
  # OVERVIEW PANEL — WarpProxy "System Status" (exact spec)
 ==============================================================*/
 .warp-panel {
-  --warp-silver: #707070;
   font-family: var(--warp-font);
 }
 .warp-grid-3 {
@@ -4130,7 +4128,7 @@ input.switch:focus-visible {
   flex-flow: column;
   gap: 8px;
   font-size: 13px;
-  color: var(--warp-silver);
+  color: var(--fg-muted);
 }
 .warp-card-footer p {
   display: flex;
@@ -4176,13 +4174,13 @@ input.switch:focus-visible {
   display: flex;
   gap: 16px;
   font-size: 13px;
-  color: var(--warp-silver);
+  color: var(--fg-muted);
 }
 .warp-traffic-legend span { display: flex; align-items: center; gap: 6px; }
 .warp-chart { height: 250px; width: 100%; }
 .warp-chart-empty {
   height: 250px; display: grid; place-items: center;
-  color: var(--warp-silver); font-size: 13px;
+  color: var(--fg-muted); font-size: 13px;
 }
 
 /* DARK */
@@ -6170,8 +6168,8 @@ input.switch:focus-visible {
   min-height: 14px;
   padding: 0 var(--space-1);
   border-radius: 8px;
-  background: #191A1C;
-  color: #FFF;
+  background: var(--bg-emphasis);
+  color: var(--fg-default);
   font: 500 11px/14px var(--warp-font);
 }
 

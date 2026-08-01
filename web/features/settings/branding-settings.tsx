@@ -40,12 +40,12 @@ export function BrandingSettingsScreen() {
             style={{
               padding: "8px 12px",
               borderRadius: "var(--radius-md)",
-              background: "#ffffff",
+              background: "var(--bg-surface)",
               border: "1px solid var(--border-subtle)",
             }}
           >
             <img src={logo || "/xlink-logo.png"} alt="" style={{ height: 22 }} />
-            <span className="text-sm" style={{ color: "#303031" }}>
+            <span className="text-sm" style={{ color: "var(--fg-default)" }}>
               {name || "XLink"}
             </span>
           </span>
