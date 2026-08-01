@@ -186,11 +186,14 @@ class ProfileService:
         count = await self._repo.session.scalar(
             select(func.count())
             .select_from(ClientAssignment)
-            .where(ClientAssignment.profile_id == profile_id)
+            .where(
+                ClientAssignment.profile_id == profile_id,
+                ClientAssignment.status == AssignmentStatus.ACTIVE,
+            )
         )
         if count:
             raise ConflictError(
-                "Profile still has assignments. Remove them first.",
+                "Profile still has active assignments. Remove them first.",
                 code="profile_in_use",
                 details={"assignments": int(count)},
             )

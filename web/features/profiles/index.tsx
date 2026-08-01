@@ -55,7 +55,6 @@ export function ProfilesScreen() {
   const [search, setSearch] = useState("");
   const [editingInbound, setEditingInbound] = useState<ProfileRead | "new" | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [editInline, setEditInline] = useState(false);
   const detail = detailId ? (profiles.find((p) => p.id === detailId) ?? null) : null;
 
   const refreshInbounds = () => {
@@ -106,30 +105,26 @@ export function ProfilesScreen() {
 
   if (detail) {
     return (
-      <HostsDrawer
-        profile={detail}
-        nodeName={nodeName(detail.node_id)}
-        onClose={() => {
-          setDetailId(null);
-          setEditInline(false);
-        }}
-        editing={editInline}
-        onEdit={() => setEditInline((v) => !v)}
-        editForm={
-          editInline ? (
-            <ProfileDialog
-              variant="inline"
-              profile={detail}
-              nodes={nodes}
-              onClose={() => setEditInline(false)}
-              onSaved={() => {
-                setEditInline(false);
-                refreshInbounds();
-              }}
-            />
-          ) : null
-        }
-      />
+      <>
+        <HostsDrawer
+          profile={detail}
+          nodeName={nodeName(detail.node_id)}
+          onClose={() => setDetailId(null)}
+          editing={false}
+          onEdit={() => setEditingInbound(detail)}
+        />
+        {editingInbound ? (
+          <ProfileDialog
+            profile={editingInbound === "new" ? null : editingInbound}
+            nodes={nodes}
+            onClose={() => setEditingInbound(null)}
+            onSaved={() => {
+              setEditingInbound(null);
+              refreshInbounds();
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
@@ -207,14 +202,12 @@ function HostsDrawer({
   onClose,
   onEdit,
   editing = false,
-  editForm = null,
 }: {
   profile: ProfileRead;
   nodeName: string;
   onClose: () => void;
   onEdit: () => void;
   editing?: boolean;
-  editForm?: React.ReactNode;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -377,8 +370,6 @@ function HostsDrawer({
           }}
         />
       ) : null}
-
-      {editForm}
     </div>
   );
 }

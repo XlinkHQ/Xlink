@@ -17,7 +17,7 @@
 #
 # Install options:
 #   --cores=xray,singbox,hysteria,wireguard   pick exactly these (default: all)
-#   --no-singbox --no-hysteria --no-wireguard drop individual cores
+#   --no-xray --no-singbox --no-hysteria --no-wireguard  drop individual cores
 #   --interactive | -i                        pick cores from a menu
 #   env: CORES=, XLINK_PANEL_URL=, XLINK_NODE_ID=, XLINK_AGENT_TOKEN=, XLINK_AGENT_URL=
 #
@@ -250,7 +250,7 @@ install_self() {
 
 cmd_install() {
   need_root
-  local want_xray=1 want_sb="${XLINK_INSTALL_SINGBOX:-1}" want_hy="${XLINK_INSTALL_HYSTERIA:-1}" want_wg="${XLINK_INSTALL_WIREGUARD:-1}" interactive=0
+  local want_xray="${XLINK_INSTALL_XRAY:-1}" want_sb="${XLINK_INSTALL_SINGBOX:-1}" want_hy="${XLINK_INSTALL_HYSTERIA:-1}" want_wg="${XLINK_INSTALL_WIREGUARD:-1}" interactive=0
   local pos=()
   apply_cores() {
     want_xray=0 want_sb=0 want_hy=0 want_wg=0; local IFS=','
@@ -261,7 +261,7 @@ cmd_install() {
   [ -n "${CORES:-}" ] && apply_cores "$CORES"
   for a in "$@"; do case "$a" in
     --cores=*) apply_cores "${a#*=}" ;;
-    --no-singbox) want_sb=0 ;; --no-hysteria) want_hy=0 ;; --no-wireguard) want_wg=0 ;;
+    --no-xray) want_xray=0 ;; --no-singbox) want_sb=0 ;; --no-hysteria) want_hy=0 ;; --no-wireguard) want_wg=0 ;;
     --interactive|-i) interactive=1 ;;
     -*) die "unknown flag '$a'" ;; *) pos+=("$a") ;;
   esac; done
@@ -274,10 +274,11 @@ cmd_install() {
   XLINK_AGENT_TOKEN="${XLINK_AGENT_TOKEN:-${pos[2]}}"
 
   if [ "$interactive" = 1 ]; then
-    log "select cores (xray always installed)"
+    log "select cores to install"
     _ask() { local a; read -rp "  install $1? [$([ "$2" = 1 ] && echo Y/n || echo y/N)] " a; case "$a" in y|Y) echo 1;; n|N) echo 0;; *) echo "$2";; esac; }
-    want_sb=$(_ask sing-box "$want_sb"); want_hy=$(_ask hysteria "$want_hy"); want_wg=$(_ask wireguard "$want_wg")
+    want_xray=$(_ask xray "$want_xray"); want_sb=$(_ask sing-box "$want_sb"); want_hy=$(_ask hysteria "$want_hy"); want_wg=$(_ask wireguard "$want_wg")
   fi
+  [ "$want_xray" = 1 ] || [ "$want_sb" = 1 ] || [ "$want_hy" = 1 ] || [ "$want_wg" = 1 ] || die "select at least one core to install."
   [ -z "$XLINK_PANEL_URL" ] && read -rp "Panel URL: " XLINK_PANEL_URL
   [ -z "$XLINK_NODE_ID" ] && read -rp "Node ID: " XLINK_NODE_ID
   [ -z "$XLINK_AGENT_TOKEN" ] && read -rp "Agent token: " XLINK_AGENT_TOKEN
@@ -293,7 +294,6 @@ cmd_install() {
     (apt-get update -y >/dev/null 2>&1 && apt-get install -y python3 >/dev/null 2>&1) || yum install -y python3 >/dev/null 2>&1 || die "install python3 manually."; ok "python3 installed"; }
   command -v curl >/dev/null 2>&1 || { apt-get install -y curl >/dev/null 2>&1 || yum install -y curl >/dev/null 2>&1 || true; }
 
-  # TLS cores (sing-box/hysteria) need a cert on disk to start.
   if [ "$want_sb" = 1 ] || [ "$want_hy" = 1 ]; then _ensure_cert; fi
 
   [ "$want_xray" = 1 ] && install_xray
