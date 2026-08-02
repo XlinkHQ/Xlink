@@ -282,11 +282,13 @@ export function ProfileDialog({
             </Field>
             <Field label={t("profiles.node")}>
               <Select value={nodeId} onChange={(e) => setNodeId(e.target.value)}>
-                {nodes.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.name}
-                  </option>
-                ))}
+                {nodes
+                  .filter((n) => n.status?.toLowerCase() !== "disabled" || n.id === nodeId)
+                  .map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.name}
+                    </option>
+                  ))}
               </Select>
             </Field>
           </div>

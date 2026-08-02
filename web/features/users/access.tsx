@@ -111,8 +111,14 @@ export function AccessManager({ userId }: { userId: string }) {
     qc.invalidateQueries({ queryKey: ["sub-links"] });
   };
 
+  const disabledNodeIds = new Set(
+    nodes.filter((n) => n.status?.toLowerCase() === "disabled").map((n) => n.id),
+  );
   const available = profiles.filter(
-    (p) => !mine.some((a) => a.profile_id === p.id && a.node_id === p.node_id),
+    (p) =>
+      p.is_active !== false &&
+      !disabledNodeIds.has(p.node_id) &&
+      !mine.some((a) => a.profile_id === p.id && a.node_id === p.node_id),
   );
 
   const resetForm = () => {
@@ -152,7 +158,12 @@ export function AccessManager({ userId }: { userId: string }) {
     const targets = group.profile_ids
       .map((pid) => profiles.find((p) => p.id === pid))
       .filter((p): p is ProfileRead => Boolean(p))
-      .filter((p) => !mine.some((a) => a.profile_id === p.id && a.node_id === p.node_id));
+      .filter(
+        (p) =>
+          p.is_active !== false &&
+          !disabledNodeIds.has(p.node_id) &&
+          !mine.some((a) => a.profile_id === p.id && a.node_id === p.node_id),
+      );
     if (targets.length === 0) {
       toast("error", t("access.allInboundsGranted"));
       return;
