@@ -170,6 +170,11 @@ class TrafficService:
     async def totals(self) -> TrafficTotals:
         return await self._repo.totals()
 
+    async def throughput(self, window_seconds: int) -> TrafficTotals:
+        window_seconds = max(1, min(3600, window_seconds))
+        since = datetime.now(UTC) - timedelta(seconds=window_seconds)
+        return await self._repo.totals_since(since)
+
     async def usage_by_node(self) -> dict[uuid.UUID, int]:
         return await self._repo.usage_by_node()
 

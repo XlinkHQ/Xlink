@@ -19,6 +19,10 @@ export function trafficSummary() {
   return apiFetch<TrafficTotals>("/traffic/summary");
 }
 
+export function trafficThroughput(windowSeconds = 120) {
+  return apiFetch<TrafficTotals>(`/traffic/throughput${query({ window_seconds: windowSeconds })}`);
+}
+
 export function onlineUsers(windowSeconds = 45) {
   return apiFetch<{ user_ids: string[]; window_seconds: number }>(
     `/traffic/online${query({ window_seconds: windowSeconds })}`,

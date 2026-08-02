@@ -48,6 +48,15 @@ async def traffic_summary(
     return await traffic.totals()
 
 
+@router.get("/throughput", response_model=TrafficTotals)
+async def traffic_throughput(
+    _admin: SudoAdminUser,
+    traffic: TrafficServiceDep,
+    window_seconds: int = 120,
+) -> TrafficTotals:
+    return await traffic.throughput(window_seconds)
+
+
 @router.get("/online", response_model=OnlineUsersRead)
 async def online_users(
     _admin: SudoAdminUser,

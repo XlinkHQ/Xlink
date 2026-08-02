@@ -5,7 +5,7 @@ import type { ApexOptions } from "apexcharts";
 import { ArrowDown, ArrowUp, Clock, Cpu, HardDrive, MemoryStick, Monitor, Package, Podcast, Radio, RotateCw, Users, Zap } from "lucide-react";
 import dynamic from "next/dynamic";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, listNodes, type NodeRead, restartPanel, systemStats, trafficSummary } from "@/lib/api";
+import { ApiError, listNodes, type NodeRead, restartPanel, systemStats, trafficSummary, trafficThroughput } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
 import { isNodeOnline, relativeTime } from "@/lib/status";
 import { baseAreaOptions, CHART_COLORS } from "@/shared/usage-chart";
@@ -154,23 +154,24 @@ export function DashboardScreen() {
   const cpuPct = Math.round(s?.cpu_percent ?? 0);
 
   const WINDOW = 60;
+  const THROUGHPUT_WINDOW = 120;
+  const throughputQ = useQuery({
+    queryKey: ["throughput"],
+    queryFn: () => trafficThroughput(THROUGHPUT_WINDOW),
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
+  });
   const [down, setDown] = useState<{ x: number; y: number }[]>([]);
   const [up, setUp] = useState<{ x: number; y: number }[]>([]);
-  const prevTotals = useRef<{ d: number; u: number; at: number } | null>(null);
   useEffect(() => {
-    if (!traffic) return;
-    const now = trafficQ.dataUpdatedAt || Date.now();
-    const dBytes = traffic.download_bytes;
-    const uBytes = traffic.upload_bytes;
-    const prev = prevTotals.current;
-    prevTotals.current = { d: dBytes, u: uBytes, at: now };
-    if (!prev) return;
-    const dt = Math.max(1, (now - prev.at) / 1000);
-    const dMbps = +((Math.max(0, dBytes - prev.d) * 8) / 1e6 / dt).toFixed(2);
-    const uMbps = +((Math.max(0, uBytes - prev.u) * 8) / 1e6 / dt).toFixed(2);
+    const tp = throughputQ.data;
+    if (!tp) return;
+    const now = throughputQ.dataUpdatedAt || Date.now();
+    const dMbps = +((tp.download_bytes * 8) / 1e6 / THROUGHPUT_WINDOW).toFixed(2);
+    const uMbps = +((tp.upload_bytes * 8) / 1e6 / THROUGHPUT_WINDOW).toFixed(2);
     setDown((s) => [...s.slice(-(WINDOW - 1)), { x: now, y: dMbps }]);
     setUp((s) => [...s.slice(-(WINDOW - 1)), { x: now, y: uMbps }]);
-  }, [trafficQ.dataUpdatedAt]);
+  }, [throughputQ.dataUpdatedAt]);
   const hasThroughput = down.length > 0;
 
   const activity = useMemo(
