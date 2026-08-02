@@ -135,7 +135,7 @@ export function UserProfileView({
       {tab === "subscription" ? (
         <div className="warp-settings-card">
           <SettingsSection icon={LinkIcon} title={t("users.tab.subscription")} description={t("users.section.subscriptionDesc")}>
-            <UserSubscriptionPanel userId={user.id} />
+            <UserSubscriptionPanel userId={user.id} username={user.username} />
           </SettingsSection>
         </div>
       ) : null}

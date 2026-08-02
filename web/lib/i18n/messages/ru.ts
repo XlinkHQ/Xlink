@@ -1020,4 +1020,6 @@ export const ru = {
   "navgroup.network": "Сеть",
   "navgroup.management": "Управление",
   "navgroup.system": "Система",
+  "access.downloadWireguard": "Скачать конфиг WireGuard",
+  "common.downloadFailed": "Не удалось скачать.",
 } as const;

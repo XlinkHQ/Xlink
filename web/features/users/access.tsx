@@ -1,7 +1,7 @@
 "use client";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Plus, Trash } from "lucide-react";
+import { Copy, Download, Plus, Trash } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useState } from "react";
 import { toneForStatus } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import {
   assignmentTraffic,
   createAssignment,
   deleteAssignment,
+  listAllAssignments,
   type GroupRead,
   listAssignments,
   listGroups,
@@ -332,12 +333,44 @@ export function AccessManager({ userId }: { userId: string }) {
   );
 }
 
-export function UserSubscriptionPanel({ userId }: { userId: string }) {
+export function UserSubscriptionPanel({ userId, username }: { userId: string; username?: string }) {
   const t = useT();
   const qc = useQueryClient();
   const urlQ = useQuery({ queryKey: ["sub-url", userId], queryFn: () => userSubscriptionUrl(userId) });
   const subUrl = urlQ.data?.subscription_url ?? "";
+  const assignQ = useQuery({
+    queryKey: ["user-assignments", userId],
+    queryFn: () => listAllAssignments({ userId }),
+  });
+  const hasWireguard = (assignQ.data ?? []).some(
+    (a) => (a as { provider_kind?: string }).provider_kind === "wireguard",
+  );
   const [busy, setBusy] = useState(false);
+
+  const downloadWireguard = async () => {
+    if (!subUrl) return;
+    setBusy(true);
+    try {
+      const sep = subUrl.includes("?") ? "&" : "?";
+      const res = await fetch(`${subUrl}${sep}format=wireguard`);
+      if (!res.ok) throw new Error(String(res.status));
+      const text = await res.text();
+      const blob = new Blob([text], { type: "text/plain" });
+      const href = URL.createObjectURL(blob);
+      const safe = (username || "wireguard").replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 40) || "wireguard";
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `${safe}.conf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    } catch {
+      toast("error", t("common.downloadFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const revoke = async () => {
     if (!(await confirmDialog({ title: t("users.revokeSubTitle"), message: t("access.revokeSubClientsMessage"), confirmLabel: t("action.revoke"), danger: true }))) return;
@@ -377,6 +410,17 @@ export function UserSubscriptionPanel({ userId }: { userId: string }) {
           <Copy size={14} strokeWidth={1.8} aria-hidden />
           {t("access.subscriptionLink")}
         </button>
+        {hasWireguard ? (
+          <button
+            type="button"
+            className="warp-dg-btn secondary"
+            disabled={!subUrl || busy}
+            onClick={downloadWireguard}
+          >
+            <Download size={14} strokeWidth={1.8} aria-hidden />
+            {t("access.downloadWireguard")}
+          </button>
+        ) : null}
         <button type="button" className="warp-dg-btn critical" disabled={busy} onClick={revoke}>
           <Trash size={14} strokeWidth={1.8} aria-hidden />
           {t("access.revokeSubscription")}

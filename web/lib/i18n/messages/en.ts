@@ -1020,4 +1020,6 @@ export const en = {
   "navgroup.network": "Network",
   "navgroup.management": "Management",
   "navgroup.system": "System",
+  "access.downloadWireguard": "Download WireGuard config",
+  "common.downloadFailed": "Download failed.",
 } as const;

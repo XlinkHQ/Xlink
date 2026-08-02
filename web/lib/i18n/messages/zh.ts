@@ -1020,4 +1020,6 @@ export const zh = {
   "navgroup.network": "网络",
   "navgroup.management": "管理",
   "navgroup.system": "系统",
+  "access.downloadWireguard": "下载 WireGuard 配置",
+  "common.downloadFailed": "下载失败。",
 } as const;

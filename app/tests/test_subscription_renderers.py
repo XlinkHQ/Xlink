@@ -5,7 +5,7 @@ import uuid
 from types import MappingProxyType
 
 from app.providers.base.models import ProviderKind
-from app.subscription.formats import singbox, xray_json
+from app.subscription.formats import singbox, wireguard, xray_json
 from app.subscription.formats import vless as vless_fmt
 from app.subscription.models import ProviderConfig
 
@@ -85,3 +85,34 @@ def test_vless_uri_alpn_list_joined() -> None:
     uri = vless_fmt.render(cfg)
     assert "alpn=h2%2Chttp%2F1.1" in uri or "alpn=h2,http/1.1" in uri
     assert "%5B%27" not in uri and "['" not in uri
+
+
+def _wg_config(host: str, settings: dict) -> ProviderConfig:
+    base = {"privateKey": "cGFk" * 11, "publicKey": "cGFk" * 11, **settings}
+    return ProviderConfig(
+        assignment_id=uuid.uuid4(),
+        user_id=uuid.uuid4(),
+        provider_kind=ProviderKind.WIREGUARD,
+        provider_name="p",
+        protocol="wireguard",
+        client_id=str(uuid.uuid4()),
+        email="e@x",
+        inbound_tag="wg",
+        host=host,
+        port=6721,
+        expires_at=None,
+        traffic_limit_bytes=None,
+        settings=MappingProxyType(base),
+    )
+
+
+def test_wireguard_full_tunnel_appends_ipv6():
+    cfg = _wg_config("1.2.3.4", {"address": "10.8.0.2/32", "allowedIPs": "0.0.0.0/0"})
+    out = wireguard.render_one(cfg)
+    assert "::/0" in out
+
+
+def test_wireguard_ipv6_endpoint_is_bracketed():
+    cfg = _wg_config("2001:db8::1", {"address": "10.8.0.2/32"})
+    out = wireguard.render_one(cfg)
+    assert "Endpoint = [2001:db8::1]:6721" in out

@@ -46,6 +46,8 @@ def _peer_block(config: ProviderConfig) -> str:
             details={"missing": ["peerPublicKey"]},
         )
     allowed_ips = _ini_value(setting(config, "allowedIPs", "0.0.0.0/0, ::/0"))
+    if "0.0.0.0/0" in allowed_ips and "::/0" not in allowed_ips:
+        allowed_ips = f"{allowed_ips}, ::/0"
     endpoint_host = _ini_value(config.host)
     if ":" in endpoint_host and not endpoint_host.startswith("["):
         endpoint_host = f"[{endpoint_host}]"

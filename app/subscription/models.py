@@ -27,7 +27,7 @@ def _strip_port(host: str) -> str:
 
 def _resolve_host(protocol: str, settings: Mapping[str, Any], node_host: str) -> str:
     if protocol == "wireguard":
-        host = settings.get("endpoint") or node_host
+        host = settings.get("endpoint") or settings.get("host") or node_host
     else:
         host = settings.get("address") or node_host
     host = str(host).split("/", 1)[0].strip()

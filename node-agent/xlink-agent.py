@@ -879,13 +879,22 @@ def build_wireguard_config(clients: list[dict]) -> str:
         psk = _wg_safe_key(psk) if psk else ""
     except ValueError:
         psk = ""
+    wan_detect = (
+        "WAN=$(ip -o route get 1.1.1.1 2>/dev/null | "
+        "awk '{for(i=1;i<=NF;i++) if($i==\"dev\"){print $(i+1);exit}}'); "
+        "[ -z \"$WAN\" ] && WAN=$(ip route list default 2>/dev/null | "
+        "awk '{for(i=1;i<=NF;i++) if($i==\"dev\"){print $(i+1);exit}}'); "
+    )
     post_up = (
-        "WAN=$(ip route list default | awk '{print $5; exit}'); "
+        f"{wan_detect}"
         "sysctl -w net.ipv4.ip_forward=1; "
         "sysctl -w net.ipv4.conf.all.rp_filter=0; "
         "sysctl -w net.ipv4.conf.default.rp_filter=0; "
         "sysctl -w net.ipv4.conf.%i.rp_filter=0; "
-        "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 2>/dev/null; "
+        "[ -n \"$WAN\" ] && sysctl -w net.ipv4.conf.$WAN.rp_filter=0 2>/dev/null; "
+        f"iptables -C INPUT -p udp --dport {port} -j ACCEPT 2>/dev/null || "
+        f"iptables -I INPUT 1 -p udp --dport {port} -j ACCEPT 2>/dev/null; "
+        "[ -z \"$WAN\" ] && { echo 'wireguard: no WAN interface detected, skipping NAT'; exit 0; }; "
         f"if iptables -t nat -A POSTROUTING -s {subnet} -o \"$WAN\" -j MASQUERADE 2>/dev/null; then "
         "iptables -I FORWARD 1 -i %i -j ACCEPT; "
         "iptables -I FORWARD 1 -o %i -j ACCEPT; "
@@ -902,10 +911,13 @@ def build_wireguard_config(clients: list[dict]) -> str:
         "fi"
     )
     post_down = (
-        "WAN=$(ip route list default | awk '{print $5; exit}'); "
-        f"iptables -t nat -D POSTROUTING -s {subnet} -o \"$WAN\" -j MASQUERADE 2>/dev/null; "
+        f"{wan_detect}"
+        f"iptables -D INPUT -p udp --dport {port} -j ACCEPT 2>/dev/null; "
+        f"[ -n \"$WAN\" ] && iptables -t nat -D POSTROUTING -s {subnet} -o \"$WAN\" -j MASQUERADE 2>/dev/null; "
         "iptables -D FORWARD -i %i -j ACCEPT 2>/dev/null; "
         "iptables -D FORWARD -o %i -j ACCEPT 2>/dev/null; "
+        "iptables -D DOCKER-USER -i %i -j ACCEPT 2>/dev/null; "
+        "iptables -D DOCKER-USER -o %i -j ACCEPT 2>/dev/null; "
         "nft delete table ip wgnat 2>/dev/null; "
         "true"
     )
@@ -914,6 +926,15 @@ def build_wireguard_config(clients: list[dict]) -> str:
         f"ListenPort = {port}",
         f"PrivateKey = {priv}",
         f"Address = {addr}",
+    ]
+    mtu = s0.get("mtu")
+    try:
+        mtu_val = int(mtu) if mtu not in (None, "") else 0
+    except (TypeError, ValueError):
+        mtu_val = 0
+    if 1280 <= mtu_val <= 1500:
+        lines.append(f"MTU = {mtu_val}")
+    lines += [
         f"PostUp = {post_up}",
         f"PostDown = {post_down}",
     ]

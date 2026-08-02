@@ -60,6 +60,7 @@ _FORMAT_CONTENT_TYPES: dict[SubscriptionFormat, str] = {
     SubscriptionFormat.XRAY_JSON: "application/json",
     SubscriptionFormat.CLASH_YAML: "text/yaml",
     SubscriptionFormat.MIHOMO_YAML: "text/yaml",
+    SubscriptionFormat.WIREGUARD_CONF: "text/plain; charset=utf-8",
 }
 
 
@@ -136,6 +137,9 @@ _FORMAT_ALIASES: dict[str, SubscriptionFormat] = {
     "xray": SubscriptionFormat.XRAY_JSON,
     "xray-json": SubscriptionFormat.XRAY_JSON,
     "json": SubscriptionFormat.XRAY_JSON,
+    "wireguard": SubscriptionFormat.WIREGUARD_CONF,
+    "wg": SubscriptionFormat.WIREGUARD_CONF,
+    "wireguard-conf": SubscriptionFormat.WIREGUARD_CONF,
 }
 
 

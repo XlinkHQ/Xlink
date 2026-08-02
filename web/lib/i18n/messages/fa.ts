@@ -1020,4 +1020,6 @@ export const fa = {
   "navgroup.network": "شبکه",
   "navgroup.management": "مدیریت",
   "navgroup.system": "سیستم",
+  "access.downloadWireguard": "دانلود کانفیگ WireGuard",
+  "common.downloadFailed": "دانلود ناموفق بود.",
 } as const;
