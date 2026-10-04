@@ -1186,38 +1186,73 @@ def build_hysteria_config(clients: list[dict]) -> dict:
 WG_INTERFACE = os.environ.get("XLINK_WG_INTERFACE", "wg0")
 WG_CONFIG_PATH = os.environ.get("XLINK_WG_CONFIG", f"/etc/wireguard/{WG_INTERFACE}.conf")
 
-_WG_RELOAD_DEFAULT = (
-    f"if ip link show {WG_INTERFACE} >/dev/null 2>&1; then "
-    f"wg syncconf {WG_INTERFACE} <(wg-quick strip {WG_INTERFACE}) || "
-    f"{{ (wg-quick down {WG_INTERFACE} 2>/dev/null; ip link delete {WG_INTERFACE} 2>/dev/null); "
-    f"wg-quick up {WG_INTERFACE}; }}; "
-    f"else wg-quick up {WG_INTERFACE}; fi; "
-    "WAN=$(ip route list default | awk '{print $5; exit}'); "
-    "sysctl -w net.ipv4.ip_forward=1 >/dev/null; "
-    "sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null; "
-    "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
-    f"sysctl -w net.ipv4.conf.{WG_INTERFACE}.rp_filter=0 >/dev/null 2>&1; "
-    "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
-    "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
-    f"{WG_CONFIG_PATH} 2>/dev/null | "
-    "python3 -c 'import sys,ipaddress; "
-    "a=sys.stdin.read().strip() or \"10.8.0.1/24\"; "
-    "a=a if \"/\" in a else a+\"/24\"; "
-    "print(ipaddress.ip_network(a,strict=False))' 2>/dev/null); "
-    "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
-    "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
-    "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
-    f"iptables -C FORWARD -i {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -I FORWARD 1 -i {WG_INTERFACE} -j ACCEPT; "
-    f"iptables -C FORWARD -o {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -I FORWARD 1 -o {WG_INTERFACE} -j ACCEPT; "
-    "if iptables -L DOCKER-USER >/dev/null 2>&1; then "
-    f"iptables -C DOCKER-USER -i {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -I DOCKER-USER 1 -i {WG_INTERFACE} -j ACCEPT; "
-    f"iptables -C DOCKER-USER -o {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -I DOCKER-USER 1 -o {WG_INTERFACE} -j ACCEPT; "
-    "fi"
+def _wg_reload_script(iface: str, conf: str, wg: str = "wg", quick: str = "wg-quick") -> str:
+    return (
+        f"if ip link show {iface} >/dev/null 2>&1; then "
+        f"{wg} syncconf {iface} <({quick} strip {iface}) || "
+        f"{{ ({quick} down {iface} 2>/dev/null; ip link delete {iface} 2>/dev/null); "
+        f"{quick} up {iface}; }}; "
+        f"else {quick} up {iface}; fi; "
+        "WAN=$(ip route list default | awk '{print $5; exit}'); "
+        "sysctl -w net.ipv4.ip_forward=1 >/dev/null; "
+        "sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null; "
+        "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
+        f"sysctl -w net.ipv4.conf.{iface}.rp_filter=0 >/dev/null 2>&1; "
+        "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
+        "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
+        f"{conf} 2>/dev/null | "
+        "python3 -c 'import sys,ipaddress; "
+        "a=sys.stdin.read().strip() or \"10.8.0.1/24\"; "
+        "a=a if \"/\" in a else a+\"/24\"; "
+        "print(ipaddress.ip_network(a,strict=False))' 2>/dev/null); "
+        "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
+        "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
+        "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
+        f"iptables -C FORWARD -i {iface} -j ACCEPT 2>/dev/null || "
+        f"iptables -I FORWARD 1 -i {iface} -j ACCEPT; "
+        f"iptables -C FORWARD -o {iface} -j ACCEPT 2>/dev/null || "
+        f"iptables -I FORWARD 1 -o {iface} -j ACCEPT; "
+        "if iptables -L DOCKER-USER >/dev/null 2>&1; then "
+        f"iptables -C DOCKER-USER -i {iface} -j ACCEPT 2>/dev/null || "
+        f"iptables -I DOCKER-USER 1 -i {iface} -j ACCEPT; "
+        f"iptables -C DOCKER-USER -o {iface} -j ACCEPT 2>/dev/null || "
+        f"iptables -I DOCKER-USER 1 -o {iface} -j ACCEPT; "
+        "fi"
+    )
+
+
+_WG_RELOAD_DEFAULT = _wg_reload_script(WG_INTERFACE, WG_CONFIG_PATH)
+
+# AmneziaWG: WireGuard with handshake obfuscation (junk packets, padded
+# handshakes, custom message headers) so DPI cannot fingerprint it. Separate
+# tooling (awg / awg-quick) and its own interface, so it can coexist with
+# plain WireGuard on the same host.
+AWG_INTERFACE = os.environ.get("XLINK_AWG_INTERFACE", "awg0")
+AWG_CONFIG_PATH = os.environ.get(
+    "XLINK_AWG_CONFIG", f"/etc/amnezia/amneziawg/{AWG_INTERFACE}.conf"
 )
+_AWG_RELOAD_DEFAULT = _wg_reload_script(AWG_INTERFACE, AWG_CONFIG_PATH, "awg", "awg-quick")
+AWG_PARAMS = ("Jc", "Jmin", "Jmax", "S1", "S2", "H1", "H2", "H3", "H4")
+
+
+def _is_amnezia(settings: dict) -> bool:
+    return str(settings.get("amnezia", "")).strip().lower() in ("1", "true", "yes", "on")
+
+
+def build_amneziawg_config(clients: list[dict]) -> str:
+    """The WireGuard config plus AmneziaWG's [Interface] parameters. S1/S2 and
+    H1-H4 must equal the client's or the handshake is silently dropped."""
+    base = build_wireguard_config(clients)
+    s0 = (clients[0].get("settings") or {}) if clients else {}
+    extra = []
+    for key in AWG_PARAMS:
+        val = str(s0.get(key, "")).strip()
+        if val.isdigit():
+            extra.append(f"{key} = {val}")
+    if not extra:
+        raise RuntimeError("amneziawg: profile has no obfuscation parameters")
+    head, sep, rest = base.partition("\nPostUp = ")
+    return head + "\n" + "\n".join(extra) + sep + rest
 
 
 CORE_PROTOCOLS: dict[str, frozenset[str]] = {
@@ -1239,6 +1274,7 @@ CORE_PROTOCOLS: dict[str, frozenset[str]] = {
     ),
     "hysteria": frozenset({"hysteria2"}),
     "wireguard": frozenset({"wireguard"}),
+    "amneziawg": frozenset({"wireguard"}),
 }
 
 
@@ -1266,6 +1302,14 @@ CORES = {
         "reload": os.environ.get("XLINK_WG_RELOAD", _WG_RELOAD_DEFAULT),
         "validate": None,
         "service": os.environ.get("XLINK_WG_SERVICE", f"wg-quick@{WG_INTERFACE}"),
+    },
+    "amneziawg": {
+        "builder": build_amneziawg_config,
+        "fmt": "text",
+        "path": AWG_CONFIG_PATH,
+        "reload": os.environ.get("XLINK_AWG_RELOAD", _AWG_RELOAD_DEFAULT),
+        "validate": None,
+        "service": os.environ.get("XLINK_AWG_SERVICE", f"awg-quick@{AWG_INTERFACE}"),
     },
     "hysteria": {
         "builder": build_hysteria_config,
@@ -1447,6 +1491,9 @@ def _core_installed(kind: str, core: dict) -> bool:
     if kind == "wireguard":
         rc, _ = _run("command -v wg >/dev/null 2>&1")
         return rc == 0
+    if kind == "amneziawg":
+        rc, _ = _run("command -v awg-quick >/dev/null 2>&1")
+        return rc == 0
     return False
 
 
@@ -1510,7 +1557,10 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
 
 
 def _effective_core(cl: dict) -> str:
-    return cl.get("provider_kind", "xray")
+    kind = cl.get("provider_kind", "xray")
+    if kind == "wireguard" and _is_amnezia(cl.get("settings") or {}):
+        return "amneziawg"
+    return kind
 
 
 def apply_config(clients: list[dict], version: str, server_version: str | None = None) -> set[str]:

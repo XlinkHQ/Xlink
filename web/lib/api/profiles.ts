@@ -25,10 +25,10 @@ export function createProfile(body: Record<string, unknown>) {
   return apiFetch<ProfileRead>("/profiles", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function generateProfileKeys(protocol: string, security: string) {
+export function generateProfileKeys(protocol: string, security: string, amnezia = false) {
   return apiFetch<Record<string, string>>("/profiles/keys", {
     method: "POST",
-    body: JSON.stringify({ protocol, security }),
+    body: JSON.stringify({ protocol, security, amnezia }),
   });
 }
 

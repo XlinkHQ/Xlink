@@ -216,6 +216,13 @@ export function transportFields(protocol: string, s: Record<string, string>): TF
       { key: "dns", label: "DNS", placeholder: "1.1.1.1" },
       { key: "mtu", label: "MTU", type: "number", placeholder: "1420" },
       { key: "persistentKeepalive", label: "Keepalive (s)", type: "number", placeholder: "25" },
+      { key: "amnezia", label: "AmneziaWG (anti-DPI)", type: "select", options: ["false", "true"] },
+      // S1/S2/H1-H4 must match on server and client; Generate keys fills them.
+      ...(s.amnezia === "true"
+        ? (["Jc", "Jmin", "Jmax", "S1", "S2", "H1", "H2", "H3", "H4"] as const).map(
+            (k): TField => ({ key: k, label: k, type: "number" }),
+          )
+        : []),
     ];
   }
 

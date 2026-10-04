@@ -19,6 +19,7 @@ from app.dependencies.auth import AdminUser, SudoAdminUser
 from app.dependencies.pagination import CursorPaginationDep
 from app.dependencies.services import ProfileServiceDep
 from app.domain.user import User
+from app.providers.base import amneziawg as _awg
 from app.providers.base.models import ProviderKind
 from app.schemas.pagination import CursorPage
 from app.schemas.profile import ProfileCreate, ProfileRead, ProfileUpdate
@@ -47,6 +48,7 @@ def _x25519(urlsafe: bool) -> tuple[str, str]:
 class KeyGenRequest(BaseModel):
     protocol: str
     security: str = "none"
+    amnezia: bool = False
 
 
 @router.post("/keys")
@@ -68,6 +70,7 @@ async def generate_profile_keys(payload: KeyGenRequest, _admin: AdminUser) -> di
             "allowedIPs": "0.0.0.0/0",
             "dns": "1.1.1.1",
             "mtu": "1420",
+            **(_awg.generate() if payload.amnezia else {}),
         }
     return {}
 

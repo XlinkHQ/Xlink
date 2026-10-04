@@ -107,7 +107,11 @@ export function ProfileDialog({
   const generate = async () => {
     setGenBusy(true);
     try {
-      const keys = await generateProfileKeys(protocol, cfg.security || "none");
+      const keys = await generateProfileKeys(
+        protocol,
+        cfg.security || "none",
+        cfg.amnezia === "true",
+      );
       setCfg((c) => ({ ...c, ...keys }));
       toast("success", t("profiles.keysGenerated"));
     } catch (e) {

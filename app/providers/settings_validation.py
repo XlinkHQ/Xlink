@@ -92,6 +92,15 @@ def _validate_wireguard(protocol: str, settings: dict[str, Any]) -> None:
             code="profile_settings_invalid",
         )
     _wg_mtu(settings)
+    from app.providers.base import amneziawg
+
+    if amneziawg.enabled(settings):
+        issues = amneziawg.problems(settings)
+        if issues:
+            raise ValidationError(
+                "AmneziaWG: " + "; ".join(issues) + ". Use Generate keys.",
+                code="profile_settings_invalid",
+            )
 
 
 def _wg_mtu(settings: dict[str, Any]) -> None:
