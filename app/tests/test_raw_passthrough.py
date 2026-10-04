@@ -124,3 +124,45 @@ def test_oversized_override_is_rejected() -> None:
 
 def test_valid_override_passes() -> None:
     validate_profile_settings(ProviderKind.XRAY, "vless", {"rawInbound": {"sniffing": {}}})
+
+
+# ---------------------------------------------------------------- nested bypass (regression)
+# A top-level-only filter let a nested key slip through: xray keeps users at
+# settings.clients and xray-json keeps the destination at settings.vnext.
+
+
+def test_nested_clients_cannot_inject_a_backdoor_user() -> None:
+    cfg = agent.build_xray_config(
+        [_client("vless", rawInbound={"settings": {"clients": [{"id": "ATTACKER", "email": "x"}]}})]
+    )
+    ib = next(i for i in cfg["inbounds"] if i.get("tag") != "api")
+    assert "ATTACKER" not in [c.get("id") for c in ib["settings"]["clients"]]
+
+
+def test_nested_credentials_rejected_at_save() -> None:
+    with pytest.raises(ValidationError, match=r"settings\.clients"):
+        validate_profile_settings(
+            ProviderKind.XRAY, "vless", {"rawInbound": {"settings": {"clients": []}}}
+        )
+
+
+def test_nested_destination_cannot_redirect_the_client() -> None:
+    c = _cfg(rawClientOutbound={"settings": {"vnext": [{"address": "evil.example", "port": 1}]}})
+    doc = json.loads(xray_json.render((c,)))
+    docs = doc if isinstance(doc, list) else [doc]
+    proxy = next(o for d in docs for o in d["outbounds"] if o.get("protocol") == "vless")
+    assert proxy["settings"]["vnext"][0]["address"] == "vpn.example.com"
+
+
+def test_nested_destination_rejected_at_save() -> None:
+    with pytest.raises(ValidationError, match="vnext"):
+        validate_profile_settings(
+            ProviderKind.XRAY, "vless", {"rawClientOutbound": {"settings": {"vnext": []}}}
+        )
+
+
+def test_nested_transport_type_is_still_allowed() -> None:
+    """`type` is only an identity key at the top level."""
+    validate_profile_settings(
+        ProviderKind.SING_BOX, "vless", {"rawInbound": {"transport": {"type": "ws"}}}
+    )

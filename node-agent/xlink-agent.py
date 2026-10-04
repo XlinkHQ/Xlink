@@ -566,11 +566,37 @@ def _default_ss_method(protocol: str) -> str:
     return "aes-256-gcm"
 
 
-# Keys a raw override may never replace: identity, the listen socket, and the
-# user list the panel manages. Everything else is passed through verbatim.
-_RAW_PROTECTED = frozenset(
-    {"tag", "listen", "port", "listen_port", "users", "clients", "type", "protocol"}
-)
+# Identity and the listen socket: forbidden at the TOP level only (`type` is a
+# legitimate nested key, e.g. a sing-box transport's {"type": "ws"}).
+_RAW_PROTECTED = frozenset({"tag", "listen", "port", "listen_port", "type", "protocol"})
+# Credentials: forbidden at ANY depth. Xray keeps its user list at
+# settings.clients, so a top-level-only filter let an override inject a client
+# the panel never sees — no quota, no expiry, untouched by revocation.
+_RAW_CREDENTIAL_KEYS = frozenset({"clients", "users", "accounts", "password", "uuid"})
+
+
+def _strip_credentials(value, path=""):
+    """Return `value` with credential keys removed at every depth, plus the
+    dotted paths that were dropped."""
+    dropped: list[str] = []
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            here = f"{path}.{k}" if path else k
+            if k in _RAW_CREDENTIAL_KEYS:
+                dropped.append(here)
+                continue
+            out[k], sub_dropped = _strip_credentials(v, here)
+            dropped += sub_dropped
+        return out, dropped
+    if isinstance(value, list):
+        out_list = []
+        for i, item in enumerate(value):
+            cleaned, sub_dropped = _strip_credentials(item, f"{path}[{i}]")
+            out_list.append(cleaned)
+            dropped += sub_dropped
+        return out_list, dropped
+    return value, dropped
 
 
 def _deep_merge(base: dict, extra: dict) -> dict:
@@ -588,15 +614,17 @@ def _apply_raw_inbound(ib: dict, s: dict) -> dict:
     This is the escape hatch for core features the panel does not model yet:
     a new transport option, a sniffing tweak, a fallback, a mux setting. The
     operator writes the core's own JSON and it lands on the inbound unchanged,
-    so a core upgrade no longer needs a panel release. Protected keys are
-    stripped at every level of `users`/`clients` so the managed user list and
-    the socket identity cannot be clobbered.
+    so a core upgrade no longer needs a panel release. Identity keys are
+    rejected at the top level and credential keys (clients, users, accounts,
+    password, uuid) at every depth, so the managed user list can be neither
+    replaced nor extended.
     """
     raw = s.get("rawInbound")
     if not isinstance(raw, dict) or not raw:
         return ib
-    safe = {k: v for k, v in raw.items() if k not in _RAW_PROTECTED}
-    dropped = sorted(set(raw) - set(safe))
+    top = {k: v for k, v in raw.items() if k not in _RAW_PROTECTED}
+    safe, cred_dropped = _strip_credentials(top)
+    dropped = sorted(set(raw) - set(top)) + cred_dropped
     if dropped:
         _log(f"rawInbound: ignored protected keys {dropped} on {ib.get('tag')}")
     return _deep_merge(ib, safe)

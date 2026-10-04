@@ -125,17 +125,33 @@ _VALIDATORS = {
 }
 
 
+# field -> (keys forbidden at the top level, keys forbidden at ANY depth).
+# Mirrors node-agent _RAW_PROTECTED/_RAW_CREDENTIAL_KEYS and
+# subscription/formats/raw_override._PROTECTED/_DEEP_PROTECTED.
 _RAW_FIELDS = {
-    # field -> keys it may not touch (mirrors node-agent _RAW_PROTECTED and
-    # subscription/formats/raw_override._PROTECTED)
-    "rawInbound": frozenset(
-        {"tag", "listen", "port", "listen_port", "users", "clients", "type", "protocol"}
+    "rawInbound": (
+        frozenset({"tag", "listen", "port", "listen_port", "type", "protocol"}),
+        frozenset({"clients", "users", "accounts", "password", "uuid"}),
     ),
-    "rawClientOutbound": frozenset(
-        {"tag", "type", "protocol", "server", "server_port", "uuid", "password",
-         "users", "vnext", "servers"}
+    "rawClientOutbound": (
+        frozenset({"tag", "type", "protocol", "server", "server_port"}),
+        frozenset({"uuid", "password", "users", "vnext", "servers", "address", "port", "id"}),
     ),
 }
+
+
+def _deep_keys(value: Any, path: str = "") -> list[tuple[str, str]]:
+    """(key, dotted path) for every dict key at every depth."""
+    out: list[tuple[str, str]] = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            here = f"{path}.{k}" if path else k
+            out.append((k, here))
+            out += _deep_keys(v, here)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            out += _deep_keys(item, f"{path}[{i}]")
+    return out
 _RAW_MAX_BYTES = 16 * 1024
 
 
@@ -144,7 +160,7 @@ def _validate_raw_overrides(settings: dict[str, Any]) -> None:
     instead of being half-applied (or silently dropped) on the node."""
     import json
 
-    for field, protected in _RAW_FIELDS.items():
+    for field, (protected, deep_protected) in _RAW_FIELDS.items():
         raw = settings.get(field)
         if raw in (None, "", {}):
             continue
@@ -164,6 +180,7 @@ def _validate_raw_overrides(settings: dict[str, Any]) -> None:
                 code="profile_settings_invalid",
             )
         clash = sorted(set(raw) & protected)
+        clash += sorted(p for k, p in _deep_keys(raw) if k in deep_protected)
         if clash:
             raise ValidationError(
                 f"{field} may not set {', '.join(clash)} — the panel manages those.",
