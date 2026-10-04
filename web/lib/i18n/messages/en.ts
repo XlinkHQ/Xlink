@@ -642,6 +642,7 @@ export const en = {
   "profiles.realityScanning": "Checking…",
   "profiles.realityScanEmpty": "Enter dest or SNI first.",
   "profiles.realityScanOk": "Target looks good for REALITY ({ms} ms).",
+  "profiles.realityScanTimeout": "The node did not answer in time. Is its agent online?",
   "profiles.realityScanBad": "Target unsuitable: {problems}",
   "profiles.generateKeys": "Generate keys",
   "profiles.generating": "Generating…",

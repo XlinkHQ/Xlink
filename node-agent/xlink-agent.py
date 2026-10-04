@@ -1773,7 +1773,117 @@ _UPGRADE_TIMEOUT = 900
 _CORE_ALIAS = {"singbox": "sing-box", "wg": "wireguard"}
 
 
+_SCAN_MAX_TARGETS = 20
+
+
+def _scan_reality_target(raw: str) -> dict:
+    """Score one REALITY target from THIS node's network position. Mirrors
+    app/services/reality_scan.py (stdlib only: the agent has no deps)."""
+    import ipaddress
+    import socket
+    import ssl
+
+    res = {"target": raw, "port": 0, "ip": None, "ok": False, "tls13": False, "h2": False,
+           "x25519": None, "cert_valid": False, "latency_ms": None, "issuer": None,
+           "problems": []}
+    host = raw.strip().lower()
+    for prefix in ("https://", "http://"):
+        if host.startswith(prefix):
+            host = host[len(prefix):]
+    host = host.split("/", 1)[0]
+    port = 443
+    if host.count(":") == 1:
+        host, p = host.rsplit(":", 1)
+        if not p.isdigit() or not 0 < int(p) < 65536:
+            res["problems"].append("bad port")
+            return res
+        port = int(p)
+    res["target"], res["port"] = host, port
+    try:
+        ipaddress.ip_address(host)
+        res["problems"].append("REALITY needs a domain name (SNI), not an IP.")
+        return res
+    except ValueError:
+        pass
+    if not host or len(host) > 253:
+        res["problems"].append("bad host")
+        return res
+    try:
+        ips = [i[4][0] for i in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)]
+    except OSError:
+        res["problems"].append("does not resolve")
+        return res
+
+    def blocked(a: str) -> bool:
+        ip = ipaddress.ip_address(a)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        return (ip.is_loopback or ip.is_link_local or ip.is_private or ip.is_reserved
+                or ip.is_multicast or ip.is_unspecified)
+
+    if not ips or any(blocked(a) for a in ips):
+        res["problems"].append("resolves to a non-public address")
+        return res
+    res["ip"] = ips[0]
+
+    def handshake(verify: bool, curve: str | None = None) -> tuple[dict, float]:
+        ctx = ssl.create_default_context()
+        if not verify:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.set_alpn_protocols(["h2", "http/1.1"])
+        if curve:
+            ctx.set_ecdh_curve(curve)
+        started = time.perf_counter()
+        with socket.create_connection((res["ip"], port), timeout=5) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as tls:
+                elapsed = (time.perf_counter() - started) * 1000
+                cert = tls.getpeercert() or {}
+                issuer = dict(x[0] for x in cert.get("issuer", ()) if x)
+                return {
+                    "version": tls.version(),
+                    "alpn": tls.selected_alpn_protocol(),
+                    "issuer": issuer.get("organizationName") or issuer.get("commonName"),
+                }, elapsed
+
+    try:
+        facts, res["latency_ms"] = handshake(True)
+        res["cert_valid"] = True
+    except ssl.SSLCertVerificationError:
+        res["problems"].append("certificate not valid for this name")
+        try:
+            facts, res["latency_ms"] = handshake(False)
+        except (OSError, ssl.SSLError):
+            res["problems"].append("no TLS 1.3")
+            return res
+    except (OSError, ssl.SSLError):
+        res["problems"].append("no TLS 1.3 handshake (or unreachable)")
+        return res
+    res["tls13"] = facts.get("version") == "TLSv1.3"
+    res["h2"] = facts.get("alpn") == "h2"
+    res["issuer"] = facts.get("issuer")
+    if not res["h2"]:
+        res["problems"].append("no h2 (ALPN)")
+    try:
+        handshake(False, "X25519")
+        res["x25519"] = True
+    except (ssl.SSLError, ValueError):
+        res["x25519"] = False
+        res["problems"].append("no X25519")
+    except OSError:
+        res["x25519"] = None
+    res["ok"] = res["tls13"] and res["h2"] and res["cert_valid"] and res["x25519"] is not False
+    return res
+
+
 def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
+    if kind == "reality_scan":
+        targets = [str(t) for t in (payload.get("targets") or []) if str(t).strip()]
+        targets = list(dict.fromkeys(targets))[:_SCAN_MAX_TARGETS]
+        results = [_scan_reality_target(t) for t in targets]
+        results.sort(key=lambda r: (not r["ok"], r["latency_ms"] or 1e9))
+        return True, {"results": results}
     if kind == "apply_config":
         _wake.set()
         return True, {"note": "config refresh scheduled"}

@@ -640,6 +640,7 @@ export const zh = {
   "profiles.realityScanning": "检测中…",
   "profiles.realityScanEmpty": "请先填写 dest 或 SNI。",
   "profiles.realityScanOk": "目标适合 REALITY（{ms} ms）。",
+  "profiles.realityScanTimeout": "节点未及时响应，代理是否在线？",
   "profiles.realityScanBad": "目标不适合：{problems}",
   "profiles.generateKeys": "生成密钥",
   "profiles.generating": "生成中…",

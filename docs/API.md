@@ -422,7 +422,9 @@ login.
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| POST | `/reality/scan` | Sudo | `{"targets": [...]}` (≤20). Per target: TLS 1.3, h2, X25519, certificate validity, latency, problems. Non-public addresses are refused. Runs from the panel, so latency is relative to the panel, not the nodes. |
+| POST | `/reality/scan` | Sudo | `{"targets": [...]}` (≤20). Per target: TLS 1.3, h2, X25519, certificate validity, latency, problems. Non-public addresses are refused. Runs from the panel; use the node variant below for node-side latency and reachability. |
+| POST | `/reality/scan/node/{node_id}` | Sudo | Same checks run by the node agent, from the node's network → `202 {command_id}` |
+| GET | `/reality/scan/commands/{command_id}` | Sudo | `{status, results, error}`; `pending` until the agent's next command poll |
 
 ## 4. Agent protocol — `/agent`
 

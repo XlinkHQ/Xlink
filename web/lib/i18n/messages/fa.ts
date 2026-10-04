@@ -640,6 +640,7 @@ export const fa = {
   "profiles.realityScanning": "در حال بررسی…",
   "profiles.realityScanEmpty": "اول dest یا SNI را وارد کنید.",
   "profiles.realityScanOk": "هدف برای REALITY مناسب است ({ms} ms).",
+  "profiles.realityScanTimeout": "نود به‌موقع جواب نداد. agent آن آنلاین است؟",
   "profiles.realityScanBad": "هدف مناسب نیست: {problems}",
   "profiles.generateKeys": "تولید کلیدها",
   "profiles.generating": "در حال تولید…",

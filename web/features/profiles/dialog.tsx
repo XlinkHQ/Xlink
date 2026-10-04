@@ -12,6 +12,7 @@ import {
   createProfile,
   generateProfileKeys,
   listProviders,
+  scanRealityOnNode,
   scanRealityTargets,
   type NodeRead,
   type ProfileRead,
@@ -125,14 +126,25 @@ export function ProfileDialog({
     }
     setScanBusy(true);
     try {
-      const [r] = await scanRealityTargets([target]);
+      // From the node when one is chosen: reachability and latency from the
+      // node's network are what matter. Fall back to the panel otherwise.
+      const [r] = nodeId
+        ? await scanRealityOnNode(nodeId, [target])
+        : await scanRealityTargets([target]);
       if (r?.ok) {
         toast("success", t("profiles.realityScanOk", { ms: Math.round(r.latency_ms ?? 0) }));
       } else {
         toast("error", t("profiles.realityScanBad", { problems: r?.problems.join(", ") ?? "" }));
       }
     } catch (e) {
-      toast("error", e instanceof ApiError ? e.message : t("profiles.realityScanBad", { problems: "" }));
+      toast(
+        "error",
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error && e.message === "timeout"
+            ? t("profiles.realityScanTimeout")
+            : t("profiles.realityScanBad", { problems: "" }),
+      );
     } finally {
       setScanBusy(false);
     }

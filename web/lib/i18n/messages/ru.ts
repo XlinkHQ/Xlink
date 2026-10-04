@@ -640,6 +640,7 @@ export const ru = {
   "profiles.realityScanning": "Проверка…",
   "profiles.realityScanEmpty": "Сначала укажите dest или SNI.",
   "profiles.realityScanOk": "Цель подходит для REALITY ({ms} мс).",
+  "profiles.realityScanTimeout": "Нода не ответила вовремя. Агент онлайн?",
   "profiles.realityScanBad": "Цель не подходит: {problems}",
   "profiles.generateKeys": "Сгенерировать ключи",
   "profiles.generating": "Генерация…",
