@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api.v1.router import api_router
@@ -33,6 +34,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.prometheus = prometheus
 
     app.add_middleware(PrometheusMiddleware, metrics=prometheus)
+    # Compress in-process rather than relying on the Caddy edge: Caddy only sits
+    # in front when a domain is configured, so without one every response —
+    # including subscription feeds that every VPN client re-downloads on a
+    # timer — left :8000 uncompressed. Starlette skips text/event-stream, so the
+    # agent wake stream is not buffered. Already-encoded responses (via Caddy)
+    # are passed through untouched.
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
     app.add_middleware(RequestContextMiddleware)
     app.add_middleware(AuditMiddleware)
     app.add_middleware(SecurityHeadersMiddleware, production=settings.is_production)

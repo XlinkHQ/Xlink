@@ -9,6 +9,7 @@ import socket
 import time
 import urllib.error
 import urllib.request
+from typing import Any
 from urllib.parse import urlparse
 
 from app.core.config import Settings
@@ -121,6 +122,9 @@ def _post(url: str, payload: dict, headers: dict[str, str], secret: str | None =
         pass
 
 
+_DELIVER_KIND = "notify.deliver"
+
+
 class WebhookDispatcher:
     def __init__(self, settings: Settings) -> None:
         self._env_urls = list(settings.webhook_urls)
@@ -133,6 +137,59 @@ class WebhookDispatcher:
         self._tg_token = self._env_tg_token
         self._tg_chats = list(self._env_tg_chats)
         self._tasks: set[asyncio.Task[None]] = set()
+        self._queue: Any = None
+
+    # ------------------------------------------------------------------ durable delivery
+    def attach_queue(self, queue: Any) -> None:
+        """Route deliveries through the durable queue instead of in-memory tasks.
+
+        Without it, a restart mid-delivery lost the notification and a failed
+        send was logged once and dropped. Each channel becomes its own job so a
+        failing target is retried on its own and never re-sends to the ones that
+        already succeeded.
+        """
+        self._queue = queue
+        queue.register(_DELIVER_KIND, self._deliver)
+
+    def _targets(self) -> list[dict[str, Any]]:
+        # Secrets (the Discord webhook URL, the Telegram bot token) are NOT put
+        # into the job: the queue persists to Redis. They are resolved from the
+        # live config at delivery time instead.
+        out: list[dict[str, Any]] = [{"target": "webhook", "url": u} for u in self._urls]
+        if self._discord:
+            out.append({"target": "discord"})
+        if self.telegram_enabled:
+            out.extend({"target": "telegram", "chat_id": c} for c in self._tg_chats)
+        return out
+
+    async def _deliver(self, job: dict[str, Any]) -> None:
+        """Queue handler. Raises on failure so the queue retries and, after the
+        last attempt, dead-letters it — instead of swallowing the error."""
+        payload = job["payload"]
+        target = job.get("target")
+        if target == "webhook":
+            url = job["url"]
+            if url not in self._urls:
+                logger.info("webhook_target_removed_skip", url=url)
+                return
+            await asyncio.to_thread(_post, url, payload, {}, self._secret)
+        elif target == "discord":
+            if not self._discord:
+                return
+            await asyncio.to_thread(_post, self._discord, {"content": self._text(payload)}, {})
+        elif target == "telegram":
+            chat_id = job["chat_id"]
+            if not self._tg_token or chat_id not in self._tg_chats:
+                return
+            url = f"https://api.telegram.org/bot{self._tg_token}/sendMessage"
+            body = {
+                "chat_id": chat_id,
+                "text": self._text(payload),
+                "disable_web_page_preview": True,
+            }
+            await asyncio.to_thread(_post, url, body, {})
+        else:
+            raise ValueError(f"unknown delivery target {target!r}")
 
     def apply_overrides(
         self,
@@ -177,6 +234,15 @@ class WebhookDispatcher:
             "detail": detail,
             "enqueued_at": time.time(),
         }
+        if self._queue is not None:
+            try:
+                for target in self._targets():
+                    await self._queue.enqueue(_DELIVER_KIND, {**target, "payload": payload})
+                return
+            except Exception as exc:
+                # Redis unavailable: degrade to best-effort in-process delivery
+                # rather than dropping the notification outright.
+                logger.warning("notify_enqueue_failed_fallback", error=str(exc))
         try:
             task = asyncio.get_running_loop().create_task(self._send_all(payload))
         except RuntimeError:
