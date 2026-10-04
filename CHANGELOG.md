@@ -6,7 +6,28 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-04
+
 ### Added
+
+- **Admin roles (RBAC)**: per-action scopes (none / own users / all users) and
+  grant limits (max users, data-limit range, max expiry) for non-sudo admins,
+  with a Roles screen and a role picker in the admin dialog.
+- **Client templates**: editable base documents for Clash, Mihomo and sing-box;
+  generated servers are injected and `{ALL}` expands in groups and selectors.
+- **First-run setup wizard**, gated by a one-time token written to the log.
+- **REALITY target scanner** (TLS 1.3, h2, X25519, certificate, latency), run
+  from the panel or from the node itself.
+- **AmneziaWG** (anti-DPI WireGuard) and **MTProto** (Telegram, fake-TLS,
+  per-user secrets) cores; opt-in via `xlink core-update amneziawg|mtproto`.
+- **AnyTLS** protocol.
+- **Per-ISP clean CDN addresses**: inbound hosts map ASNs to addresses, chosen
+  per subscriber from a local iptoasn.com dataset (`/asn/*`).
+- **Durable job queue** (Redis Streams, dead-letter, retry) and an
+  `api` / `worker` process split; multi-panel HA with leader fencing.
+- Raw inbound / client-outbound passthrough with deep, case-insensitive
+  protection of managed keys.
+
 
 - Optional PostgreSQL **read replica**: when a replica host is configured, heavy
   lag-tolerant reads (traffic analytics and subscription source listings) are
@@ -32,16 +53,22 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile `subpage`, off by default) that serves `/sub/{token}` on its own domain
   so the panel API can be locked down without breaking subscription links.
 
-### Changed
-
-- Gunicorn workers auto-size to the host CPUs, capped by the database connection
-  budget (was a fixed 4).
-- Protocol definitions and the protocol×format capability matrix now come from a
-  single source of truth instead of allow-sets duplicated across renderers;
-  format-incompatible protocols are logged once per feed rather than dropped
-  silently.
-
 ### Fixed
+
+- Shadowsocks 2022 multi-user: server PSK, `server:user` client keys and
+  correct key lengths (migration 0054 backfills existing profiles).
+- REALITY key-pair and shortId validation; sing-box feeds no longer drop nodes
+  with an empty shortId. TUIC congestion control, ALPN, stable ShadowTLS detour
+  ports, one Hysteria obfs password per node.
+- sing-box `geosite:` / `geoip:` rules now map to remote rule-sets instead of
+  being dropped.
+- TOTP codes cannot be replayed; backup import is capped against gzip bombs;
+  explicit `null` can no longer lift users past role limits.
+- Node and inbound-host changes invalidate cached subscriptions.
+- Dashboard CPU shows real utilisation and a host-wide process count.
+- Dependency security updates (pyjwt, anyio, cryptography, urllib3, next).
+
+
 
 - **Security (subscription feed)** — a single malformed numeric profile setting
   no longer 500s the entire feed, including the public `/sub/{token}` endpoint;
@@ -56,6 +83,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   secret key names.
 - Database backup downloads are gzipped (SQL compresses ~5–10×), so the download
   is fast; import transparently accepts both `.sql.gz` and older plain `.sql`.
+
+### Changed
+
+- Gunicorn workers auto-size to the host CPUs, capped by the database connection
+  budget (was a fixed 4).
+- Protocol definitions and the protocol×format capability matrix now come from a
+  single source of truth instead of allow-sets duplicated across renderers;
+  format-incompatible protocols are logged once per feed rather than dropped
+  silently.
 
 ## [1.1.0] - 2026-07-08
 
@@ -116,6 +152,7 @@ Initial release.
 - Role-based access control with sudo admins and scoped reseller-admins.
 - One-command installer and containerized deployment.
 
-[Unreleased]: https://github.com/XlinkHQ/Xlink/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/XlinkHQ/Xlink/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/XlinkHQ/Xlink/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/XlinkHQ/Xlink/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/XlinkHQ/Xlink/releases/tag/v1.0.0
