@@ -28,6 +28,7 @@ export type UserRead = {
   subscription_url_prefix: string | null;
   admin_user_limit?: number | null;
   admin_traffic_limit_bytes?: number | null;
+  admin_role_id?: string | null;
   sub_updated_at: string | null;
   sub_last_user_agent: string | null;
   created_at: string;
@@ -167,6 +168,7 @@ export function updateAdmin(
     subscription_url_prefix?: string | null;
     admin_user_limit?: number | null;
     admin_traffic_limit_bytes?: number | null;
+    admin_role_id?: string | null;
   },
 ) {
   return apiFetch<UserRead>(`/users/admins/${id}`, {

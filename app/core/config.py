@@ -197,6 +197,8 @@ class Settings(BaseSettings):
     auto_backup_enabled: bool = True
     auto_backup_interval_seconds: int = 86400
     auto_backup_dir: str = "backups"
+    # iptoasn.com dataset for per-ISP clean CDN addresses (inbound host asn_addresses).
+    asn_data_dir: str = "data/asn"
     auto_backup_keep: int = 7
 
     admin_username: str | None = None

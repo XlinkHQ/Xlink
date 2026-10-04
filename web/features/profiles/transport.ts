@@ -147,7 +147,8 @@ export function transportFields(protocol: string, s: Record<string, string>): TF
           "2022-blake3-chacha20-poly1305",
         ],
       },
-      { key: "password", label: "Password (base64 PSK)", type: "password" },
+      // Server PSK. Each user gets their own key; clients send "server:user".
+      { key: "serverPassword", label: "Server key (base64 PSK)", type: "password" },
     ];
   }
 
@@ -203,6 +204,16 @@ export function transportFields(protocol: string, s: Record<string, string>): TF
     ];
   }
 
+  if (protocol === "mtproto") {
+    return [
+      HOST,
+      PORT,
+      // Fake-TLS camouflage domain; it is baked into every user's secret.
+      { key: "tlsDomain", label: "Fake-TLS domain", placeholder: "www.cloudflare.com" },
+      { key: "adTag", label: "Ad tag (@MTProxybot)", placeholder: "optional" },
+    ];
+  }
+
   if (protocol === "wireguard") {
     return [
       HOST,
@@ -215,6 +226,13 @@ export function transportFields(protocol: string, s: Record<string, string>): TF
       { key: "dns", label: "DNS", placeholder: "1.1.1.1" },
       { key: "mtu", label: "MTU", type: "number", placeholder: "1420" },
       { key: "persistentKeepalive", label: "Keepalive (s)", type: "number", placeholder: "25" },
+      { key: "amnezia", label: "AmneziaWG (anti-DPI)", type: "select", options: ["false", "true"] },
+      // S1/S2/H1-H4 must match on server and client; Generate keys fills them.
+      ...(s.amnezia === "true"
+        ? (["Jc", "Jmin", "Jmax", "S1", "S2", "H1", "H2", "H3", "H4"] as const).map(
+            (k): TField => ({ key: k, label: k, type: "number" }),
+          )
+        : []),
     ];
   }
 

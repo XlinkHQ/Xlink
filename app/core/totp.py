@@ -28,14 +28,28 @@ def _hotp(secret: str, counter: int) -> str:
     return str(code).zfill(_DIGITS)
 
 
-def verify(secret: str, code: str, *, window: int = 1, at: float | None = None) -> bool:
+def matching_step(
+    secret: str, code: str, *, window: int = 1, at: float | None = None
+) -> int | None:
+    """Time step the code belongs to, or None. Callers that must reject replays
+    record the step as used (see AuthService)."""
     code = (code or "").strip().replace(" ", "")
     if not code.isdigit() or len(code) != _DIGITS:
-        return False
+        return None
     now = int((at if at is not None else time.time()) // _STEP)
-    return any(
-        hmac.compare_digest(_hotp(secret, now + i), code) for i in range(-window, window + 1)
-    )
+    match = None
+    for i in range(-window, window + 1):
+        # No early exit: keep the comparison count independent of the match.
+        if hmac.compare_digest(_hotp(secret, now + i), code) and match is None:
+            match = now + i
+    return match
+
+
+def verify(secret: str, code: str, *, window: int = 1, at: float | None = None) -> bool:
+    return matching_step(secret, code, window=window, at=at) is not None
+
+
+REPLAY_TTL_S = _STEP * 4
 
 
 def provisioning_uri(secret: str, account: str, issuer: str = "XLink") -> str:

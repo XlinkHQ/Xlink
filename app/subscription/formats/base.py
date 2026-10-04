@@ -137,3 +137,15 @@ def setting_int(config: ProviderConfig, key: str, default: int = 0) -> int:
             code="subscription_setting_not_int",
             details={"setting": key},
         ) from exc
+
+
+def ss_password(config: ProviderConfig, method: str) -> str:
+    """Client password for shadowsocks. 2022 multi-user inbounds authenticate
+    with "<server PSK>:<user key>" (SIP022); a bare user key is rejected."""
+    from app.providers.base import ss2022
+
+    user = str(config.resolved_password)
+    server = str(setting(config, "serverPassword", "") or "").strip()
+    if ss2022.is_2022(method) and server and ":" not in user:
+        return f"{server}:{user}"
+    return user

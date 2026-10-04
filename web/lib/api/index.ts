@@ -20,3 +20,4 @@ export * from "./settings";
 export * from "./gitops";
 export * from "./agent";
 export * from "./providers";
+export * from "./rbac";

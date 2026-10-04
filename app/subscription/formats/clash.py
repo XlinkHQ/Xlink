@@ -4,15 +4,16 @@ from typing import Any
 
 import yaml
 
+from app.subscription import templates as client_templates
 from app.subscription.formats.base import (
     FormatRenderError,
     label,
     setting,
     setting_int,
+    ss_password,
     validate_node,
 )
 from app.subscription.formats.capabilities import supported_protocols
-from app.subscription import templates as client_templates
 from app.subscription.models import ProviderConfig
 from app.subscription.schemas import SubscriptionFormat
 
@@ -116,7 +117,7 @@ def build_proxy(config: ProviderConfig, *, allowed: frozenset[str]) -> dict[str,
             "2022-blake3-aes-256-gcm" if protocol == "shadowsocks2022" else "aes-256-gcm"
         )
         proxy["cipher"] = str(setting(config, "method", default_method))
-        proxy["password"] = config.resolved_password
+        proxy["password"] = ss_password(config, proxy["cipher"])
     elif protocol == "shadowtls":
         proxy["type"] = "ss"
         proxy["cipher"] = str(setting(config, "method", "aes-128-gcm"))
@@ -165,12 +166,12 @@ def build_clash_document(configs: tuple[ProviderConfig, ...], *, allowed: frozen
     if configs and not proxies:
         raise FormatRenderError("No CLASH-compatible proxies in feed.")
     names = [proxy["name"] for proxy in proxies]
-    template = client_templates.active(
-        "mihomo" if allowed is not CLASH_PROTOCOLS else "clash"
-    )
+    template = client_templates.active("mihomo" if allowed is not CLASH_PROTOCOLS else "clash")
     if template is not None:
         document = client_templates.apply_clash(template, proxies)
-        return yaml.safe_dump(document, sort_keys=False, allow_unicode=True, default_flow_style=False)
+        return yaml.safe_dump(
+            document, sort_keys=False, allow_unicode=True, default_flow_style=False
+        )
     document = {
         "proxies": proxies,
         "proxy-groups": [

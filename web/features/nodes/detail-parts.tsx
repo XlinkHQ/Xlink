@@ -86,6 +86,8 @@ export const CORE_LABELS: Record<string, string> = {
   "sing-box": "sing-box",
   hysteria: "Hysteria",
   wireguard: "WireGuard",
+  amneziawg: "AmneziaWG",
+  mtproto: "MTProto",
 };
 
 export function CopyField({ label, value }: { label: string; value: string }) {

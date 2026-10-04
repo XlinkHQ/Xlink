@@ -41,6 +41,7 @@ _URI_PROTOCOLS = frozenset(
         "http",
         "naive",
         "wireguard",
+        "mtproto",
     }
 )
 

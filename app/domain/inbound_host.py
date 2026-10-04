@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,6 +31,11 @@ class InboundHost(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     noise: Mapped[str | None] = mapped_column(String(255), nullable=True)
     mux: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     allow_insecure: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # {"<ASN>": ["clean IP or host", ...]}: a subscriber whose ISP is that ASN
+    # gets one of these as the address instead of `address`. CDN edges that
+    # are reachable differ by ISP under censorship; this picks per ISP.
+    asn_addresses: Mapped[dict[str, list[str]] | None] = mapped_column(JSON, nullable=True)
 
     weight: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     is_universal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -75,4 +80,6 @@ class InboundHost(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             out["mux"] = "true"
         if self.allow_insecure:
             out["allowInsecure"] = "true"
+        if self.asn_addresses:
+            out["asn_addresses"] = self.asn_addresses
         return out

@@ -6,6 +6,7 @@ from app.subscription.formats import (
     anytls,
     http_proxy,
     hysteria2,
+    mtproto,
     naive,
     shadowsocks,
     socks,
@@ -31,6 +32,7 @@ _URI_RENDERERS: dict[str, Callable[[ProviderConfig], str]] = {
     http_proxy.PROTOCOL: http_proxy.render,
     naive.PROTOCOL: naive.render,
     wireguard.PROTOCOL: wireguard.render_one,
+    mtproto.PROTOCOL: mtproto.render,
 }
 
 URI_PROTOCOLS = frozenset(_URI_RENDERERS)

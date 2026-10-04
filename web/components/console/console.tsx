@@ -25,6 +25,8 @@ import { OutboundsScreen } from "@/features/outbounds";
 import { SettingsScreen } from "@/features/settings";
 import { UsersScreen } from "@/features/users";
 import { ApiKeysScreen } from "@/features/apikeys";
+import { ClientTemplatesScreen } from "@/features/client-templates";
+import { RolesScreen } from "@/features/roles";
 
 const SCREEN_KEYS = NAV_ITEMS.map((i) => i.key);
 
@@ -189,6 +191,10 @@ export function ConsoleV2() {
             <AuditLogScreen />
           ) : active === "ApiKeys" ? (
             <ApiKeysScreen />
+          ) : active === "Roles" ? (
+            <RolesScreen />
+          ) : active === "ClientTemplates" ? (
+            <ClientTemplatesScreen />
           ) : active === "Settings" ? (
             <SettingsScreen />
           ) : (

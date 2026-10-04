@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.providers.base.provider import Provider
 from app.providers.base.registry import ProviderRegistry
 from app.providers.hysteria.provider import HysteriaProvider
+from app.providers.mtproto.provider import MtprotoProvider
 from app.providers.singbox.provider import SingBoxProvider
 from app.providers.wireguard.provider import WireGuardProvider
 from app.providers.xray.provider import XrayProvider
@@ -14,6 +15,7 @@ def default_providers() -> list[Provider]:
         WireGuardProvider(),
         SingBoxProvider(),
         HysteriaProvider(),
+        MtprotoProvider(),
     ]
 
 
