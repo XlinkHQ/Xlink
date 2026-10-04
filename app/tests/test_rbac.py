@@ -205,3 +205,46 @@ async def test_roles_api_is_sudo_only(ctx) -> None:
     h = await _token(c, "reseller", RESELLER_PW)
     assert (await c.get(f"{API}/admin-roles", headers=h)).status_code == 403
     assert (await c.post(f"{API}/admin-roles", headers=h, json={"name": "x"})).status_code == 403
+
+
+async def test_explicit_null_cannot_lift_a_user_past_role_ceilings(ctx) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    c, sudo, rid, _ = ctx
+    await _assign(
+        c,
+        sudo,
+        rid,
+        await _role(
+            c,
+            sudo,
+            {"users": {"create": 1, "read": 1, "update": 1, "bulk": 1}},
+            {"data_limit_max": 10 * GB, "expire_max_days": 30},
+        ),
+    )
+    h = await _token(c, "reseller", RESELLER_PW)
+    soon = (datetime.now(UTC) + timedelta(days=10)).isoformat()
+    r = await c.post(
+        f"{API}/users",
+        headers=h,
+        json={"username": "capped", "password": USER_PW, "data_limit_bytes": GB, "expire_at": soon},
+    )
+    assert r.status_code == 201, r.text
+    uid = r.json()["id"]
+
+    for body in ({"data_limit_bytes": None}, {"expire_at": None}):
+        r = await c.patch(f"{API}/users/{uid}", headers=h, json=body)
+        assert r.status_code in (400, 422), (body, r.text)
+
+    r = await c.post(
+        f"{API}/users/bulk",
+        headers=h,
+        json={"action": "set_data_limit", "user_ids": [uid], "data_limit_bytes": None},
+    )
+    assert r.status_code in (400, 422), r.text
+    r = await c.post(
+        f"{API}/users/bulk",
+        headers=h,
+        json={"action": "extend_expiry", "user_ids": [uid], "extend_days": 365},
+    )
+    assert r.status_code in (400, 422), r.text

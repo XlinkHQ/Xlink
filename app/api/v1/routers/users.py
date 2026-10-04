@@ -278,6 +278,25 @@ async def bulk_user_action(
         raise ValidationError("Too many users in one request (max 1000).", code="bulk_too_large")
     if payload.action in ("delete", "disable") and admin.id in payload.user_ids:
         _guard_not_self(admin, admin.id)
+    if getattr(admin, "rbac_policy", None) is not None:
+        if payload.action == "set_data_limit":
+            rbac.enforce_limits(
+                admin, data_limit_bytes=payload.data_limit_bytes,
+                explicit=frozenset({"data_limit_bytes"}),
+            )
+        elif payload.action == "set_expiry":
+            rbac.enforce_limits(
+                admin, expire_at=payload.expire_at, explicit=frozenset({"expire_at"})
+            )
+        elif payload.action == "extend_expiry" and (
+            (rbac.policy_of(admin).limits or {}).get("expire_max_days") is not None
+        ):
+            # Repeated relative extensions would walk past the ceiling; an
+            # absolute set_expiry is checkable, so require that instead.
+            raise ValidationError(
+                "Your role caps expiry; use set_expiry instead of extend_expiry.",
+                code="role_expire",
+            )
     return await users.bulk_action(
         payload.action,
         payload.user_ids,
@@ -394,6 +413,7 @@ async def update_user(
             admin,
             data_limit_bytes=payload.data_limit_bytes if "data_limit_bytes" in fields else None,
             expire_at=payload.expire_at if "expire_at" in fields else None,
+            explicit=frozenset(fields & {"data_limit_bytes", "expire_at"}),
         )
     return UserRead.model_validate(await users.update_quota(user_id, payload))
 

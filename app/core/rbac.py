@@ -112,9 +112,16 @@ def enforce_limits(
     expire_at: datetime | None = None,
     owned_user_count: int | None = None,
     creating: bool = False,
+    explicit: frozenset[str] = frozenset(),
 ) -> None:
     """Bound what a role-holding admin may grant. Sudo and role-less admins are
-    governed by the existing quota fields instead."""
+    governed by the existing quota fields instead.
+
+    ``explicit`` names fields the request actually set. A None there means
+    "unlimited / never expires", which must respect the role's ceiling exactly
+    like a None on create — otherwise PATCH {"data_limit_bytes": null} lifts
+    any capped user out of the role's bounds.
+    """
     if getattr(actor, "is_sudo", False):
         return
     policy = policy_of(actor)
@@ -140,7 +147,7 @@ def enforce_limits(
             raise ValidationError(
                 "Data limit is above your role's maximum.", code="role_data_limit"
             )
-    elif creating and lim.get("data_limit_max") is not None:
+    elif (creating or "data_limit_bytes" in explicit) and lim.get("data_limit_max") is not None:
         # An unlimited user would escape the role's ceiling entirely.
         raise ValidationError(
             "Your role requires a data limit on every user.", code="role_data_limit"
@@ -150,7 +157,7 @@ def enforce_limits(
 
         ceiling = datetime.now(UTC) + timedelta(days=int(lim["expire_max_days"]))
         if expire_at is None:
-            if creating:
+            if creating or "expire_at" in explicit:
                 raise ValidationError(
                     "Your role requires an expiry on every user.", code="role_expire"
                 )
