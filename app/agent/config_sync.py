@@ -205,7 +205,10 @@ def _build_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str,
             "peers": [peer],
         }
         if str(settings.get("mtu", "")).strip().isdigit():
-            wg["mtu"] = int(settings["mtu"])
+            # Clamp to the same window the agent and the client renderer use,
+            # so an out-of-range value cannot reach a node that would silently
+            # drop it while the client was told to use it.
+            wg["mtu"] = max(1280, min(1500, int(settings["mtu"])))
         if settings.get("reserved"):
             wg["reserved"] = [
                 int(x) for x in str(settings["reserved"]).split(",") if x.strip().isdigit()

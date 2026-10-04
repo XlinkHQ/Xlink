@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -80,6 +81,16 @@ class ProfileService:
         if profile is None:
             raise NotFoundError("Profile not found.", code="profile_not_found")
         return profile
+
+    async def list_by_ids(self, profile_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, Profile]:
+        """Resolve many profile ids in one query, keyed by id. Raises the same
+        NotFoundError as get() if any requested id is missing, so callers keep
+        identical behaviour to calling get() per id."""
+        found = {p.id: p for p in await self._repo.list_by_ids(profile_ids)}
+        for pid in profile_ids:
+            if pid not in found:
+                raise NotFoundError("Profile not found.", code="profile_not_found")
+        return found
 
     async def update(self, profile_id: uuid.UUID, data: ProfileUpdate) -> Profile:
         profile = await self.get(profile_id)

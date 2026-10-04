@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import secrets
 
 from app.providers.base.exceptions import ClientAlreadyExistsError, ClientNotFoundError
@@ -37,30 +38,47 @@ class HysteriaProvider(Provider):
             capabilities=_CAPABILITIES,
         )
 
-    async def create_client(self, spec: ClientSpec) -> ClientResult:
+    def _create_client_sync(self, spec: ClientSpec) -> ClientResult:
         self.ensure_capability(ProviderCapability.CREATE_CLIENT)
         if spec.client_id in self._clients:
             raise ClientAlreadyExistsError(details={"client_id": spec.client_id})
         return self._store(spec)
 
-    async def update_client(self, spec: ClientSpec) -> ClientResult:
+    def _update_client_sync(self, spec: ClientSpec) -> ClientResult:
         self.ensure_capability(ProviderCapability.UPDATE_CLIENT)
         if spec.client_id not in self._clients:
             return self._store(spec)
         existing = self._clients[spec.client_id]
         return self._store(spec, existing=existing)
 
-    async def delete_client(self, client_id: str) -> None:
+    def _delete_client_sync(self, client_id: str) -> None:
         self.ensure_capability(ProviderCapability.DELETE_CLIENT)
         if self._clients.pop(client_id, None) is None:
             raise ClientNotFoundError(details={"client_id": client_id})
 
-    async def get_client(self, client_id: str) -> ClientResult:
+    def _get_client_sync(self, client_id: str) -> ClientResult:
         self.ensure_capability(ProviderCapability.GET_CLIENT)
         record = self._clients.get(client_id)
         if record is None:
             raise ClientNotFoundError(details={"client_id": client_id})
         return ClientResult(client_id=client_id, provider=PROVIDER_NAME, raw=dict(record))
+
+    # The client store is a JSON file guarded by an exclusive flock and
+    # rewritten (with fsync) on every change, so each call is O(clients) of
+    # blocking I/O. Run it off the event loop: at 20k clients one create
+    # held the loop ~160 ms, stalling every other request, and flock
+    # contention between gunicorn workers could hold it far longer.
+    async def create_client(self, spec: ClientSpec) -> ClientResult:
+        return await asyncio.to_thread(self._create_client_sync, spec)
+
+    async def update_client(self, spec: ClientSpec) -> ClientResult:
+        return await asyncio.to_thread(self._update_client_sync, spec)
+
+    async def delete_client(self, client_id: str) -> None:
+        return await asyncio.to_thread(self._delete_client_sync, client_id)
+
+    async def get_client(self, client_id: str) -> ClientResult:
+        return await asyncio.to_thread(self._get_client_sync, client_id)
 
     async def health_check(self) -> bool:
         try:

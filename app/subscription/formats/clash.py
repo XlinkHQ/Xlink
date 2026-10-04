@@ -135,6 +135,15 @@ def build_proxy(config: ProviderConfig, *, allowed: frozenset[str]) -> dict[str,
         proxy["uuid"] = config.resolved_uuid
         proxy["password"] = str(setting(config, "password", "") or config.resolved_password)
         proxy["sni"] = str(setting(config, "sni", setting(config, "host", "")))
+    elif protocol == "anytls":
+        proxy["type"] = "anytls"
+        proxy["password"] = str(setting(config, "password", "") or config.resolved_password)
+        proxy["sni"] = str(setting(config, "sni", setting(config, "host", "")) or config.host)
+        proxy["udp"] = True
+        if setting(config, "allowInsecure"):
+            proxy["skip-cert-verify"] = True
+        if setting(config, "fingerprint"):
+            proxy["client-fingerprint"] = str(setting(config, "fingerprint"))
     elif protocol in ("socks", "http"):
         proxy["type"] = "socks5" if protocol == "socks" else "http"
         if setting(config, "username"):

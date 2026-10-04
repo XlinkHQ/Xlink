@@ -91,6 +91,31 @@ def _validate_wireguard(protocol: str, settings: dict[str, Any]) -> None:
             "matching WireGuard key pair.",
             code="profile_settings_invalid",
         )
+    _wg_mtu(settings)
+
+
+def _wg_mtu(settings: dict[str, Any]) -> None:
+    """Reject an out-of-range MTU at save time.
+
+    All three layers (panel store, node agent, client config) share the
+    1280..1500 window. Accepting 9000 here and clamping it downstream meant the
+    operator saw a successful save while the tunnel quietly used a different
+    value, so this is a hard error rather than a silent correction.
+    """
+    raw = settings.get("mtu")
+    if raw in (None, ""):
+        return
+    try:
+        mtu = int(raw)
+    except (TypeError, ValueError):
+        raise ValidationError(
+            "MTU must be a whole number.", code="profile_settings_invalid"
+        ) from None
+    if not (1280 <= mtu <= 1500):
+        raise ValidationError(
+            f"MTU must be between 1280 and 1500 (got {mtu}). 1420 suits most networks.",
+            code="profile_settings_invalid",
+        )
 
 
 _VALIDATORS = {
@@ -100,9 +125,56 @@ _VALIDATORS = {
 }
 
 
+_RAW_FIELDS = {
+    # field -> keys it may not touch (mirrors node-agent _RAW_PROTECTED and
+    # subscription/formats/raw_override._PROTECTED)
+    "rawInbound": frozenset(
+        {"tag", "listen", "port", "listen_port", "users", "clients", "type", "protocol"}
+    ),
+    "rawClientOutbound": frozenset(
+        {"tag", "type", "protocol", "server", "server_port", "uuid", "password",
+         "users", "vnext", "servers"}
+    ),
+}
+_RAW_MAX_BYTES = 16 * 1024
+
+
+def _validate_raw_overrides(settings: dict[str, Any]) -> None:
+    """Passthrough overrides are validated up front so a bad one fails the save
+    instead of being half-applied (or silently dropped) on the node."""
+    import json
+
+    for field, protected in _RAW_FIELDS.items():
+        raw = settings.get(field)
+        if raw in (None, "", {}):
+            continue
+        if not isinstance(raw, dict):
+            raise ValidationError(
+                f"{field} must be a JSON object.", code="profile_settings_invalid"
+            )
+        try:
+            size = len(json.dumps(raw))
+        except (TypeError, ValueError):
+            raise ValidationError(
+                f"{field} must be plain JSON.", code="profile_settings_invalid"
+            ) from None
+        if size > _RAW_MAX_BYTES:
+            raise ValidationError(
+                f"{field} is too large ({size} bytes, max {_RAW_MAX_BYTES}).",
+                code="profile_settings_invalid",
+            )
+        clash = sorted(set(raw) & protected)
+        if clash:
+            raise ValidationError(
+                f"{field} may not set {', '.join(clash)} — the panel manages those.",
+                code="profile_settings_invalid",
+            )
+
+
 def validate_profile_settings(
     kind: ProviderKind, protocol: str, settings: dict[str, Any] | None
 ) -> None:
+    _validate_raw_overrides(settings or {})
     validator = _VALIDATORS.get(kind)
     if validator is None:
         return

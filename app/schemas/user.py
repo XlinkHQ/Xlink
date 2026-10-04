@@ -19,6 +19,8 @@ def _check_password(value: str | None) -> str | None:
 USERNAME_PATTERN = r"^[a-zA-Z0-9_]{3,64}$"
 PASSWORD_MIN_LEN = 12
 PASSWORD_MAX_LEN = 128
+# Bounds the per-profile assignment fan-out a single create/update can trigger.
+MAX_PROFILE_IDS = 100
 
 
 class UserCreate(InputModel):
@@ -50,7 +52,7 @@ class UserCreate(InputModel):
     subscription_url_prefix: str | None = Field(default=None, max_length=512)
     admin_user_limit: int | None = Field(default=None, ge=0)
     admin_traffic_limit_bytes: int | None = Field(default=None, ge=0)
-    profile_ids: list[uuid.UUID] | None = Field(default=None)
+    profile_ids: list[uuid.UUID] | None = Field(default=None, max_length=MAX_PROFILE_IDS)
 
     @model_validator(mode="after")
     def _validate_on_hold(self) -> UserCreate:
@@ -106,6 +108,10 @@ class UserRead(APIModel):
     expire_at: datetime | None
     data_reset_strategy: DataResetStrategy
     on_hold: bool
+    # Returned so a client can round-trip it on edit. While this was missing,
+    # the console had no value to send back and submitted null every time,
+    # silently destroying the hold window on an unrelated field change.
+    on_hold_duration_seconds: int | None
     expire_strategy: UserExpireStrategy
     activation_deadline: datetime | None
     device_limit: int | None

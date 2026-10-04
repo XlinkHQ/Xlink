@@ -50,6 +50,14 @@ class ProfileRepository(BaseRepository[Profile]):
         await self.session.refresh(profile)
         return profile
 
+    async def list_by_ids(self, profile_ids: Sequence[uuid.UUID]) -> list[Profile]:
+        """Fetch many profiles in one round-trip. Callers that need to act on a
+        caller-supplied list of ids use this instead of get() in a loop."""
+        if not profile_ids:
+            return []
+        stmt = select(Profile).where(Profile.id.in_(list(profile_ids)))
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def list_keyset(
         self,
         *,
@@ -69,7 +77,8 @@ class ProfileRepository(BaseRepository[Profile]):
         if cursor is not None:
             cursor_created_at, cursor_id = cursor
             stmt = stmt.where(
-                tuple_(Profile.created_at, Profile.id) < tuple_(cursor_created_at, cursor_id)
+                tuple_(Profile.created_at, Profile.id)
+                < tuple_(cursor_created_at, cursor_id)  # type: ignore[arg-type]  # SQLAlchemy coerces cursor values to bind params
             )
         stmt = stmt.order_by(Profile.created_at.desc(), Profile.id.desc()).limit(limit)
         return (await self.session.execute(stmt)).scalars().all()

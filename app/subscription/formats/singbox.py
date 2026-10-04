@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.subscription.formats import raw_override
 from app.subscription.formats.base import (
     FormatRenderError,
     normalize_alpn,
@@ -144,10 +145,15 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
         base["password"] = str(setting(config, "password", config.resolved_password))
     elif protocol == "hysteria2":
         base["type"] = "hysteria2"
-        base["password"] = config.resolved_password
+        # Matches the server's `auth: userpass` map, which is keyed on the
+        # assignment id (see the URI renderer for why it cannot change).
+        base["password"] = f"{config.assignment_id}:{config.resolved_password}"
     elif protocol == "tuic":
         base["type"] = "tuic"
         base["uuid"] = config.resolved_uuid
+        base["password"] = str(setting(config, "password", "") or config.resolved_password)
+    elif protocol == "anytls":
+        base["type"] = "anytls"
         base["password"] = str(setting(config, "password", "") or config.resolved_password)
     elif protocol in ("socks", "http"):
         base["type"] = protocol
@@ -161,7 +167,7 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
             details={"protocol": protocol},
         )
     tls = _tls_block(config)
-    if tls is None and protocol in ("hysteria2", "tuic"):
+    if tls is None and protocol in ("hysteria2", "tuic", "anytls"):
         tls = {
             "enabled": True,
             "server_name": str(setting(config, "sni", "") or config.host),
@@ -176,7 +182,7 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
     transport = _transport_block(config)
     if transport is not None:
         base["transport"] = transport
-    return [base]
+    return [raw_override.apply(base, config)]
 
 
 def render(configs: tuple[ProviderConfig, ...]) -> str:

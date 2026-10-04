@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import delete, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.refresh_token import RefreshToken
@@ -46,12 +46,33 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
         )
         return result.rowcount or 0
 
-    async def revoke_all_for_user(self, user_id: uuid.UUID) -> int:
+    async def recent_jtis_for_user(self, user_id: uuid.UUID) -> list[str]:
+        """Every jti for this user, revoked ones INCLUDED.
 
+        The token service clears each one's Redis grace entry on logout-all.
+        Already-revoked jtis matter most: rotate() marks a token revoked and
+        then caches its successor, so the replayable grace entries hang off
+        exactly the rows a `revoked == False` filter would skip.
+        """
+        result = await self.session.execute(
+            select(RefreshToken.jti).where(RefreshToken.user_id == user_id)
+        )
+        return list(result.scalars().all())
+
+    async def revoke_all_for_user(self, user_id: uuid.UUID) -> int:
+        """Revoke every unexpired token for this user and burn its grace slot.
+
+        Deliberately NOT filtered on ``revoked == False``: rotate() revokes a
+        token and then leaves a short reuse-grace window open on that same row
+        (_consume checks ``revoked_at >= cutoff`` and ``claim_grace``). Skipping
+        already-revoked rows left that window open, so a stolen pre-rotation
+        token still replayed straight through a logout-all.
+        """
         result = await self.session.execute(
             update(RefreshToken)
-            .where(RefreshToken.user_id == user_id, RefreshToken.revoked.is_(False))
+            .where(RefreshToken.user_id == user_id)
             .values(revoked=True, grace_used=True)
+            .execution_options(synchronize_session=False)
         )
         return result.rowcount or 0
 

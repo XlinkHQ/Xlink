@@ -77,6 +77,8 @@ PROTOCOLS: tuple[ProtocolSpec, ...] = (
     _spec("shadowtls", providers=(SING_BOX,)),
     _spec("hysteria2", providers=(SING_BOX, HYSTERIA)),
     _spec("tuic", providers=(SING_BOX,)),
+    # Padded-TLS transport built to defeat traffic-shape fingerprinting.
+    _spec("anytls", providers=(SING_BOX,)),
     _spec("naive", providers=(SING_BOX,)),
     _spec("socks", providers=(SING_BOX,)),
     _spec("http", providers=()),

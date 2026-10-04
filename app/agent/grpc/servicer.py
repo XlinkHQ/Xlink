@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any
 
 import grpc
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.commands import CommandSigner
 from app.agent.grpc import agent_pb2 as pb
@@ -39,6 +42,7 @@ async def _req_uuid(raw: str, context: grpc.aio.ServicerContext) -> uuid.UUID:
         return uuid.UUID(raw)
     except (ValueError, AttributeError, TypeError):
         await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "malformed node_id")
+        raise  # unreachable: abort() raises, but mypy cannot see that
 
 
 def _maybe_uuid(raw: str) -> uuid.UUID | None:
@@ -61,7 +65,7 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
         self._events = events
         self._settings = settings
 
-    def _agent_service(self, session) -> NodeAgentService:
+    def _agent_service(self, session: AsyncSession) -> NodeAgentService:
         return NodeAgentService(
             session,
             events=self._events,
@@ -76,9 +80,13 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
             try:
                 await self._agent_service(session).authenticate(node_id, token)
             except AuthenticationError:
-                await context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid node token")
+                await context.abort(
+                    grpc.StatusCode.UNAUTHENTICATED, "invalid node token"
+                )
 
-    async def GetConfig(self, request: pb.ConfigRequest, context) -> pb.DesiredConfig:
+    async def GetConfig(
+        self, request: pb.ConfigRequest, context: grpc.aio.ServicerContext
+    ) -> pb.DesiredConfig:
         node_id = await _req_uuid(request.node_id, context)
         token = _token(context)
         known_version = request.known_version or None
@@ -88,7 +96,9 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
                     node_id, token=token, known_version=known_version
                 )
             except AuthenticationError:
-                await context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid node token")
+                await context.abort(
+                    grpc.StatusCode.UNAUTHENTICATED, "invalid node token"
+                )
         return pb.DesiredConfig(
             node_id=str(snap["node_id"]),
             config_version=snap["config_version"],
@@ -96,7 +106,9 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
             assignment_count=snap["assignment_count"],
         )
 
-    async def StreamTraffic(self, request_iterator, context):
+    async def StreamTraffic(
+        self, request_iterator: AsyncIterator[Any], context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[pb.TrafficAck]:
         authed_nid = None
         async for batch in request_iterator:
             nid = await _req_uuid(batch.node_id, context)
@@ -126,7 +138,9 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
                 skipped=result.skipped,
             )
 
-    async def StreamMetrics(self, request_iterator, context):
+    async def StreamMetrics(
+        self, request_iterator: AsyncIterator[Any], context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[pb.Ack]:
         authed_nid = None
         async for batch in request_iterator:
             nid = await _req_uuid(batch.node_id, context)
@@ -145,7 +159,9 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
                 )
             yield pb.Ack(accepted=len(samples), dropped=0)
 
-    async def StreamLogs(self, request_iterator, context):
+    async def StreamLogs(
+        self, request_iterator: AsyncIterator[Any], context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[pb.Ack]:
         authed_nid = None
         async for batch in request_iterator:
             nid = await _req_uuid(batch.node_id, context)
@@ -168,7 +184,9 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
                 )
             yield pb.Ack(accepted=len(lines), dropped=0)
 
-    async def ReportConnections(self, request: pb.ConnectionBatch, context) -> pb.Ack:
+    async def ReportConnections(
+        self, request: pb.ConnectionBatch, context: grpc.aio.ServicerContext
+    ) -> pb.Ack:
         nid = await _req_uuid(request.node_id, context)
         await self._auth(nid, context)
         service = IpLimitService(self._db, self._cache)
@@ -180,7 +198,9 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
         await service.report(iter(pairs), node_id=nid)
         return pb.Ack(accepted=len(pairs), dropped=len(request.samples) - len(pairs))
 
-    async def ReportProviderHealth(self, request: pb.ProviderHealthBatch, context) -> pb.Ack:
+    async def ReportProviderHealth(
+        self, request: pb.ProviderHealthBatch, context: grpc.aio.ServicerContext
+    ) -> pb.Ack:
         nid = await _req_uuid(request.node_id, context)
         token = _token(context)
         checks = [
@@ -193,12 +213,19 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
             for c in request.checks
         ]
         async with self._db.session() as session:
-            await self._agent_service(session).record_provider_health(
-                nid, token=token, checks=checks
-            )
+            try:
+                await self._agent_service(session).record_provider_health(
+                    nid, token=token, checks=checks
+                )
+            except AuthenticationError:
+                await context.abort(
+                    grpc.StatusCode.UNAUTHENTICATED, "invalid node token"
+                )
         return pb.Ack(accepted=len(checks), dropped=0)
 
-    async def ReportState(self, request: pb.ReportedState, context) -> pb.DriftReport:
+    async def ReportState(
+        self, request: pb.ReportedState, context: grpc.aio.ServicerContext
+    ) -> pb.DriftReport:
         nid = await _req_uuid(request.node_id, context)
         token = _token(context)
         try:
@@ -208,14 +235,19 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
         if not isinstance(applied, dict):
             applied = {}
         async with self._db.session() as session:
-            report = await self._agent_service(session).report_state(
-                nid,
-                token=token,
-                config_version=request.config_version or None,
-                agent_version=request.agent_version or None,
-                applied=applied,
-                provider_status=dict(request.provider_status),
-            )
+            try:
+                report = await self._agent_service(session).report_state(
+                    nid,
+                    token=token,
+                    config_version=request.config_version or None,
+                    agent_version=request.agent_version or None,
+                    applied=applied,
+                    provider_status=dict(request.provider_status),
+                )
+            except AuthenticationError:
+                await context.abort(
+                    grpc.StatusCode.UNAUTHENTICATED, "invalid node token"
+                )
         return pb.DriftReport(
             node_id=str(report.node_id),
             severity=str(
@@ -227,13 +259,20 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
             remediated=report.remediated,
         )
 
-    async def LeaseCommands(self, request: pb.CommandLeaseRequest, context) -> pb.CommandLease:
+    async def LeaseCommands(
+        self, request: pb.CommandLeaseRequest, context: grpc.aio.ServicerContext
+    ) -> pb.CommandLease:
         nid = await _req_uuid(request.node_id, context)
         token = _token(context)
         async with self._db.session() as session:
-            lease_token, commands = await self._agent_service(session).lease_commands(
-                nid, token=token
-            )
+            try:
+                lease_token, commands = await self._agent_service(session).lease_commands(
+                    nid, token=token
+                )
+            except AuthenticationError:
+                await context.abort(
+                    grpc.StatusCode.UNAUTHENTICATED, "invalid node token"
+                )
         return pb.CommandLease(
             lease_token=lease_token or "",
             commands=[
@@ -251,7 +290,9 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
             ],
         )
 
-    async def SubmitCommandResult(self, request: pb.CommandResult, context) -> pb.CommandResultAck:
+    async def SubmitCommandResult(
+        self, request: pb.CommandResult, context: grpc.aio.ServicerContext
+    ) -> pb.CommandResultAck:
         nid = await _req_uuid(request.node_id, context)
         command_id = await _req_uuid(request.command_id, context)
         token = _token(context)
@@ -260,18 +301,25 @@ class NodeAgentServicer(pb_grpc.NodeAgentServicer):
         except json.JSONDecodeError:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "malformed result_json")
         async with self._db.session() as session:
-            cmd = await self._agent_service(session).report_command_result(
-                nid,
-                token=token,
-                command_id=command_id,
-                lease_token=request.lease_token,
-                success=request.success,
-                result=result,
-            )
+            try:
+                cmd = await self._agent_service(session).report_command_result(
+                    nid,
+                    token=token,
+                    command_id=command_id,
+                    lease_token=request.lease_token,
+                    success=request.success,
+                    result=result,
+                )
+            except AuthenticationError:
+                await context.abort(
+                    grpc.StatusCode.UNAUTHENTICATED, "invalid node token"
+                )
         status = str(cmd.status.value if hasattr(cmd.status, "value") else cmd.status)
         return pb.CommandResultAck(command_id=request.command_id, status=status)
 
-    async def WatchEvents(self, request: pb.EventRequest, context):
+    async def WatchEvents(
+        self, request: pb.EventRequest, context: grpc.aio.ServicerContext
+    ) -> AsyncIterator[pb.NodeEvent]:
         nid = await _req_uuid(request.node_id, context)
         await self._auth(nid, context)
         channel = self._cache.node_channel(nid)

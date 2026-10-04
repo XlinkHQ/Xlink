@@ -55,6 +55,7 @@ _SETTINGS: dict[str, dict[str, object]] = {
     "shadowtls": {"password": "pw", "sni": "x.io", "shadowtls_password": "st"},
     "hysteria2": {"password": "pw", "sni": "x.io"},
     "tuic": {"password": "pw", "sni": "x.io"},
+    "anytls": {"password": "pw", "sni": "x.io"},
     "socks": {"username": "u", "password": "p"},
     "http": {"username": "u", "password": "p"},
     "naive": {"username": "u", "password": "p"},
@@ -83,7 +84,7 @@ def _cfg(protocol: str) -> ProviderConfig:
 def test_provider_protocols_reexport_matches_source():
     """PROVIDER_PROTOCOLS (re-exported from providers.base.models) is exactly
     what the source derives; the re-export can't drift from app.protocols."""
-    assert PROVIDER_PROTOCOLS == source.provider_protocols()
+    assert source.provider_protocols() == PROVIDER_PROTOCOLS
 
 
 def test_provider_protocols_covers_every_kind():
@@ -97,7 +98,7 @@ def test_protocols_for_matches_map():
 
 
 def test_supported_subscription_protocols_is_derived():
-    assert SUPPORTED_SUBSCRIPTION_PROTOCOLS == source.subscription_protocols()
+    assert source.subscription_protocols() == SUPPORTED_SUBSCRIPTION_PROTOCOLS
 
 
 def test_profile_valid_protocols_is_derived():
@@ -105,7 +106,7 @@ def test_profile_valid_protocols_is_derived():
     the union of everything the providers can provision -- derived, not
     hand-listed."""
     provider_union = set().union(*PROVIDER_PROTOCOLS.values())
-    assert VALID_PROTOCOLS == provider_union
+    assert provider_union == VALID_PROTOCOLS
 
 
 def test_every_protocol_belongs_to_a_provider_or_is_http():
@@ -155,7 +156,7 @@ def test_uri_renderers_are_subscription_protocols():
     for protocol in URI_PROTOCOLS:
         assert protocol in known, f"URI renderer for unknown '{protocol}'"
         assert protocol in SUPPORTED_SUBSCRIPTION_PROTOCOLS
-    assert URI_PROTOCOLS == supported_protocols(SubscriptionFormat.TEXT)
+    assert supported_protocols(SubscriptionFormat.TEXT) == URI_PROTOCOLS
 
 
 def test_singbox_dispatch_matches_matrix():

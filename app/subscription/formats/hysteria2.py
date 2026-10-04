@@ -29,6 +29,11 @@ def render(config: ProviderConfig) -> str:
             "obfs-password": setting(config, "obfsPassword", ""),
         }
     )
-    auth = quote(config.resolved_password)
+    # The server runs `auth: userpass` with the ASSIGNMENT ID as the username
+    # (node-agent build_hysteria_config), and hysteria's traffic API reports
+    # usage back under that same username — so the username cannot change
+    # without breaking per-user accounting. Send `user:pass`, not a bare
+    # password, or authentication fails for every client.
+    auth = f"{quote(str(config.assignment_id))}:{quote(config.resolved_password)}"
     suffix = f"?{params}" if params else ""
     return f"hysteria2://{auth}@{config.host}:{config.port}{suffix}#{label(config)}"

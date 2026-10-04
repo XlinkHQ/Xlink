@@ -4,17 +4,20 @@ import asyncio
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
+from sqlalchemy.sql.selectable import Subquery
 
 from app.traffic.models import TrafficHourly, TrafficRecord, TrafficRollupState
 from app.traffic.schemas import TrafficTotals, TrafficUsage
 
 
-def _hour_bucket_expr(dialect: str):
+def _hour_bucket_expr(dialect: str) -> Any:
     """SQL expression truncating TrafficRecord.collected_at to the hour, portable
     across Postgres and SQLite. Postgres keeps a real timestamptz; SQLite has no
     date_trunc so we format to 'YYYY-MM-DD HH:00:00' text — which SQLAlchemy's
@@ -24,7 +27,7 @@ def _hour_bucket_expr(dialect: str):
     return func.date_trunc("hour", TrafficRecord.collected_at)
 
 
-def _as_hour_datetime(value) -> datetime:
+def _as_hour_datetime(value: Any) -> datetime:
     """Normalise a hour-bucket value from the aggregation SELECT into a tz-aware
     UTC datetime truncated to the hour. Postgres date_trunc already yields a
     datetime; SQLite's strftime yields a 'YYYY-MM-DD HH:MM:SS' string which the
@@ -65,7 +68,9 @@ class TrafficRepository:
         )
         await self.session.flush()
 
-    async def bulk_insert(self, rows: Sequence[dict]) -> tuple[dict[uuid.UUID, int], int]:
+    async def bulk_insert(
+        self, rows: Sequence[dict[str, Any]]
+    ) -> tuple[dict[uuid.UUID, int], int]:
         """Insert rows, ignoring (assignment_id, collected_at) conflicts, and
         return (per-assignment SUM of total_bytes, number of rows) that were
         ACTUALLY inserted (via RETURNING).
@@ -81,6 +86,7 @@ class TrafficRepository:
         if not rows:
             return {}, 0
         dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
+        stmt: Any
         if dialect == "sqlite":
             stmt = sqlite_insert(TrafficRecord).values(list(rows))
             stmt = stmt.on_conflict_do_nothing(index_elements=["assignment_id", "collected_at"])
@@ -105,6 +111,7 @@ class TrafficRepository:
 
         dialect = self.session.bind.dialect.name if self.session.bind else "postgresql"
         values = {"node_id": node_id, "batch_id": batch_id}
+        stmt: Any
         if dialect == "sqlite":
             stmt = (
                 sqlite_insert(ProcessedBatch)
@@ -119,7 +126,7 @@ class TrafficRepository:
             )
         result = await self.session.execute(stmt)
         await self.session.flush()
-        return bool(result.rowcount)
+        return bool(result.rowcount)  # type: ignore[attr-defined]  # CursorResult at runtime
 
     async def usage_for_assignment(self, assignment_id: uuid.UUID) -> TrafficUsage:
         stmt = select(
@@ -137,7 +144,7 @@ class TrafficRepository:
             sample_count=int(count),
         )
 
-    async def _weighted_totals_stmt(self, since: datetime | None = None):
+    async def _weighted_totals_stmt(self, since: datetime | None = None) -> Select[Any]:
         from app.domain.client_assignment import ClientAssignment
         from app.domain.node import Node
 
@@ -159,7 +166,7 @@ class TrafficRepository:
             stmt = stmt.where(src.c.bucket_start >= since)
         return stmt
 
-    def _unified_usage_ts_cte(self, boundary: datetime):
+    def _unified_usage_ts_cte(self, boundary: datetime) -> Subquery:
         """Like _unified_usage_cte but also carries a `bucket_start` time column
         (hour_bucket for rollup rows, collected_at for raw rows) so callers can
         apply a time filter across both sources."""
@@ -244,7 +251,7 @@ class TrafficRepository:
             sub = select(TrafficRecord.id).where(TrafficRecord.collected_at < cutoff).limit(batch)
             stmt = delete(TrafficRecord).where(TrafficRecord.id.in_(sub.scalar_subquery()))
             result = await self.session.execute(stmt)
-            n = result.rowcount or 0
+            n = result.rowcount or 0  # type: ignore[attr-defined]  # CursorResult at runtime
             deleted += n
             await self.session.commit()
             if n < batch:
@@ -343,6 +350,7 @@ class TrafficRepository:
             }
             for r in rows
         ]
+        stmt: Any
         if dialect == "sqlite":
             stmt = sqlite_insert(TrafficHourly).values(payload)
             stmt = stmt.on_conflict_do_update(
@@ -375,7 +383,7 @@ class TrafficRepository:
             sub = select(TrafficHourly.id).where(TrafficHourly.hour_bucket < cutoff).limit(batch)
             stmt = delete(TrafficHourly).where(TrafficHourly.id.in_(sub.scalar_subquery()))
             result = await self.session.execute(stmt)
-            n = result.rowcount or 0
+            n = result.rowcount or 0  # type: ignore[attr-defined]  # CursorResult at runtime
             deleted += n
             await self.session.commit()
             if n < batch:
@@ -457,7 +465,7 @@ class TrafficRepository:
             wm = wm.replace(tzinfo=UTC)
         return wm if wm is not None else self._EPOCH
 
-    def _unified_usage_cte(self, boundary: datetime):
+    def _unified_usage_cte(self, boundary: datetime) -> Subquery:
         """A UNION ALL of (assignment_id, node_id, upload, download, total) rows
         from the rollup (closed buckets) and raw (open window), as a subquery the
         callers join to ClientAssignment/Node and aggregate over — identical to

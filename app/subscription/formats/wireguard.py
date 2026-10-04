@@ -12,6 +12,11 @@ from app.subscription.models import ProviderConfig
 PROTOCOL = "wireguard"
 
 
+WG_MTU_MIN = 1280
+WG_MTU_MAX = 1500
+WG_MTU_DEFAULT = 1420
+
+
 def _ini_value(raw: object) -> str:
     return str(raw).replace("\r", " ").replace("\n", " ").strip()
 
@@ -82,7 +87,12 @@ def _interface_block(config: ProviderConfig) -> str:
     dns = _ini_value(setting(config, "dns", ""))
     if dns:
         lines.append(f"DNS = {dns}")
-    mtu = _int_setting(config, "mtu", 1280, 1280, 65535)
+    # One MTU contract across all three layers (panel store, node agent,
+    # client config): 1280..1500, default 1420. The renderer used to allow
+    # up to 65535 and default to 1280 while the agent silently omitted
+    # anything over 1500, so a blank setting meant the client got 1280 and
+    # the server kept its 1420 kernel default — a 140-byte mismatch.
+    mtu = _int_setting(config, "mtu", WG_MTU_DEFAULT, WG_MTU_MIN, WG_MTU_MAX)
     lines.append(f"MTU = {mtu}")
     return "\n".join(lines)
 

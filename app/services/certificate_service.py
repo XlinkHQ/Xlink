@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 
@@ -75,6 +76,9 @@ def _issuer_of(cert: x509.Certificate) -> str:
     return ""
 
 
+_ACME_RENEW_CONCURRENCY = 4
+
+
 class CertificateService:
     def __init__(self, repo: CertificateRepository) -> None:
         self._repo = repo
@@ -144,16 +148,32 @@ class CertificateService:
         reference = now or datetime.now(UTC)
         before = reference + timedelta(days=window_days)
         due = await self._repo.list_acme_due(before=before)
+        if not due:
+            return 0
+
+        # ACME issuance is network-bound and independent per domain, so run it
+        # concurrently (bounded, to stay friendly to the ACME rate limits). The
+        # DB writes below stay sequential: they share one session.
+        semaphore = asyncio.Semaphore(_ACME_RENEW_CONCURRENCY)
+
+        async def _issue(domain: str) -> tuple[str, str] | AcmeError:
+            async with semaphore:
+                try:
+                    return await issue_certificate(
+                        cache, domain, email=email, staging=staging
+                    )
+                except AcmeError as exc:
+                    return exc
+
+        issued = await asyncio.gather(*(_issue(cert.domain) for cert in due))
+
         renewed = 0
-        for cert in due:
-            try:
-                fullchain_pem, key_pem = await issue_certificate(
-                    cache, cert.domain, email=email, staging=staging
-                )
-            except AcmeError as exc:
-                cert.last_error = str(exc)[:500]
+        for cert, outcome in zip(due, issued, strict=True):
+            if isinstance(outcome, AcmeError):
+                cert.last_error = str(outcome)[:500]
                 await self._repo.session.flush()
                 continue
+            fullchain_pem, key_pem = outcome
             result = await self.import_manual(cert.domain, fullchain_pem, key_pem)
             result.source = CertificateSource.ACME
             await self._repo.session.flush()

@@ -86,6 +86,11 @@ class SubscriptionService:
             return await self._render_feed(request)
 
         cache_key = await self._cache_key(request)
+        if cache_key is None:
+            # Revisions unreadable: serving from (or writing to) a guessed key
+            # would resurrect pre-invalidation configs. Render fresh instead.
+            return await self._render_feed(request)
+
         cached = await self._read_cache(cache_key)
         if cached is not None:
             return cached
@@ -215,28 +220,67 @@ class SubscriptionService:
 
     async def invalidate_cache(self, pattern: str = "subscription:*") -> None:
         rev = await self._cache.incr(_GLOBAL_REV_KEY)
+        # Durable witness, so an evicted counter is not mistaken for "never
+        # invalidated" — see _cache_key.
+        await self._cache.mark_invalidated(_GLOBAL_REV_KEY)
         logger.info("subscription_cache_invalidated", global_rev=rev)
 
     async def invalidate_subjects(self, subject_ids: Sequence[uuid.UUID]) -> None:
         for sid in subject_ids:
             await self._cache.incr(_subject_rev_key(sid))
+            await self._cache.mark_invalidated(sid)
         if subject_ids:
             logger.info("subscription_cache_invalidated_subjects", subjects=len(subject_ids))
 
     async def invalidate_subject(self, subject_id: uuid.UUID) -> None:
         await self._cache.incr(_subject_rev_key(subject_id))
+        await self._cache.mark_invalidated(subject_id)
 
     async def notify_node_changed(self, node_id: uuid.UUID) -> None:
         await self._cache.publish_node_event(node_id, "config_changed")
 
-    async def _cache_key(self, request: FeedRequest) -> str:
+    async def _cache_key(self, request: FeedRequest) -> str | None:
+        """Versioned cache key, or None when the revisions cannot be trusted.
+
+        Invalidation is revision-based: revoking a subscription bumps a counter
+        and the old key is orphaned. Falling back to a fixed ``g0:r0`` on a read
+        failure pointed straight back at the generation that existed before any
+        invalidation ever happened — and the write path then refreshed that slot,
+        so the stale entry never even aged out.
+
+        This is reachable without an outage: the revision counters are written
+        with INCR and carry no TTL, while Redis runs ``allkeys-lru``, so an
+        eviction alone was enough to resurrect revoked configs. When the
+        revisions are unavailable we now skip the cache entirely and serve a
+        freshly rendered feed.
+        """
         try:
             global_rev, subject_rev = await self._cache.mget_int(
                 [_GLOBAL_REV_KEY, _subject_rev_key(request.subject_id)]
             )
         except Exception:
             logger.warning("subscription_cache_key_redis_error")
-            global_rev, subject_rev = None, None
+            return None
+        # An absent counter is ambiguous: "never invalidated" (generation zero
+        # is genuinely correct) looks exactly like "evicted" (generation zero is
+        # the pre-revocation key, and serving it resurrects revoked configs).
+        # The ambiguity is resolved at WRITE time — every invalidation leaves a
+        # durable marker — so absent counter + marker present means evicted.
+        try:
+            if global_rev is None and await self._cache.invalidation_seen(_GLOBAL_REV_KEY):
+                logger.warning("subscription_cache_revision_evicted", scope="global")
+                return None
+            if subject_rev is None and await self._cache.invalidation_seen(
+                request.subject_id
+            ):
+                logger.warning(
+                    "subscription_cache_revision_evicted",
+                    subject_id=str(request.subject_id),
+                )
+                return None
+        except Exception:
+            logger.warning("subscription_cache_revision_check_failed")
+            return None
         return (
             "subscription:"
             f"{request.subject_id}:"

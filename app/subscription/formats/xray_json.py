@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+from app.subscription.formats import raw_override
 from app.subscription.formats.base import (
     FormatRenderError,
     label,
@@ -113,7 +114,7 @@ def _proxy_outbound(config: ProviderConfig) -> dict:
     }
     if _truthy(setting(config, "mux", "")):
         out["mux"] = {"enabled": True, "concurrency": 8}
-    return out
+    return raw_override.apply(out, config)
 
 
 def _fragment_outbound(config: ProviderConfig) -> dict | None:

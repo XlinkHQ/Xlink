@@ -54,9 +54,9 @@ class BackupValidator:
         await self._validate_foreign_keys(data)
 
     async def _validate_foreign_keys(self, data: dict[str, list[dict[str, Any]]]) -> None:
-        user_ids = {row["id"] for row in data.get("users", []) if "id" in row}
-        node_ids = {row["id"] for row in data.get("nodes", []) if "id" in row}
-        profile_ids = {row["id"] for row in data.get("profiles", []) if "id" in row}
+        user_ids = {str(row["id"]) for row in data.get("users", []) if "id" in row}
+        node_ids = {str(row["id"]) for row in data.get("nodes", []) if "id" in row}
+        profile_ids = {str(row["id"]) for row in data.get("profiles", []) if "id" in row}
 
         if self._session is not None:
             for model, id_set in (
@@ -66,26 +66,30 @@ class BackupValidator:
             ):
                 stmt = select(model.id)
                 rows = (await self._session.execute(stmt)).scalars().all()
-                id_set.update(rows)
+                # Document ids arrive as JSON strings; DB ids are uuid.UUID,
+                # and str(u) != u. Without normalising, this union never
+                # matched and every incremental restore was rejected for
+                # "references missing node".
+                id_set.update(str(row) for row in rows)
 
         for profile in data.get("profiles", []):
-            if profile.get("node_id") not in node_ids:
+            if str(profile.get("node_id")) not in node_ids:
                 raise ValidationError(
                     "Profile references missing node.",
                     code="backup_missing_dependency",
                 )
         for assignment in data.get("assignments", []):
-            if assignment.get("user_id") not in user_ids:
+            if str(assignment.get("user_id")) not in user_ids:
                 raise ValidationError(
                     "Assignment references missing user.",
                     code="backup_missing_dependency",
                 )
-            if assignment.get("node_id") not in node_ids:
+            if str(assignment.get("node_id")) not in node_ids:
                 raise ValidationError(
                     "Assignment references missing node.",
                     code="backup_missing_dependency",
                 )
-            if assignment.get("profile_id") not in profile_ids:
+            if str(assignment.get("profile_id")) not in profile_ids:
                 raise ValidationError(
                     "Assignment references missing profile.",
                     code="backup_missing_dependency",

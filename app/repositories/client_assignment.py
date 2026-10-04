@@ -98,7 +98,7 @@ class ClientAssignmentRepository(BaseRepository[ClientAssignment]):
             cursor_created_at, cursor_id = cursor
             stmt = stmt.where(
                 tuple_(ClientAssignment.created_at, ClientAssignment.id)
-                < tuple_(cursor_created_at, cursor_id)
+                < tuple_(cursor_created_at, cursor_id)  # type: ignore[arg-type]  # SQLAlchemy coerces cursor values to bind params
             )
         stmt = stmt.order_by(ClientAssignment.created_at.desc(), ClientAssignment.id.desc()).limit(
             limit

@@ -62,7 +62,8 @@ class NodeRepository(BaseRepository[Node]):
         if cursor is not None:
             cursor_created_at, cursor_id = cursor
             stmt = stmt.where(
-                tuple_(Node.created_at, Node.id) < tuple_(cursor_created_at, cursor_id)
+                tuple_(Node.created_at, Node.id)
+                < tuple_(cursor_created_at, cursor_id)  # type: ignore[arg-type]  # SQLAlchemy coerces cursor values to bind params
             )
         stmt = stmt.order_by(Node.created_at.desc(), Node.id.desc()).limit(limit)
         return (await self.session.execute(stmt)).scalars().all()

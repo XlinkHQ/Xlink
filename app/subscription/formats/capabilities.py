@@ -36,6 +36,7 @@ _URI_PROTOCOLS = frozenset(
         "shadowsocks2022",
         "hysteria2",
         "tuic",
+        "anytls",
         "socks",
         "http",
         "naive",
@@ -54,7 +55,7 @@ _CLASH_PROTOCOLS = frozenset(
 )
 
 _MIHOMO_PROTOCOLS = _CLASH_PROTOCOLS | frozenset(
-    {"hysteria2", "tuic", "socks", "http", "shadowtls"}
+    {"hysteria2", "tuic", "anytls", "socks", "http", "shadowtls"}
 )
 
 _XRAY_JSON_PROTOCOLS = frozenset({"vless", "vmess", "trojan"})
@@ -68,6 +69,7 @@ _SINGBOX_PROTOCOLS = frozenset(
         "shadowsocks2022",
         "hysteria2",
         "tuic",
+        "anytls",
         "socks",
         "http",
         "shadowtls",

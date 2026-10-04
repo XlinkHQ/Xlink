@@ -192,8 +192,13 @@ async def create_user(
                     "This profile is not in your scope.", code="profile_out_of_scope"
                 )
     user = await users.create(payload, owner_id=owner_id)
-    for profile_id in payload.profile_ids or []:
-        profile = await profiles.get(profile_id)
+    requested_profiles = payload.profile_ids or []
+    # One query for every requested profile, then create the assignments in
+    # order. Each create() reserves a node slot on the shared session, so the
+    # assignment step itself stays sequential.
+    by_id = await profiles.list_by_ids(requested_profiles) if requested_profiles else {}
+    for profile_id in requested_profiles:
+        profile = by_id[profile_id]
         await assignments.create(
             AssignmentCreate(
                 user_id=user.id,

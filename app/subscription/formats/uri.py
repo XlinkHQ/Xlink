@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from app.subscription.formats import (
+    anytls,
     http_proxy,
     hysteria2,
     naive,
@@ -25,6 +26,7 @@ _URI_RENDERERS: dict[str, Callable[[ProviderConfig], str]] = {
     "shadowsocks2022": shadowsocks.render,
     hysteria2.PROTOCOL: hysteria2.render,
     tuic.PROTOCOL: tuic.render,
+    anytls.PROTOCOL: anytls.render,
     socks.PROTOCOL: socks.render,
     http_proxy.PROTOCOL: http_proxy.render,
     naive.PROTOCOL: naive.render,

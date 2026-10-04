@@ -104,20 +104,36 @@ class BackupImporter:
 
 
 def _order_users_by_ownership(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Owners before the users they own, so FK inserts succeed.
+
+    Iterative, not recursive: `placed` used to be marked only AFTER recursing,
+    so a self-owning user or an ownership cycle never terminated and a deep
+    chain blew the stack — a RecursionError surfacing as a 500 on restore.
+    A cycle cannot be ordered at all, so it is broken deterministically and
+    the rows are still emitted rather than dropped.
+    """
     by_id = {r.get("id"): r for r in rows}
     ordered: list[dict[str, Any]] = []
     placed: set = set()
 
-    def place(row: dict[str, Any]) -> None:
-        rid = row.get("id")
-        if rid in placed:
-            return
-        owner = row.get("owner_id")
-        if owner is not None and owner in by_id and owner not in placed:
-            place(by_id[owner])
-        placed.add(rid)
-        ordered.append(row)
-
-    for r in rows:
-        place(r)
+    for row in rows:
+        # Walk up the owner chain, stopping on anything already placed or
+        # revisited within this walk (the cycle guard).
+        chain: list[dict[str, Any]] = []
+        seen_in_chain: set = set()
+        current: dict[str, Any] | None = row
+        while current is not None:
+            rid = current.get("id")
+            if rid in placed or rid in seen_in_chain:
+                break
+            seen_in_chain.add(rid)
+            chain.append(current)
+            owner = current.get("owner_id")
+            current = by_id.get(owner) if owner is not None else None
+        # Deepest owner first.
+        for item in reversed(chain):
+            iid = item.get("id")
+            if iid not in placed:
+                placed.add(iid)
+                ordered.append(item)
     return ordered
