@@ -127,10 +127,33 @@ def _wg_mtu(settings: dict[str, Any]) -> None:
         )
 
 
+_HOSTNAME = __import__("re").compile(
+    r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+)
+
+
+def _validate_mtproto(protocol: str, settings: dict[str, Any]) -> None:
+    """The node writes these into a Python config file that mtprotoproxy
+    executes, so anything outside the strict shapes below is refused."""
+    _port(settings)
+    domain = str(settings.get("tlsDomain") or "").strip().lower()
+    if not _HOSTNAME.match(domain):
+        raise ValidationError(
+            "tlsDomain must be a plain domain name (the site the fake-TLS mimics).",
+            code="profile_settings_invalid",
+        )
+    tag = str(settings.get("adTag") or "").strip()
+    if tag and (len(tag) != 32 or any(c not in "0123456789abcdef" for c in tag.lower())):
+        raise ValidationError(
+            "adTag must be the 32-hex tag from @MTProxybot.", code="profile_settings_invalid"
+        )
+
+
 _VALIDATORS = {
     ProviderKind.SING_BOX: _validate_singbox,
     ProviderKind.HYSTERIA: _validate_hysteria,
     ProviderKind.WIREGUARD: _validate_wireguard,
+    ProviderKind.MTPROTO: _validate_mtproto,
 }
 
 

@@ -60,6 +60,7 @@ _SETTINGS: dict[str, dict[str, object]] = {
     "http": {"username": "u", "password": "p"},
     "naive": {"username": "u", "password": "p"},
     "wireguard": {"peerPublicKey": "PUB", "privateKey": "PRIV"},
+    "mtproto": {"secret": "ab" * 16, "tlsDomain": "a.com"},
 }
 
 
@@ -230,7 +231,12 @@ def test_node_agent_mirror_matches_source():
             f"node-agent CORE_PROTOCOLS[{_KIND_KEY[kind]}] drifted from the "
             f"panel source: {node.get(_KIND_KEY[kind])} != {protos}"
         )
-    assert set(node) == {_KIND_KEY[k] for k in ProviderKind}
+    # Agent-only variant cores serve an existing provider kind's protocols
+    # (AmneziaWG is a WireGuard profile with obfuscation switched on).
+    variants = {"amneziawg": ProviderKind.WIREGUARD}
+    for core, kind in variants.items():
+        assert node.get(core) == PROVIDER_PROTOCOLS[kind]
+    assert set(node) - set(variants) == {_KIND_KEY[k] for k in ProviderKind}
 
 
 def test_web_mirror_matches_source():

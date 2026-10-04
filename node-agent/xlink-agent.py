@@ -64,6 +64,9 @@ def _v2ray_enabled() -> bool:
 
 HYSTERIA_API_ADDR = os.environ.get("XLINK_HYSTERIA_API", "127.0.0.1:10087")
 HYSTERIA_API_SECRET = os.environ.get("XLINK_HYSTERIA_API_SECRET", "xlink-stats")
+MTPROTO_DIR = os.environ.get("XLINK_MTPROTO_DIR", "/opt/mtprotoproxy")
+MTPROTO_CONFIG = os.environ.get("XLINK_MTPROTO_CONFIG", "/etc/mtprotoproxy/config.py")
+MTPROTO_METRICS_PORT = int(os.environ.get("XLINK_MTPROTO_METRICS_PORT", "10088"))
 
 AGENT_VERSION = "xlink-agent/1.2.0"
 BASE = f"{PANEL_URL}/api/v1/agent/nodes/{NODE_ID}"
@@ -1146,6 +1149,83 @@ def build_wireguard_config(clients: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+_HEX32 = re.compile(r"^[0-9a-f]{32}$")
+_DOMAIN = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+
+
+def build_mtproto_config(clients: list[dict]) -> str:
+    """config.py for mtprotoproxy (alexbers). That file is EXECUTED by the
+    proxy, so every value is re-validated here against a strict shape and
+    emitted with repr(); nothing from the panel reaches it verbatim."""
+    if not clients:
+        # Drained: keep the service valid but accepting nobody.
+        return 'PORT = 443\nUSERS = {}\nMODES = {"classic": False, "secure": False, "tls": True}\n'
+    s0 = clients[0].get("settings") or {}
+    port = int(s0.get("port", 443) or 443)
+    if not 1 <= port <= 65535:
+        raise RuntimeError("mtproto: bad port")
+    domain = str(s0.get("tlsDomain") or "").strip().lower()
+    if not _DOMAIN.match(domain):
+        raise RuntimeError("mtproto: tlsDomain is not a plain domain")
+    users: dict[str, str] = {}
+    for cl in clients:
+        aid = str(cl.get("assignment_id") or "")
+        secret = str((cl.get("credentials") or {}).get("secret") or "").strip().lower()
+        try:
+            uuid.UUID(aid)
+        except ValueError:
+            continue
+        if _HEX32.match(secret):
+            users[aid] = secret
+    config = {
+        "PORT": port,
+        "USERS": users,
+        # Fake-TLS only: classic and "secure" (dd) modes are fingerprintable.
+        "MODES": {"classic": False, "secure": False, "tls": True},
+        "TLS_DOMAIN": domain,
+        "METRICS_PORT": MTPROTO_METRICS_PORT,
+        "METRICS_LISTEN_ADDR_IPV4": "127.0.0.1",
+        "METRICS_WHITELIST": ["127.0.0.1"],
+    }
+    tag = str(s0.get("adTag") or "").strip().lower()
+    if _HEX32.match(tag):
+        config["AD_TAG"] = tag
+    return "".join(f"{k} = {v!r}\n" for k, v in config.items())
+
+
+_mtproto_last: dict[str, tuple[int, int]] = {}
+
+
+def _mtproto_traffic() -> list[dict]:
+    """Per-user deltas from mtprotoproxy's cumulative Prometheus counters. A
+    counter that went down means the proxy restarted: count it from zero."""
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{MTPROTO_METRICS_PORT}/")
+        with _OPENER.open(req, timeout=8) as resp:
+            text = resp.read().decode("utf-8", "replace")
+    except Exception as exc:
+        _log(f"mtproto stats query failed: {exc}")
+        return []
+    cur: dict[str, list[int]] = {}
+    pat = re.compile(r'^mtprotoproxy_user_octets_(from|to)\{user="([^"]+)"\}\s+(\d+)')
+    for line in text.splitlines():
+        m = pat.match(line)
+        if m:
+            slot = cur.setdefault(m.group(2), [0, 0])
+            slot[0 if m.group(1) == "from" else 1] = int(m.group(3))
+    ts = _now()
+    out = []
+    for user, (up, down) in cur.items():
+        last_up, last_down = _mtproto_last.get(user, (0, 0))
+        d_up = up - last_up if up >= last_up else up
+        d_down = down - last_down if down >= last_down else down
+        _mtproto_last[user] = (up, down)
+        if d_up or d_down:
+            out.append({"assignment_id": user, "upload_bytes": d_up,
+                        "download_bytes": d_down, "collected_at": ts})
+    return out
+
+
 def build_hysteria_config(clients: list[dict]) -> dict:
     s0 = (clients[0].get("settings") or {}) if clients else {}
     port = int(s0.get("port", 443) or 443)
@@ -1275,6 +1355,7 @@ CORE_PROTOCOLS: dict[str, frozenset[str]] = {
     "hysteria": frozenset({"hysteria2"}),
     "wireguard": frozenset({"wireguard"}),
     "amneziawg": frozenset({"wireguard"}),
+    "mtproto": frozenset({"mtproto"}),
 }
 
 
@@ -1310,6 +1391,14 @@ CORES = {
         "reload": os.environ.get("XLINK_AWG_RELOAD", _AWG_RELOAD_DEFAULT),
         "validate": None,
         "service": os.environ.get("XLINK_AWG_SERVICE", f"awg-quick@{AWG_INTERFACE}"),
+    },
+    "mtproto": {
+        "builder": build_mtproto_config,
+        "fmt": "text",
+        "path": MTPROTO_CONFIG,
+        "reload": os.environ.get("XLINK_MTPROTO_RELOAD", "systemctl restart mtprotoproxy"),
+        "validate": None,
+        "service": os.environ.get("XLINK_MTPROTO_SERVICE", "mtprotoproxy"),
     },
     "hysteria": {
         "builder": build_hysteria_config,
@@ -1494,6 +1583,8 @@ def _core_installed(kind: str, core: dict) -> bool:
     if kind == "amneziawg":
         rc, _ = _run("command -v awg-quick >/dev/null 2>&1")
         return rc == 0
+    if kind == "mtproto":
+        return os.path.exists(os.path.join(MTPROTO_DIR, "mtprotoproxy.py"))
     return False
 
 
@@ -1506,11 +1597,11 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
     if not core_clients:
         if not os.path.exists(path):
             return True
-        if kind == "wireguard":
-            _run(
-                f"wg-quick down {WG_INTERFACE} 2>/dev/null; "
-                f"ip link delete {WG_INTERFACE} 2>/dev/null"
+        if kind in ("wireguard", "amneziawg"):
+            iface, quick = (
+                (WG_INTERFACE, "wg-quick") if kind == "wireguard" else (AWG_INTERFACE, "awg-quick")
             )
+            _run(f"{quick} down {iface} 2>/dev/null; ip link delete {iface} 2>/dev/null")
             with contextlib.suppress(OSError):
                 os.remove(path)
             _log(f"{kind}: drained (no clients) — interface down")
@@ -1753,6 +1844,8 @@ def collect_traffic(active_kinds: set[str], clients: list[dict] | None = None) -
         samples += _hysteria_traffic()
     if "sing-box" in active_kinds and _v2ray_enabled():
         samples += _singbox_traffic()
+    if "mtproto" in active_kinds:
+        samples += _mtproto_traffic()
     clean = []
     for s in samples:
         try:

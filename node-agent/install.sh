@@ -203,6 +203,41 @@ install_amneziawg() {
   warn "amneziawg install failed — see https://github.com/amnezia-vpn/amneziawg-linux-kernel-module"
 }
 
+# MTProto (Telegram) proxy: alexbers/mtprotoproxy, fake-TLS mode, per-user
+# secrets. Opt-in: `xlink core-update mtproto`. The agent writes its config.
+install_mtproto() {
+  log "mtproto core"
+  local dir=/opt/mtprotoproxy
+  if [ -f "$dir/mtprotoproxy.py" ]; then skip "mtproto present"
+  else
+    command -v git >/dev/null 2>&1 || { command -v apt-get >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y git >/dev/null 2>&1; }
+    git clone --depth 1 https://github.com/alexbers/mtprotoproxy.git "$dir" >/dev/null 2>&1 \
+      || { warn "mtproto install failed (git clone)"; return; }
+  fi
+  # Native AES makes the proxy several times faster; it works without it.
+  command -v apt-get >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y python3-cryptography >/dev/null 2>&1
+  mkdir -p /etc/mtprotoproxy
+  [ -f /etc/mtprotoproxy/config.py ] || printf 'PORT = 443\nUSERS = {}\nMODES = {"classic": False, "secure": False, "tls": True}\n' > /etc/mtprotoproxy/config.py
+  cat > /etc/systemd/system/mtprotoproxy.service <<UNIT
+[Unit]
+Description=MTProto proxy (managed by xlink-agent)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 $dir/mtprotoproxy.py /etc/mtprotoproxy/config.py
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload && systemctl enable mtprotoproxy >/dev/null 2>&1
+  ok "mtproto installed"
+}
+
 fetch_agent() {
   mkdir -p "$XLINK_DIR"
   local src_dir; src_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)"
@@ -397,7 +432,8 @@ cmd_core_update() {
     hysteria) install_hysteria ;;
     wireguard|wg) install_wireguard ;;
     amneziawg|awg) install_amneziawg ;;
-    *) die "usage: xlink core-update <xray|singbox|hysteria|wireguard|amneziawg> [version]" ;;
+    mtproto|mtg) install_mtproto ;;
+    *) die "usage: xlink core-update <xray|singbox|hysteria|wireguard|amneziawg|mtproto> [version]" ;;
   esac
   systemctl restart xlink-agent >/dev/null 2>&1 || true
 }

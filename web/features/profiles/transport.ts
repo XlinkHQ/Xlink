@@ -204,6 +204,16 @@ export function transportFields(protocol: string, s: Record<string, string>): TF
     ];
   }
 
+  if (protocol === "mtproto") {
+    return [
+      HOST,
+      PORT,
+      // Fake-TLS camouflage domain; it is baked into every user's secret.
+      { key: "tlsDomain", label: "Fake-TLS domain", placeholder: "www.cloudflare.com" },
+      { key: "adTag", label: "Ad tag (@MTProxybot)", placeholder: "optional" },
+    ];
+  }
+
   if (protocol === "wireguard") {
     return [
       HOST,

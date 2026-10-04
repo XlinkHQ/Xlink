@@ -51,6 +51,7 @@ _PROTO_NAMES = {
     "tuic": "TUIC",
     "anytls": "AnyTLS",
     "wireguard": "WireGuard",
+    "mtproto": "MTProto",
 }
 
 
