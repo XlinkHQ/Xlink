@@ -188,6 +188,56 @@ install_wireguard() {
 
 # ---------------------------------------------------------------- agent
 
+# AmneziaWG (anti-DPI WireGuard). Opt-in: it builds a kernel module via DKMS,
+# so it is not part of the default core set. `xlink core-update amneziawg`.
+install_amneziawg() {
+  log "amneziawg core"
+  if command -v awg-quick >/dev/null 2>&1; then skip "amneziawg present"; return; fi
+  if command -v apt-get >/dev/null 2>&1 && grep -qi ubuntu /etc/os-release 2>/dev/null; then
+    DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common "linux-headers-$(uname -r)" >/dev/null 2>&1
+    add-apt-repository -y ppa:amnezia/ppa >/dev/null 2>&1
+    apt-get update >/dev/null 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y amneziawg iproute2 iptables >/dev/null 2>&1
+  fi
+  command -v awg-quick >/dev/null 2>&1 && { ok "amneziawg installed"; return; }
+  warn "amneziawg install failed — see https://github.com/amnezia-vpn/amneziawg-linux-kernel-module"
+}
+
+# MTProto (Telegram) proxy: alexbers/mtprotoproxy, fake-TLS mode, per-user
+# secrets. Opt-in: `xlink core-update mtproto`. The agent writes its config.
+install_mtproto() {
+  log "mtproto core"
+  local dir=/opt/mtprotoproxy
+  if [ -f "$dir/mtprotoproxy.py" ]; then skip "mtproto present"
+  else
+    command -v git >/dev/null 2>&1 || { command -v apt-get >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y git >/dev/null 2>&1; }
+    git clone --depth 1 https://github.com/alexbers/mtprotoproxy.git "$dir" >/dev/null 2>&1 \
+      || { warn "mtproto install failed (git clone)"; return; }
+  fi
+  # Native AES makes the proxy several times faster; it works without it.
+  command -v apt-get >/dev/null 2>&1 && DEBIAN_FRONTEND=noninteractive apt-get install -y python3-cryptography >/dev/null 2>&1
+  mkdir -p /etc/mtprotoproxy
+  [ -f /etc/mtprotoproxy/config.py ] || printf 'PORT = 443\nUSERS = {}\nMODES = {"classic": False, "secure": False, "tls": True}\n' > /etc/mtprotoproxy/config.py
+  cat > /etc/systemd/system/mtprotoproxy.service <<UNIT
+[Unit]
+Description=MTProto proxy (managed by xlink-agent)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 $dir/mtprotoproxy.py /etc/mtprotoproxy/config.py
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload && systemctl enable mtprotoproxy >/dev/null 2>&1
+  ok "mtproto installed"
+}
+
 fetch_agent() {
   mkdir -p "$XLINK_DIR"
   local src_dir; src_dir="$(cd "$(dirname "$0")" 2>/dev/null && pwd || true)"
@@ -381,7 +431,9 @@ cmd_core_update() {
     singbox|sing-box) [ -n "$ver" ] && export XLINK_SINGBOX_VERSION="$ver"; rm -f /usr/local/bin/sing-box 2>/dev/null; install_singbox ;;
     hysteria) install_hysteria ;;
     wireguard|wg) install_wireguard ;;
-    *) die "usage: xlink core-update <xray|singbox|hysteria|wireguard> [version]" ;;
+    amneziawg|awg) install_amneziawg ;;
+    mtproto|mtg) install_mtproto ;;
+    *) die "usage: xlink core-update <xray|singbox|hysteria|wireguard|amneziawg|mtproto> [version]" ;;
   esac
   systemctl restart xlink-agent >/dev/null 2>&1 || true
 }

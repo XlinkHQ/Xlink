@@ -165,9 +165,39 @@ async def test_non_leader_job_skips_its_work(redis, monkeypatch) -> None:
     assert calls == 0
 
     leader = LeaderElector(_Cache(redis), ttl_seconds=30)
+    assert await leader._try_acquire_or_renew() is True
     leader._is_leader = True
     job2 = TokenCleanupJob(db=None, interval_seconds=0, leader=leader)  # type: ignore[arg-type]
     job2.start()
     await asyncio.sleep(0.05)
     await job2.stop()
     assert calls > 0
+
+
+async def test_leader_ids_are_unique_per_elector() -> None:
+    import fakeredis
+
+    from app.core.leader import LeaderElector
+
+    class _C:
+        client = fakeredis.aioredis.FakeRedis()
+
+    assert LeaderElector(_C())._id != LeaderElector(_C())._id
+
+
+async def test_stalled_leader_stops_claiming_leadership(monkeypatch) -> None:
+    import fakeredis
+
+    from app.core import leader as leader_mod
+
+    class _C:
+        client = fakeredis.aioredis.FakeRedis()
+
+    elector = leader_mod.LeaderElector(_C(), ttl_seconds=30)
+    clock = [1000.0]
+    monkeypatch.setattr(leader_mod.time, "monotonic", lambda: clock[0])
+    assert await elector._try_acquire_or_renew() is True
+    elector._is_leader = True
+    assert elector.is_leader is True
+    clock[0] += 25  # past 2/3 TTL without a renew: the key may be someone else's
+    assert elector.is_leader is False

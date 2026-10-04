@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import time
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -11,6 +12,7 @@ from app.core.cache import CacheProtocol
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.providers.base.models import ProviderKind
+from app.subscription import templates as client_templates
 from app.subscription.generator import SubscriptionGenerator
 from app.subscription.models import ProviderConfig, RenderedFeed
 from app.subscription.renderer import SubscriptionRenderer
@@ -36,6 +38,28 @@ def _subject_rev_key(subject_id: uuid.UUID) -> str:
 logger = get_logger("xlink.subscription")
 
 
+def _apply_asn_addresses(
+    overrides: dict[uuid.UUID, list[dict]], asn: int | None
+) -> dict[uuid.UUID, list[dict]]:
+    """Swap each host's address for one of its clean addresses for this ASN,
+    and drop the map itself so it never reaches a renderer."""
+    out: dict[uuid.UUID, list[dict]] = {}
+    for pid, hosts in overrides.items():
+        fixed = []
+        for h in hosts:
+            mapping = h.get("asn_addresses")
+            if mapping is None:
+                fixed.append(h)
+                continue
+            h = {k: v for k, v in h.items() if k != "asn_addresses"}
+            choices = mapping.get(str(asn)) if asn else None
+            if choices:
+                h["address"] = random.choice(choices)
+            fixed.append(h)
+        out[pid] = fixed
+    return out
+
+
 class SubscriptionService:
     def __init__(
         self,
@@ -49,6 +73,7 @@ class SubscriptionService:
         self._renderer = renderer
         self._cache = cache
         self._inflight: dict[str, asyncio.Lock] = {}
+        self._asn_cache: tuple[float, frozenset[int]] | None = None
 
     async def generate_config(self, assignment_id: uuid.UUID) -> ConfigRead:
         source = await self._repository.get_assignment_source(assignment_id)
@@ -116,12 +141,27 @@ class SubscriptionService:
         configs = await self._generate_feed_configs(request)
         if request.shuffle:
             configs = tuple(random.sample(configs, len(configs)))
-        rendered = self._renderer.render_feed(
-            configs,
-            version=request.version,
-            feed_format=request.format,
-        )
+        with client_templates.use(await self._load_templates()):
+            rendered = self._renderer.render_feed(
+                configs,
+                version=request.version,
+                feed_format=request.format,
+            )
         return self._feed_read(rendered)
+
+    async def _load_templates(self) -> dict[str, dict]:
+        loader = getattr(self._repository, "default_client_templates", None)
+        if loader is None:
+            return {}
+        parsed: dict[str, dict] = {}
+        for fmt, content in (await loader()).items():
+            try:
+                parsed[fmt] = client_templates.parse(fmt, content)
+            except ValidationError:
+                # Validated on save; a row that no longer parses (manual DB
+                # edit) must not take every subscription down with it.
+                logger.warning("client_template_unparseable", format=fmt)
+        return parsed
 
     async def placeholder_feed(
         self,
@@ -176,7 +216,22 @@ class SubscriptionService:
         texts = await self._repository.get_status_texts()
         profile_ids = list({s.profile.id for s in sources})
         overrides = await self._repository.host_overrides(profile_ids)
+        if overrides:
+            overrides = _apply_asn_addresses(overrides, request.client_asn)
         return await self._generator.generate_feed(sources, texts, overrides)
+
+    async def mapped_asns(self) -> frozenset[int]:
+        """ASNs any host maps to clean addresses (cached briefly in-process;
+        host edits invalidate feeds, and a 30 s lag here only delays which
+        cache bucket a new mapping uses)."""
+        now = time.monotonic()
+        cached = self._asn_cache
+        if cached is not None and now - cached[0] < 30:
+            return cached[1]
+        loader = getattr(self._repository, "mapped_asns", None)
+        asns = frozenset(await loader()) if loader else frozenset()
+        self._asn_cache = (now, asns)
+        return asns
 
     def _feed_read(self, rendered: RenderedFeed) -> FeedRead:
         return FeedRead(
@@ -289,4 +344,5 @@ class SubscriptionService:
             f"{request.format.value}:"
             f"g{global_rev or 0}:"
             f"r{subject_rev or 0}"
+            + (f":a{request.client_asn}" if request.client_asn else "")
         )

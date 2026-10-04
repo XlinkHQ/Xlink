@@ -17,6 +17,8 @@ export function protoBadge(p: string): string {
       return "is-cyan";
     case "anytls":
       return "is-indigo";
+    case "mtproto":
+      return "is-cyan";
     default:
       return "is-slate";
   }

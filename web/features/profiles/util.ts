@@ -1,4 +1,4 @@
-export const PROVIDERS = ["xray", "wireguard", "sing-box", "hysteria"];
+export const PROVIDERS = ["xray", "wireguard", "sing-box", "hysteria", "mtproto"];
 export const PROTOCOLS = [
   "vless",
   "vmess",
@@ -12,6 +12,7 @@ export const PROTOCOLS = [
   "anytls",
   "naive",
   "socks",
+  "mtproto",
 ];
 
 const PROVIDER_PROTOCOLS: Record<string, string[]> = {
@@ -31,6 +32,7 @@ const PROVIDER_PROTOCOLS: Record<string, string[]> = {
   ],
   hysteria: ["hysteria2"],
   wireguard: ["wireguard"],
+  mtproto: ["mtproto"],
 };
 
 export function protocolsFor(provider: string): string[] {

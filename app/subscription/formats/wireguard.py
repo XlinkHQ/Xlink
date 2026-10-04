@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.providers.base import amneziawg
 from app.subscription.formats.base import (
     FormatRenderError,
     require_fields,
@@ -94,6 +95,13 @@ def _interface_block(config: ProviderConfig) -> str:
     # the server kept its 1420 kernel default — a 140-byte mismatch.
     mtu = _int_setting(config, "mtu", WG_MTU_DEFAULT, WG_MTU_MIN, WG_MTU_MAX)
     lines.append(f"MTU = {mtu}")
+    if amneziawg.enabled(dict(config.settings)):
+        # AmneziaVPN / AmneziaWG clients read these from [Interface]; a plain
+        # WireGuard client would reject them, so they only appear for AWG.
+        for key in amneziawg.PARAMS:
+            val = _ini_value(setting(config, key, ""))
+            if val.isdigit():
+                lines.append(f"{key} = {val}")
     return "\n".join(lines)
 
 

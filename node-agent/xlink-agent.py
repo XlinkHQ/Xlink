@@ -64,6 +64,9 @@ def _v2ray_enabled() -> bool:
 
 HYSTERIA_API_ADDR = os.environ.get("XLINK_HYSTERIA_API", "127.0.0.1:10087")
 HYSTERIA_API_SECRET = os.environ.get("XLINK_HYSTERIA_API_SECRET", "xlink-stats")
+MTPROTO_DIR = os.environ.get("XLINK_MTPROTO_DIR", "/opt/mtprotoproxy")
+MTPROTO_CONFIG = os.environ.get("XLINK_MTPROTO_CONFIG", "/etc/mtprotoproxy/config.py")
+MTPROTO_METRICS_PORT = int(os.environ.get("XLINK_MTPROTO_METRICS_PORT", "10088"))
 
 AGENT_VERSION = "xlink-agent/1.2.0"
 BASE = f"{PANEL_URL}/api/v1/agent/nodes/{NODE_ID}"
@@ -502,6 +505,19 @@ def _write_cert(sni: str, cert_pem: str, key_pem: str) -> tuple[str, str]:
     return cert_path, key_path
 
 
+def _alpn_list(s: dict, default: list | None = None) -> list:
+    """ALPN the server offers. Must match what the subscription hands the
+    client; an inbound with none negotiates whatever, which breaks h2-only
+    and ALPN-routed setups."""
+    raw = s.get("alpn")
+    if isinstance(raw, list):
+        items = [str(a).strip() for a in raw]
+    else:
+        items = [a.strip() for a in str(raw or "").split(",")]
+    items = [a for a in items if a in ("h3", "h2", "http/1.1")]
+    return items or list(default or [])
+
+
 def _stream_settings(s: dict) -> dict:
     network = (s.get("network") or "tcp").lower()
     security = (s.get("security") or "none").lower()
@@ -532,6 +548,8 @@ def _stream_settings(s: dict) -> dict:
             tls["serverName"] = s["sni"]
         if str(s.get("allowInsecure", "")).lower() in ("1", "true"):
             tls["allowInsecure"] = True
+        if _alpn_list(s):
+            tls["alpn"] = _alpn_list(s)
         cert_pem = s.get("cert_pem")
         key_pem = s.get("key_pem")
         if cert_pem and key_pem:
@@ -691,6 +709,13 @@ def build_xray_config(clients: list[dict]) -> dict:
                     settings["decryption"] = "none"
                 if protocol in ("shadowsocks", "shadowsocks2022"):
                     settings["method"] = s.get("method", _default_ss_method(protocol))
+                    if str(settings["method"]).startswith("2022-"):
+                        # Multi-user 2022 needs the server PSK at inbound level;
+                        # without it xray rejects the file.
+                        if s.get("serverPassword"):
+                            settings["password"] = s["serverPassword"]
+                        else:
+                            _log(f"ss2022_missing_server_password port={port}")
                 if isinstance(s.get("fallbacks"), list) and protocol in ("vless", "trojan"):
                     settings["fallbacks"] = s["fallbacks"]
             network = (s.get("network") or "tcp").lower()
@@ -805,6 +830,9 @@ def _singbox_tls(s: dict) -> dict:
     tls: dict = {"enabled": True}
     if s.get("sni"):
         tls["server_name"] = s["sni"]
+    alpn = _alpn_list(s, default=["h3"] if s.get("_quic") else None)
+    if alpn:
+        tls["alpn"] = alpn
     cert_pem, key_pem = s.get("cert_pem"), s.get("key_pem")
     if cert_pem and key_pem:
         try:
@@ -879,10 +907,21 @@ def build_singbox_config(clients: list[dict]) -> dict:
                     "2022-blake3-aes-256-gcm" if protocol == "shadowsocks2022" else "aes-256-gcm"
                 )
                 ib["method"] = s.get("method", default_method)
+                if str(ib["method"]).startswith("2022-"):
+                    if s.get("serverPassword"):
+                        ib["password"] = s["serverPassword"]
+                    else:
+                        _log(f"ss2022_missing_server_password port={port}")
             elif protocol == "shadowtls":
                 sni = s.get("sni") or s.get("handshake") or "www.microsoft.com"
                 ss_tag = f"sstls-ss-{port}-{len(inbounds)}"
-                detour_port = 40000 + len(detours)
+                # Derived from the public port, not from position: a positional
+                # port moved every time a profile was added or reordered,
+                # restarting unrelated inbounds.
+                used = {d["listen_port"] for d in detours.values()}
+                detour_port = 40000 + port % 20000
+                while detour_port in used or detour_port == port:
+                    detour_port = 40000 + (detour_port - 40000 + 1) % 20000
                 ib["version"] = 3
                 ib["handshake"] = {"server": sni, "server_port": 443}
                 ib["detour"] = ss_tag
@@ -900,7 +939,13 @@ def build_singbox_config(clients: list[dict]) -> dict:
             else:
                 tls_required = protocol in _SB_TLS_MANDATORY
                 if (secure or tls_required) and protocol in _SB_TLS_OK:
-                    ib["tls"] = _singbox_tls(s)
+                    quic = protocol in ("hysteria2", "tuic")
+                    ib["tls"] = _singbox_tls({**s, "_quic": quic} if quic else s)
+                if protocol == "tuic":
+                    # Server default is cubic; the client is told bbr unless set.
+                    ib["congestion_control"] = str(
+                        s.get("congestionControl") or "bbr"
+                    ).lower()
                 transport = _singbox_transport(s)
                 if transport and protocol in _SB_TRANSPORT_OK:
                     ib["transport"] = transport
@@ -1104,6 +1149,86 @@ def build_wireguard_config(clients: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+_HEX32 = re.compile(r"^[0-9a-f]{32}$")
+_DOMAIN = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+
+
+def build_mtproto_config(clients: list[dict]) -> str:
+    """config.py for mtprotoproxy (alexbers). That file is EXECUTED by the
+    proxy, so every value is re-validated here against a strict shape and
+    emitted with repr(); nothing from the panel reaches it verbatim."""
+    if not clients:
+        # Drained: keep the service valid but accepting nobody.
+        return 'PORT = 443\nUSERS = {}\nMODES = {"classic": False, "secure": False, "tls": True}\n'
+    s0 = clients[0].get("settings") or {}
+    port = int(s0.get("port", 443) or 443)
+    if not 1 <= port <= 65535:
+        raise RuntimeError("mtproto: bad port")
+    domain = str(s0.get("tlsDomain") or "").strip().lower()
+    if not _DOMAIN.match(domain):
+        raise RuntimeError("mtproto: tlsDomain is not a plain domain")
+    users: dict[str, str] = {}
+    for cl in clients:
+        aid = str(cl.get("assignment_id") or "")
+        secret = str((cl.get("credentials") or {}).get("secret") or "").strip().lower()
+        try:
+            uuid.UUID(aid)
+        except ValueError:
+            continue
+        if _HEX32.match(secret):
+            users[aid] = secret
+    config = {
+        "PORT": port,
+        "USERS": users,
+        # Fake-TLS only: classic and "secure" (dd) modes are fingerprintable.
+        "MODES": {"classic": False, "secure": False, "tls": True},
+        "TLS_DOMAIN": domain,
+        "METRICS_PORT": MTPROTO_METRICS_PORT,
+        "METRICS_LISTEN_ADDR_IPV4": "127.0.0.1",
+        "METRICS_WHITELIST": ["127.0.0.1"],
+    }
+    tag = str(s0.get("adTag") or "").strip().lower()
+    if _HEX32.match(tag):
+        config["AD_TAG"] = tag
+    return "".join(f"{k} = {v!r}\n" for k, v in config.items())
+
+
+_mtproto_last: dict[str, tuple[int, int]] = {}
+
+
+def _mtproto_traffic() -> list[dict]:
+    """Per-user deltas from mtprotoproxy's cumulative Prometheus counters. A
+    counter that went down means the proxy restarted: count it from zero."""
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{MTPROTO_METRICS_PORT}/")
+        with _OPENER.open(req, timeout=8) as resp:
+            text = resp.read().decode("utf-8", "replace")
+    except Exception as exc:
+        _log(f"mtproto stats query failed: {exc}")
+        return []
+    cur: dict[str, list[int]] = {}
+    pat = re.compile(r'^mtprotoproxy_user_octets_(from|to)\{user="([^"]+)"\}\s+(\d+)')
+    for line in text.splitlines():
+        m = pat.match(line)
+        if m:
+            slot = cur.setdefault(m.group(2), [0, 0])
+            slot[0 if m.group(1) == "from" else 1] = int(m.group(3))
+    # Forget users the proxy no longer reports, so churn cannot grow this map.
+    for gone in set(_mtproto_last) - set(cur):
+        del _mtproto_last[gone]
+    ts = _now()
+    out = []
+    for user, (up, down) in cur.items():
+        last_up, last_down = _mtproto_last.get(user, (0, 0))
+        d_up = up - last_up if up >= last_up else up
+        d_down = down - last_down if down >= last_down else down
+        _mtproto_last[user] = (up, down)
+        if d_up or d_down:
+            out.append({"assignment_id": user, "upload_bytes": d_up,
+                        "download_bytes": d_down, "collected_at": ts})
+    return out
+
+
 def build_hysteria_config(clients: list[dict]) -> dict:
     s0 = (clients[0].get("settings") or {}) if clients else {}
     port = int(s0.get("port", 443) or 443)
@@ -1124,12 +1249,17 @@ def build_hysteria_config(clients: list[dict]) -> dict:
         "auth": {"type": "userpass", "userpass": userpass},
         "trafficStats": {"listen": HYSTERIA_API_ADDR, "secret": HYSTERIA_API_SECRET},
     }
+    obfs_seen: set = set()
     for c in clients:
         cs = {**(c.get("settings") or {}), **(c.get("credentials") or {})}
         obfs_pw = cs.get("obfsPassword") or cs.get("obfs_password")
-        if cs.get("obfs") and obfs_pw:
+        obfs_seen.add(str(obfs_pw) if cs.get("obfs") and obfs_pw else "")
+        if cs.get("obfs") and obfs_pw and "obfs" not in config:
             config["obfs"] = {"type": "salamander", "salamander": {"password": str(obfs_pw)}}
-            break
+    if len(obfs_seen) > 1:
+        # One daemon, one obfs password: profiles that disagree cannot all
+        # work. The panel refuses this at save time; log it if it slips in.
+        _log(f"hysteria2_obfs_conflict profiles={len(obfs_seen)} using=first")
     for key_name in ("acl", "outbounds", "bandwidth", "masquerade", "log", "resolver", "sniff"):
         if core.get(key_name):
             config[key_name] = core[key_name]
@@ -1139,38 +1269,73 @@ def build_hysteria_config(clients: list[dict]) -> dict:
 WG_INTERFACE = os.environ.get("XLINK_WG_INTERFACE", "wg0")
 WG_CONFIG_PATH = os.environ.get("XLINK_WG_CONFIG", f"/etc/wireguard/{WG_INTERFACE}.conf")
 
-_WG_RELOAD_DEFAULT = (
-    f"if ip link show {WG_INTERFACE} >/dev/null 2>&1; then "
-    f"wg syncconf {WG_INTERFACE} <(wg-quick strip {WG_INTERFACE}) || "
-    f"{{ (wg-quick down {WG_INTERFACE} 2>/dev/null; ip link delete {WG_INTERFACE} 2>/dev/null); "
-    f"wg-quick up {WG_INTERFACE}; }}; "
-    f"else wg-quick up {WG_INTERFACE}; fi; "
-    "WAN=$(ip route list default | awk '{print $5; exit}'); "
-    "sysctl -w net.ipv4.ip_forward=1 >/dev/null; "
-    "sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null; "
-    "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
-    f"sysctl -w net.ipv4.conf.{WG_INTERFACE}.rp_filter=0 >/dev/null 2>&1; "
-    "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
-    "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
-    f"{WG_CONFIG_PATH} 2>/dev/null | "
-    "python3 -c 'import sys,ipaddress; "
-    "a=sys.stdin.read().strip() or \"10.8.0.1/24\"; "
-    "a=a if \"/\" in a else a+\"/24\"; "
-    "print(ipaddress.ip_network(a,strict=False))' 2>/dev/null); "
-    "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
-    "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
-    "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
-    f"iptables -C FORWARD -i {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -I FORWARD 1 -i {WG_INTERFACE} -j ACCEPT; "
-    f"iptables -C FORWARD -o {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -I FORWARD 1 -o {WG_INTERFACE} -j ACCEPT; "
-    "if iptables -L DOCKER-USER >/dev/null 2>&1; then "
-    f"iptables -C DOCKER-USER -i {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -I DOCKER-USER 1 -i {WG_INTERFACE} -j ACCEPT; "
-    f"iptables -C DOCKER-USER -o {WG_INTERFACE} -j ACCEPT 2>/dev/null || "
-    f"iptables -I DOCKER-USER 1 -o {WG_INTERFACE} -j ACCEPT; "
-    "fi"
+def _wg_reload_script(iface: str, conf: str, wg: str = "wg", quick: str = "wg-quick") -> str:
+    return (
+        f"if ip link show {iface} >/dev/null 2>&1; then "
+        f"{wg} syncconf {iface} <({quick} strip {iface}) || "
+        f"{{ ({quick} down {iface} 2>/dev/null; ip link delete {iface} 2>/dev/null); "
+        f"{quick} up {iface}; }}; "
+        f"else {quick} up {iface}; fi; "
+        "WAN=$(ip route list default | awk '{print $5; exit}'); "
+        "sysctl -w net.ipv4.ip_forward=1 >/dev/null; "
+        "sysctl -w net.ipv4.conf.all.rp_filter=0 >/dev/null; "
+        "sysctl -w net.ipv4.conf.default.rp_filter=0 >/dev/null; "
+        f"sysctl -w net.ipv4.conf.{iface}.rp_filter=0 >/dev/null 2>&1; "
+        "sysctl -w net.ipv4.conf.$WAN.rp_filter=0 >/dev/null 2>&1; "
+        "WG_SUBNET=$(awk -F'[=,/ ]+' '/^Address/{print $2\"/\"$3; exit}' "
+        f"{conf} 2>/dev/null | "
+        "python3 -c 'import sys,ipaddress; "
+        "a=sys.stdin.read().strip() or \"10.8.0.1/24\"; "
+        "a=a if \"/\" in a else a+\"/24\"; "
+        "print(ipaddress.ip_network(a,strict=False))' 2>/dev/null); "
+        "[ -z \"$WG_SUBNET\" ] && WG_SUBNET=10.8.0.0/24; "
+        "iptables -t nat -C POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE 2>/dev/null || "
+        "iptables -t nat -A POSTROUTING -s $WG_SUBNET -o $WAN -j MASQUERADE; "
+        f"iptables -C FORWARD -i {iface} -j ACCEPT 2>/dev/null || "
+        f"iptables -I FORWARD 1 -i {iface} -j ACCEPT; "
+        f"iptables -C FORWARD -o {iface} -j ACCEPT 2>/dev/null || "
+        f"iptables -I FORWARD 1 -o {iface} -j ACCEPT; "
+        "if iptables -L DOCKER-USER >/dev/null 2>&1; then "
+        f"iptables -C DOCKER-USER -i {iface} -j ACCEPT 2>/dev/null || "
+        f"iptables -I DOCKER-USER 1 -i {iface} -j ACCEPT; "
+        f"iptables -C DOCKER-USER -o {iface} -j ACCEPT 2>/dev/null || "
+        f"iptables -I DOCKER-USER 1 -o {iface} -j ACCEPT; "
+        "fi"
+    )
+
+
+_WG_RELOAD_DEFAULT = _wg_reload_script(WG_INTERFACE, WG_CONFIG_PATH)
+
+# AmneziaWG: WireGuard with handshake obfuscation (junk packets, padded
+# handshakes, custom message headers) so DPI cannot fingerprint it. Separate
+# tooling (awg / awg-quick) and its own interface, so it can coexist with
+# plain WireGuard on the same host.
+AWG_INTERFACE = os.environ.get("XLINK_AWG_INTERFACE", "awg0")
+AWG_CONFIG_PATH = os.environ.get(
+    "XLINK_AWG_CONFIG", f"/etc/amnezia/amneziawg/{AWG_INTERFACE}.conf"
 )
+_AWG_RELOAD_DEFAULT = _wg_reload_script(AWG_INTERFACE, AWG_CONFIG_PATH, "awg", "awg-quick")
+AWG_PARAMS = ("Jc", "Jmin", "Jmax", "S1", "S2", "H1", "H2", "H3", "H4")
+
+
+def _is_amnezia(settings: dict) -> bool:
+    return str(settings.get("amnezia", "")).strip().lower() in ("1", "true", "yes", "on")
+
+
+def build_amneziawg_config(clients: list[dict]) -> str:
+    """The WireGuard config plus AmneziaWG's [Interface] parameters. S1/S2 and
+    H1-H4 must equal the client's or the handshake is silently dropped."""
+    base = build_wireguard_config(clients)
+    s0 = (clients[0].get("settings") or {}) if clients else {}
+    extra = []
+    for key in AWG_PARAMS:
+        val = str(s0.get(key, "")).strip()
+        if val.isdigit():
+            extra.append(f"{key} = {val}")
+    if not extra:
+        raise RuntimeError("amneziawg: profile has no obfuscation parameters")
+    head, sep, rest = base.partition("\nPostUp = ")
+    return head + "\n" + "\n".join(extra) + sep + rest
 
 
 CORE_PROTOCOLS: dict[str, frozenset[str]] = {
@@ -1192,6 +1357,8 @@ CORE_PROTOCOLS: dict[str, frozenset[str]] = {
     ),
     "hysteria": frozenset({"hysteria2"}),
     "wireguard": frozenset({"wireguard"}),
+    "amneziawg": frozenset({"wireguard"}),
+    "mtproto": frozenset({"mtproto"}),
 }
 
 
@@ -1219,6 +1386,22 @@ CORES = {
         "reload": os.environ.get("XLINK_WG_RELOAD", _WG_RELOAD_DEFAULT),
         "validate": None,
         "service": os.environ.get("XLINK_WG_SERVICE", f"wg-quick@{WG_INTERFACE}"),
+    },
+    "amneziawg": {
+        "builder": build_amneziawg_config,
+        "fmt": "text",
+        "path": AWG_CONFIG_PATH,
+        "reload": os.environ.get("XLINK_AWG_RELOAD", _AWG_RELOAD_DEFAULT),
+        "validate": None,
+        "service": os.environ.get("XLINK_AWG_SERVICE", f"awg-quick@{AWG_INTERFACE}"),
+    },
+    "mtproto": {
+        "builder": build_mtproto_config,
+        "fmt": "text",
+        "path": MTPROTO_CONFIG,
+        "reload": os.environ.get("XLINK_MTPROTO_RELOAD", "systemctl restart mtprotoproxy"),
+        "validate": None,
+        "service": os.environ.get("XLINK_MTPROTO_SERVICE", "mtprotoproxy"),
     },
     "hysteria": {
         "builder": build_hysteria_config,
@@ -1400,6 +1583,11 @@ def _core_installed(kind: str, core: dict) -> bool:
     if kind == "wireguard":
         rc, _ = _run("command -v wg >/dev/null 2>&1")
         return rc == 0
+    if kind == "amneziawg":
+        rc, _ = _run("command -v awg-quick >/dev/null 2>&1")
+        return rc == 0
+    if kind == "mtproto":
+        return os.path.exists(os.path.join(MTPROTO_DIR, "mtprotoproxy.py"))
     return False
 
 
@@ -1412,11 +1600,11 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
     if not core_clients:
         if not os.path.exists(path):
             return True
-        if kind == "wireguard":
-            _run(
-                f"wg-quick down {WG_INTERFACE} 2>/dev/null; "
-                f"ip link delete {WG_INTERFACE} 2>/dev/null"
+        if kind in ("wireguard", "amneziawg"):
+            iface, quick = (
+                (WG_INTERFACE, "wg-quick") if kind == "wireguard" else (AWG_INTERFACE, "awg-quick")
             )
+            _run(f"{quick} down {iface} 2>/dev/null; ip link delete {iface} 2>/dev/null")
             with contextlib.suppress(OSError):
                 os.remove(path)
             _log(f"{kind}: drained (no clients) — interface down")
@@ -1463,7 +1651,10 @@ def apply_one(kind: str, core: dict, core_clients: list[dict]) -> bool:
 
 
 def _effective_core(cl: dict) -> str:
-    return cl.get("provider_kind", "xray")
+    kind = cl.get("provider_kind", "xray")
+    if kind == "wireguard" and _is_amnezia(cl.get("settings") or {}):
+        return "amneziawg"
+    return kind
 
 
 def apply_config(clients: list[dict], version: str, server_version: str | None = None) -> set[str]:
@@ -1656,6 +1847,8 @@ def collect_traffic(active_kinds: set[str], clients: list[dict] | None = None) -
         samples += _hysteria_traffic()
     if "sing-box" in active_kinds and _v2ray_enabled():
         samples += _singbox_traffic()
+    if "mtproto" in active_kinds:
+        samples += _mtproto_traffic()
     clean = []
     for s in samples:
         try:
@@ -1726,7 +1919,117 @@ _UPGRADE_TIMEOUT = 900
 _CORE_ALIAS = {"singbox": "sing-box", "wg": "wireguard"}
 
 
+_SCAN_MAX_TARGETS = 20
+
+
+def _scan_reality_target(raw: str) -> dict:
+    """Score one REALITY target from THIS node's network position. Mirrors
+    app/services/reality_scan.py (stdlib only: the agent has no deps)."""
+    import ipaddress
+    import socket
+    import ssl
+
+    res = {"target": raw, "port": 0, "ip": None, "ok": False, "tls13": False, "h2": False,
+           "x25519": None, "cert_valid": False, "latency_ms": None, "issuer": None,
+           "problems": []}
+    host = raw.strip().lower()
+    for prefix in ("https://", "http://"):
+        if host.startswith(prefix):
+            host = host[len(prefix):]
+    host = host.split("/", 1)[0]
+    port = 443
+    if host.count(":") == 1:
+        host, p = host.rsplit(":", 1)
+        if not p.isdigit() or not 0 < int(p) < 65536:
+            res["problems"].append("bad port")
+            return res
+        port = int(p)
+    res["target"], res["port"] = host, port
+    try:
+        ipaddress.ip_address(host)
+        res["problems"].append("REALITY needs a domain name (SNI), not an IP.")
+        return res
+    except ValueError:
+        pass
+    if not host or len(host) > 253:
+        res["problems"].append("bad host")
+        return res
+    try:
+        ips = [i[4][0] for i in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)]
+    except OSError:
+        res["problems"].append("does not resolve")
+        return res
+
+    def blocked(a: str) -> bool:
+        ip = ipaddress.ip_address(a)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+        return (ip.is_loopback or ip.is_link_local or ip.is_private or ip.is_reserved
+                or ip.is_multicast or ip.is_unspecified)
+
+    if not ips or any(blocked(a) for a in ips):
+        res["problems"].append("resolves to a non-public address")
+        return res
+    res["ip"] = ips[0]
+
+    def handshake(verify: bool, curve: str | None = None) -> tuple[dict, float]:
+        ctx = ssl.create_default_context()
+        if not verify:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        ctx.set_alpn_protocols(["h2", "http/1.1"])
+        if curve:
+            ctx.set_ecdh_curve(curve)
+        started = time.perf_counter()
+        with socket.create_connection((res["ip"], port), timeout=5) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as tls:
+                elapsed = (time.perf_counter() - started) * 1000
+                cert = tls.getpeercert() or {}
+                issuer = dict(x[0] for x in cert.get("issuer", ()) if x)
+                return {
+                    "version": tls.version(),
+                    "alpn": tls.selected_alpn_protocol(),
+                    "issuer": issuer.get("organizationName") or issuer.get("commonName"),
+                }, elapsed
+
+    try:
+        facts, res["latency_ms"] = handshake(True)
+        res["cert_valid"] = True
+    except ssl.SSLCertVerificationError:
+        res["problems"].append("certificate not valid for this name")
+        try:
+            facts, res["latency_ms"] = handshake(False)
+        except (OSError, ssl.SSLError):
+            res["problems"].append("no TLS 1.3")
+            return res
+    except (OSError, ssl.SSLError):
+        res["problems"].append("no TLS 1.3 handshake (or unreachable)")
+        return res
+    res["tls13"] = facts.get("version") == "TLSv1.3"
+    res["h2"] = facts.get("alpn") == "h2"
+    res["issuer"] = facts.get("issuer")
+    if not res["h2"]:
+        res["problems"].append("no h2 (ALPN)")
+    try:
+        handshake(False, "X25519")
+        res["x25519"] = True
+    except (ssl.SSLError, ValueError):
+        res["x25519"] = False
+        res["problems"].append("no X25519")
+    except OSError:
+        res["x25519"] = None
+    res["ok"] = res["tls13"] and res["h2"] and res["cert_valid"] and res["x25519"] is not False
+    return res
+
+
 def _run_command(kind: str, payload: dict) -> tuple[bool, dict]:
+    if kind == "reality_scan":
+        targets = [str(t) for t in (payload.get("targets") or []) if str(t).strip()]
+        targets = list(dict.fromkeys(targets))[:_SCAN_MAX_TARGETS]
+        results = [_scan_reality_target(t) for t in targets]
+        results.sort(key=lambda r: (not r["ok"], r["latency_ms"] or 1e9))
+        return True, {"results": results}
     if kind == "apply_config":
         _wake.set()
         return True, {"note": "config refresh scheduled"}

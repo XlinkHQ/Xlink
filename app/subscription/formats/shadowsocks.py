@@ -7,6 +7,7 @@ from app.subscription.formats.base import (
     label,
     require_fields,
     setting,
+    ss_password,
     validate_node,
 )
 from app.subscription.models import ProviderConfig
@@ -30,6 +31,6 @@ def render(config: ProviderConfig) -> str:
         "2022-blake3-aes-256-gcm" if config.protocol == "shadowsocks2022" else "aes-256-gcm"
     )
     method = str(setting(config, "method", default_method))
-    password = config.resolved_password
+    password = ss_password(config, method)
     userinfo = base64.urlsafe_b64encode(f"{method}:{password}".encode()).decode("ascii").rstrip("=")
     return f"ss://{userinfo}@{config.host}:{config.port}#{label(config)}"

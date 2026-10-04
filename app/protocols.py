@@ -67,6 +67,7 @@ XRAY = ProviderKind.XRAY
 SING_BOX = ProviderKind.SING_BOX
 HYSTERIA = ProviderKind.HYSTERIA
 WIREGUARD = ProviderKind.WIREGUARD
+MTPROTO = ProviderKind.MTPROTO
 
 PROTOCOLS: tuple[ProtocolSpec, ...] = (
     _spec("vless", providers=(XRAY, SING_BOX)),
@@ -83,6 +84,8 @@ PROTOCOLS: tuple[ProtocolSpec, ...] = (
     _spec("socks", providers=(SING_BOX,)),
     _spec("http", providers=()),
     _spec("wireguard", providers=(WIREGUARD,)),
+    # Telegram proxy (fake-TLS). Feeds carry a t.me/proxy link.
+    _spec("mtproto", providers=(MTPROTO,)),
 )
 
 

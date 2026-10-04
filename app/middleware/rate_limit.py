@@ -15,7 +15,7 @@ IPNetwork = IPv4Network | IPv6Network
 _EXCLUDED_PATH_MARKERS = ("/health/", "/health", "/ready")
 _WINDOW_SECONDS = 60
 
-_AUTH_PATH_MARKERS = ("/auth/login", "/auth/refresh", "/auth/register")
+_AUTH_PATH_MARKERS = ("/auth/login", "/auth/refresh", "/auth/register", "/api/v1/setup")
 _AUTH_LIMIT = 10
 
 

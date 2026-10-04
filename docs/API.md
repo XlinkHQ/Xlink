@@ -377,6 +377,68 @@ Ping spins up a throwaway local core instance against the outbound and reports
 
 ---
 
+### 3.24 Admin Roles — `/admin-roles`
+
+Per-action scopes (`0` none, `1` own users, `2` all users) and grant limits
+(`max_users`, `data_limit_min`, `data_limit_max`, `expire_max_days`) for
+non-sudo admins. Assign with `PATCH /users/admins/{id}` `{"admin_role_id": ...}`.
+Role-less admins keep the legacy owner-scoped behaviour.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/admin-roles/catalogue` | Sudo | Resources, actions, limit keys |
+| GET | `/admin-roles` | Sudo | List roles |
+| POST | `/admin-roles` | Sudo | Create role → `201` |
+| PATCH | `/admin-roles/{role_id}` | Sudo | Update role |
+| DELETE | `/admin-roles/{role_id}` | Sudo | Delete → `204`; `409` while assigned |
+
+### 3.25 Client Templates — `/client-templates`
+
+Base documents for `clash`, `mihomo` (YAML) and `singbox` (JSON). The default
+template of a format becomes the feed document; generated servers are injected
+(`proxies` / prepended `outbounds`) and `"{ALL}"` inside a group's or
+selector's list expands to every generated name. Validated on save; changing a
+default invalidates the subscription cache.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/client-templates` | Sudo | List templates |
+| POST | `/client-templates` | Sudo | Create → `201` |
+| PATCH | `/client-templates/{template_id}` | Sudo | Update (setting `is_default` clears the previous default) |
+| DELETE | `/client-templates/{template_id}` | Sudo | Delete → `204` |
+
+### 3.26 Setup — `/setup`
+
+First run only. While no admin exists the panel logs a one-time
+`setup_token`; creating the first sudo admin requires it. Rate-limited like
+login.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/setup/status` | Public | `{"needs_setup": bool}` |
+| POST | `/setup` | Public + token | `{token, username, password}` → `201`; `409` once set up |
+
+### 3.27 REALITY — `/reality`
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| POST | `/reality/scan` | Sudo | `{"targets": [...]}` (≤20). Per target: TLS 1.3, h2, X25519, certificate validity, latency, problems. Non-public addresses are refused. Runs from the panel; use the node variant below for node-side latency and reachability. |
+| POST | `/reality/scan/node/{node_id}` | Sudo | Same checks run by the node agent, from the node's network → `202 {command_id}` |
+| GET | `/reality/scan/commands/{command_id}` | Sudo | `{status, results, error}`; `pending` until the agent's next command poll |
+
+### 3.28 ASN — `/asn`
+
+Per-ISP clean CDN addresses. An inbound host's `asn_addresses`
+(`{"58224": ["104.16.1.1", ...]}`) replaces its address for subscribers whose
+IP belongs to that ASN. Lookups use the local iptoasn.com dataset; the
+subscription cache is split per mapped ASN only.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/asn/status` | Sudo | Loaded ranges per family |
+| POST | `/asn/refresh` | Sudo | Download the dataset (fixed URLs, ~10 MB) |
+| GET | `/asn/lookup?ip=` | Sudo | ASN for an address |
+
 ## 4. Agent protocol — `/agent`
 
 Node agents authenticate with their per-node **agent token**. Pull-based config + SSE wake.

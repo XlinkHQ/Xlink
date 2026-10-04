@@ -123,7 +123,13 @@ async def test_totp_enroll_confirm_and_login(client: AsyncClient) -> None:
     assert no_code.status_code == 401
     assert no_code.json()["error"]["code"] == "totp_required"
 
-    code2 = totp._hotp(secret, int(time.time() // 30))
+    # The confirm code was consumed: replaying it must fail.
+    replay = await client.post(LOGIN, json={**creds, "totp_code": code})
+    assert replay.status_code == 401
+
+    code2 = totp._hotp(secret, int(time.time() // 30) + 1)
     with_code = await client.post(LOGIN, json={**creds, "totp_code": code2})
     assert with_code.status_code == 200
     assert with_code.json()["tokens"]["access_token"]
+    again = await client.post(LOGIN, json={**creds, "totp_code": code2})
+    assert again.status_code == 401

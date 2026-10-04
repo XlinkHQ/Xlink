@@ -430,3 +430,19 @@ flowchart TB
     a1 ==>|HTTPS, outbound only| p_caddy
     a2 ==>|HTTPS, outbound only| p_caddy
 ```
+
+**Multi-panel (HA).** Several panel replicas share one PostgreSQL and one Redis
+behind a load balancer. Redis is the coordination bus (PasarGuard uses NATS for
+the same job):
+
+| Concern | Mechanism |
+|---|---|
+| Background jobs run once | `LeaderElector`: TTL'd Redis key with a unique id per process, renewed every TTL/3. A leader that cannot confirm its hold within 2/3 TTL stops claiming leadership locally, so a stalled process never overlaps the next leader. |
+| Webhook / notification delivery | Durable queue (Redis Streams consumer group): each job goes to exactly one worker; crashed workers' jobs are reclaimed. |
+| Config push to nodes | `publish_node_event` on Redis pub/sub; whichever replica holds the agent's stream forwards it. |
+| Subscription cache | Redis revision counters plus durable invalidation markers. |
+| Rate limits, refresh-token grace, setup token | Redis keys, so every replica sees the same state. |
+| Auto-failover cooldown | Redis `SET NX` per node, so one outage triggers one failover across the cluster. |
+
+Run any number of `XLINK_INSTANCE_ROLE=api` replicas and one or more `worker`
+(or `all`) replicas; the elector keeps jobs single-instance.

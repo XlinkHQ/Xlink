@@ -38,10 +38,18 @@ def _meminfo() -> dict[str, int]:
 
 
 def _process_count() -> int:
+    """Host-wide task count. Listing /proc inside a container only sees the
+    container's own PID namespace (a handful of gunicorn processes), while
+    RAM, disk and load on the same card are host-wide; /proc/loadavg's
+    "running/total" field is host-wide."""
     try:
-        return sum(1 for name in os.listdir("/proc") if name.isdigit())
-    except OSError:
-        return 0
+        with open("/proc/loadavg") as fh:
+            return int(fh.read().split()[3].split("/")[1])
+    except (OSError, IndexError, ValueError):
+        try:
+            return sum(1 for name in os.listdir("/proc") if name.isdigit())
+        except OSError:
+            return 0
 
 
 def _uptime_seconds() -> int:
@@ -52,7 +60,39 @@ def _uptime_seconds() -> int:
         return 0
 
 
+_cpu_prev: tuple[int, int] | None = None
+
+
+def _cpu_times() -> tuple[int, int] | None:
+    """(busy, total) jiffies from the aggregate line of /proc/stat."""
+    try:
+        with open("/proc/stat") as fh:
+            parts = fh.readline().split()
+    except OSError:
+        return None
+    if not parts or parts[0] != "cpu":
+        return None
+    vals = [int(v) for v in parts[1:9]]
+    idle = vals[3] + vals[4]  # idle + iowait
+    total = sum(vals)
+    return total - idle, total
+
+
+# Prime at import so a worker's first request already has a baseline.
+_cpu_prev = _cpu_times()
+
+
 def _cpu_percent(cores: int) -> float:
+    """Real utilisation since the previous call (the dashboard polls every few
+    seconds). Load average is NOT utilisation: it counts tasks waiting on I/O
+    and lags by a minute, so it misreports both idle-but-blocked and bursty
+    hosts. Load/cores is only the first-call fallback."""
+    global _cpu_prev
+    now = _cpu_times()
+    prev, _cpu_prev = _cpu_prev, now
+    if now is not None and prev is not None and now[1] > prev[1]:
+        busy = now[0] - prev[0]
+        return round(max(0.0, min(100.0, busy * 100.0 / (now[1] - prev[1]))), 1)
     try:
         load1 = os.getloadavg()[0]
     except (OSError, AttributeError):

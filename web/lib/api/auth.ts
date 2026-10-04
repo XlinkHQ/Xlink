@@ -61,3 +61,14 @@ export async function logout(): Promise<void> {
 export function logoutAll() {
   return apiFetch<void>("/auth/logout-all", { method: "POST" });
 }
+
+export function setupStatus() {
+  return apiFetch<{ needs_setup: boolean }>("/setup/status");
+}
+
+export function runSetup(token: string, username: string, password: string) {
+  return apiFetch<{ id: string; username: string }>("/setup", {
+    method: "POST",
+    body: JSON.stringify({ token, username, password }),
+  });
+}

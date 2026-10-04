@@ -68,7 +68,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     curl \
     ca-certificates \
     && groupadd --system --gid 1001 xlink \
-    && useradd --system --uid 1001 --gid xlink --no-create-home xlink
+    && useradd --system --uid 1001 --gid xlink --create-home --home-dir /home/xlink xlink
 
 COPY --from=xray /usr/local/bin/xray /usr/local/bin/xray
 

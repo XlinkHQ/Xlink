@@ -111,6 +111,8 @@ const PAGE_TITLE_KEYS: Record<string, MessageKey> = {
   Admins: "nav.admins",
   Activity: "nav.activity",
   ApiKeys: "nav.apiKeys",
+  Roles: "nav.roles",
+  ClientTemplates: "nav.clientTemplates",
   Settings: "nav.settings",
 };
 

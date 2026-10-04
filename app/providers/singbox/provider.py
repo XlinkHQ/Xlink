@@ -4,6 +4,7 @@ import asyncio
 import secrets
 import uuid
 
+from app.providers.base import ss2022
 from app.providers.base.exceptions import ClientAlreadyExistsError, ClientNotFoundError
 from app.providers.base.models import (
     ClientResult,
@@ -39,20 +40,10 @@ _PASSWORD_PROTOCOLS = frozenset(
     }
 )
 
-_SS2022_KEY_BYTES = {"2022-blake3-aes-128-gcm": 16}
-
-
-def _ss2022_password(method: str) -> str:
-    import base64
-
-    n = _SS2022_KEY_BYTES.get(method, 32)
-    return base64.b64encode(secrets.token_bytes(n)).decode("ascii")
-
-
 def _gen_password(protocol: str, settings: dict | None) -> str:
     method = str((settings or {}).get("method", "")).strip().lower()
-    if protocol == "shadowsocks2022" or method.startswith("2022-"):
-        return _ss2022_password(method or "2022-blake3-aes-256-gcm")
+    if protocol == "shadowsocks2022" or ss2022.is_2022(method):
+        return ss2022.new_key(method or ss2022.DEFAULT_METHOD)
     return secrets.token_urlsafe(24)
 
 

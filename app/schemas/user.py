@@ -78,6 +78,8 @@ class AdminUpdate(InputModel):
     is_sudo: bool | None = Field(default=None)
     all_groups_access: bool | None = Field(default=None)
     modify_users_access: bool | None = Field(default=None)
+    # Assign an RBAC role. Send null to clear it (back to legacy rules).
+    admin_role_id: uuid.UUID | None = Field(default=None)
     subscription_url_prefix: str | None = Field(default=None, max_length=512)
     admin_user_limit: int | None = Field(default=None, ge=0)
     admin_traffic_limit_bytes: int | None = Field(default=None, ge=0)
@@ -112,6 +114,7 @@ class UserRead(APIModel):
     # the console had no value to send back and submitted null every time,
     # silently destroying the hold window on an unrelated field change.
     on_hold_duration_seconds: int | None
+    admin_role_id: uuid.UUID | None = None
     expire_strategy: UserExpireStrategy
     activation_deadline: datetime | None
     device_limit: int | None

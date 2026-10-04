@@ -19,6 +19,7 @@ _REQUIRED_PAYLOAD: dict[CommandKind, frozenset[str]] = {
     CommandKind.RESTART: frozenset(),
     CommandKind.COLLECT_DIAGNOSTICS: frozenset(),
     CommandKind.PROVIDER_HEALTHCHECK: frozenset(),
+    CommandKind.REALITY_SCAN: frozenset({"targets"}),
 }
 
 

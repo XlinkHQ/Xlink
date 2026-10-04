@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         auto_failover = AutoFailoverHandler(
             FailoverService(db, providers, events, cache=cache),
             cooldown_seconds=settings.auto_failover_cooldown_seconds,
+            cache=cache,
         )
         event_registry.subscribe(NodeOffline, auto_failover)
 
@@ -281,6 +282,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception:
             logger.exception("admin_bootstrap_failed", username=settings.admin_username)
 
+    if role.serves_http:
+        await _announce_setup_token(db, cache)
+
     app.state.xlink = AppState(
         settings=settings,
         db=db,
@@ -343,3 +347,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await cache.close()
         await db.dispose()
         logger.info("shutdown_complete")
+
+
+async def _announce_setup_token(db, cache) -> None:  # noqa: ANN001
+    """On a panel with no admin yet, log the one-time token the setup wizard
+    asks for. Without it, whoever reaches a fresh install first owns it."""
+    from app.services import setup_service
+
+    try:
+        async with db.session() as session:
+            if not await setup_service.needs_setup(session):
+                return
+        token = await setup_service.ensure_token(cache)
+    except Exception:
+        logger.exception("setup_token_unavailable")
+        return
+    logger.warning(
+        "setup_required",
+        hint="open the panel and complete setup with this token",
+        setup_token=token,
+    )
