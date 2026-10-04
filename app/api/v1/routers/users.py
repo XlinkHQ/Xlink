@@ -10,9 +10,17 @@ from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.core import rbac
 from app.core.authz import owner_scope
 from app.core.exceptions import PermissionDeniedError, ValidationError
-from app.dependencies.auth import AdminUser, CurrentUser, SudoAdminUser, WriteAdminUser
+from app.db.session import Database
+from app.dependencies.auth import (
+    AdminUser,
+    CurrentUser,
+    SudoAdminUser,
+    WriteAdminUser,
+    role_action,
+)
 from app.dependencies.core import DatabaseDep
 from app.dependencies.pagination import ListPaginationDep
 from app.dependencies.services import (
@@ -83,6 +91,7 @@ async def list_users(
     include_removed: bool = False,
     search: str | None = None,
     sort: str | None = None,
+    _role: User = role_action("users", "read"),
 ) -> CursorPage[UserRead] | Page[UserRead]:
 
     owner_id = _owner_filter(admin)
@@ -117,6 +126,7 @@ async def list_users(
 async def export_users_csv(
     admin: AdminUser,
     database: DatabaseDep,
+    _role: User = role_action("users", "read"),
 ) -> StreamingResponse:
     owner_id = _owner_filter(admin)
 
@@ -174,6 +184,20 @@ async def export_users_csv(
     )
 
 
+async def _owned_user_count(db: Database, admin_id: uuid.UUID) -> int:
+    from sqlalchemy import func, select
+
+    async with db.session() as session:
+        return int(
+            await session.scalar(
+                select(func.count())
+                .select_from(User)
+                .where(User.owner_id == admin_id, User.removed.is_(False))
+            )
+            or 0
+        )
+
+
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def create_user(
     payload: UserCreate,
@@ -182,8 +206,18 @@ async def create_user(
     admins: AdminServiceDep,
     profiles: ProfileServiceDep,
     assignments: AssignmentServiceDep,
+    db: DatabaseDep,
+    _role: User = role_action("users", "create"),
 ) -> UserRead:
     owner_id = None if admin.is_sudo else admin.id
+    if getattr(admin, "rbac_policy", None) is not None:
+        rbac.enforce_limits(
+            admin,
+            data_limit_bytes=payload.data_limit_bytes,
+            expire_at=payload.expire_at,
+            owned_user_count=await _owned_user_count(db, admin.id),
+            creating=True,
+        )
     if payload.profile_ids and not admin.is_sudo and not admin.all_groups_access:
         scoped_profiles = await admins.scoped_profile_ids(admin.id)
         for profile_id in payload.profile_ids:
@@ -236,6 +270,7 @@ async def bulk_user_action(
     payload: BulkUserAction,
     admin: WriteAdminUser,
     users: UserBulkServiceDep,
+    _role: User = role_action("users", "bulk"),
 ) -> dict[str, int]:
     if payload.action not in _BULK_ACTIONS:
         raise ValidationError("Unknown bulk action.", code="unknown_bulk_action")
@@ -259,6 +294,7 @@ async def get_user(
     user_id: uuid.UUID,
     admin: AdminUser,
     users: UserServiceDep,
+    _role: User = role_action("users", "read"),
 ) -> UserRead:
     return UserRead.model_validate(await _scoped_get(users, admin, user_id))
 
@@ -269,6 +305,7 @@ async def list_user_devices(
     admin: AdminUser,
     users: UserServiceDep,
     device_svc: UserDeviceServiceDep,
+    _role: User = role_action("users", "devices"),
 ) -> list[UserDeviceRead]:
     await _scoped_get(users, admin, user_id)
     devices = await device_svc.list_devices(user_id)
@@ -281,6 +318,7 @@ async def reset_user_devices(
     admin: AdminUser,
     users: UserServiceDep,
     device_svc: UserDeviceServiceDep,
+    _role: User = role_action("users", "devices"),
 ) -> None:
     await _scoped_get(users, admin, user_id)
     await device_svc.reset_devices(user_id)
@@ -291,6 +329,7 @@ async def disable_user(
     user_id: uuid.UUID,
     admin: WriteAdminUser,
     users: UserServiceDep,
+    _role: User = role_action("users", "disable"),
 ) -> UserRead:
     _guard_not_self(admin, user_id)
     await _scoped_get(users, admin, user_id)
@@ -303,6 +342,7 @@ async def enable_user(
     user_id: uuid.UUID,
     admin: WriteAdminUser,
     users: UserServiceDep,
+    _role: User = role_action("users", "disable"),
 ) -> UserRead:
     _guard_not_self(admin, user_id)
     await _scoped_get(users, admin, user_id)
@@ -316,6 +356,7 @@ async def delete_user(
     admin: WriteAdminUser,
     users: UserServiceDep,
     purge: bool = False,
+    _role: User = role_action("users", "delete"),
 ) -> None:
     _guard_not_self(admin, user_id)
     await _scoped_get(users, admin, user_id)
@@ -330,6 +371,7 @@ async def restore_user(
     user_id: uuid.UUID,
     admin: WriteAdminUser,
     users: UserServiceDep,
+    _role: User = role_action("users", "delete"),
 ) -> UserRead:
     await _scoped_get(users, admin, user_id)
     return UserRead.model_validate(await users.restore(user_id))
@@ -341,8 +383,18 @@ async def update_user(
     payload: UserUpdate,
     admin: WriteAdminUser,
     users: UserServiceDep,
+    _role: User = role_action("users", "update"),
 ) -> UserRead:
     await _scoped_get(users, admin, user_id)
+    fields = payload.model_fields_set
+    if getattr(admin, "rbac_policy", None) is not None and (
+        "data_limit_bytes" in fields or "expire_at" in fields
+    ):
+        rbac.enforce_limits(
+            admin,
+            data_limit_bytes=payload.data_limit_bytes if "data_limit_bytes" in fields else None,
+            expire_at=payload.expire_at if "expire_at" in fields else None,
+        )
     return UserRead.model_validate(await users.update_quota(user_id, payload))
 
 
@@ -406,6 +458,7 @@ async def revoke_subscription(
     user_id: uuid.UUID,
     admin: WriteAdminUser,
     users: UserServiceDep,
+    _role: User = role_action("users", "revoke_sub"),
 ) -> UserRead:
     await _scoped_get(users, admin, user_id)
     return UserRead.model_validate(await users.revoke_subscription(user_id))

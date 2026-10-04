@@ -4,7 +4,7 @@ import uuid
 
 from sqlalchemy import func, select, update
 
-from app.core.exceptions import ValidationError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.core.security import hash_password_async
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.user import User, UserRole
@@ -52,6 +52,13 @@ class AdminService(UserServiceBase):
             user.all_groups_access = data.all_groups_access
         if data.modify_users_access is not None:
             user.modify_users_access = data.modify_users_access
+        if "admin_role_id" in data.model_fields_set:
+            if data.admin_role_id is not None:
+                from app.domain.admin_role import AdminRole
+
+                if await self._repo.session.get(AdminRole, data.admin_role_id) is None:
+                    raise NotFoundError("Admin role not found.", code="admin_role_not_found")
+            user.admin_role_id = data.admin_role_id
         if data.subscription_url_prefix is not None:
             user.subscription_url_prefix = data.subscription_url_prefix or None
         if data.admin_user_limit is not None:

@@ -7,6 +7,7 @@ from app.agent.domain import (
     NodeProviderHealth,
     ProviderHealthStatus,
 )
+from app.domain.admin_role import AdminRole
 from app.domain.api_key import ApiKey
 from app.domain.app_settings import AppSettings
 from app.domain.audit_log import AuditLog
@@ -23,6 +24,7 @@ from app.domain.user_device import UserDevice
 from app.traffic.models import TrafficRecord
 
 __all__ = [
+    "AdminRole",
     "ApiKey",
     "AppSettings",
     "AssignmentStatus",
