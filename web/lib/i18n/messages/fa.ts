@@ -590,7 +590,7 @@ export const fa = {
   "profiles.fingerprint": "اثر انگشت",
   "profiles.fragmentLabel": "Fragment (len,interval,packets)",
   "profiles.fullSettingsJson": "JSON کامل تنظیمات",
-  "profiles.fullSettingsJsonHint": "ویرایش در اینجا فیلدهای بالا را بازنویسی می‌کند؛ باید JSON معتبر باشد",
+  "profiles.fullSettingsJsonHint": "ویرایش در اینجا فیلدهای بالا را بازنویسی می‌کند؛ باید JSON معتبر باشد. با \"rawInbound\" (ادغام روی inbound سرور) یا \"rawClientOutbound\" (ادغام روی کانفیگ کلاینت) می‌توانید از قابلیت‌هایی از هسته که فرم پوشش نمی‌دهد استفاده کنید",
   "profiles.generalDescription": "خلاصه پروتکل، نود و آدرس ورودی.",
   "profiles.generateKeys": "تولید کلیدها",
   "profiles.generating": "در حال تولید…",

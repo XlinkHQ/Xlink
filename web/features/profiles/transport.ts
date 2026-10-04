@@ -192,6 +192,17 @@ export function transportFields(protocol: string, s: Record<string, string>): TF
     ];
   }
 
+  if (protocol === "anytls") {
+    return [
+      HOST,
+      PORT,
+      { key: "password", label: "Password", type: "password" },
+      { key: "sni", label: "SNI" },
+      { key: "fingerprint", label: "uTLS fingerprint", type: "select", options: ["", "chrome", "firefox", "safari", "ios", "edge", "random"] },
+      { key: "allowInsecure", label: "Allow insecure", type: "select", options: ["false", "true"] },
+    ];
+  }
+
   if (protocol === "wireguard") {
     return [
       HOST,

@@ -592,7 +592,7 @@ export const en = {
   "profiles.fingerprint": "Fingerprint",
   "profiles.fragmentLabel": "Fragment (len,interval,packets)",
   "profiles.fullSettingsJson": "Full settings JSON",
-  "profiles.fullSettingsJsonHint": "edited here overrides the fields above; must be valid JSON",
+  "profiles.fullSettingsJsonHint": "edited here overrides the fields above; must be valid JSON. Add \"rawInbound\" (core JSON merged onto the server inbound) or \"rawClientOutbound\" (merged onto the client config) to use core features the form does not cover",
   "profiles.generalDescription": "Inbound protocol, node and address summary.",
   "profiles.generateKeys": "Generate keys",
   "profiles.generating": "Generating…",

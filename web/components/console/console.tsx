@@ -91,7 +91,8 @@ export function ConsoleV2() {
       active = false;
       setAuthLostHandler(null);
     };
-  }, []);
+    // qc is the React Query client, stable across renders.
+  }, [qc]);
 
   if (authed === null) {
     return (

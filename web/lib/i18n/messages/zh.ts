@@ -590,7 +590,7 @@ export const zh = {
   "profiles.fingerprint": "指纹",
   "profiles.fragmentLabel": "分片 (len,interval,packets)",
   "profiles.fullSettingsJson": "完整设置 JSON",
-  "profiles.fullSettingsJsonHint": "此处编辑将覆盖上方字段；必须是有效的 JSON",
+  "profiles.fullSettingsJsonHint": "此处编辑将覆盖上方字段；必须是有效的 JSON。添加 \"rawInbound\"（合并到服务器入站）或 \"rawClientOutbound\"（合并到客户端配置）即可使用表单未覆盖的内核功能",
   "profiles.generalDescription": "入站协议、节点和地址摘要。",
   "profiles.generateKeys": "生成密钥",
   "profiles.generating": "生成中…",

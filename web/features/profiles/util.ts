@@ -9,6 +9,7 @@ export const PROTOCOLS = [
   "wireguard",
   "hysteria2",
   "tuic",
+  "anytls",
   "naive",
   "socks",
 ];
@@ -24,6 +25,7 @@ const PROVIDER_PROTOCOLS: Record<string, string[]> = {
     "shadowtls",
     "hysteria2",
     "tuic",
+    "anytls",
     "naive",
     "socks",
   ],

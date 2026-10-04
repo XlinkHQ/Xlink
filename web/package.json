@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "lint": "next lint",
+    "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "deadcode": "bash scripts/dead-code.sh",
     "e2e": "playwright test"
@@ -25,6 +25,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@playwright/test": "^1.61.1",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.1",

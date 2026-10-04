@@ -590,7 +590,7 @@ export const ru = {
   "profiles.fingerprint": "Отпечаток",
   "profiles.fragmentLabel": "Fragment (длина,интервал,пакеты)",
   "profiles.fullSettingsJson": "Полный JSON настроек",
-  "profiles.fullSettingsJsonHint": "изменённое здесь переопределяет поля выше; должно быть корректным JSON",
+  "profiles.fullSettingsJsonHint": "изменённое здесь переопределяет поля выше; должно быть корректным JSON. Добавьте \"rawInbound\" (JSON ядра для входящего на сервере) или \"rawClientOutbound\" (для конфигурации клиента), чтобы использовать возможности ядра, которых нет в форме",
   "profiles.generalDescription": "Сводка по протоколу, узлу и адресу входящего подключения.",
   "profiles.generateKeys": "Сгенерировать ключи",
   "profiles.generating": "Генерация…",

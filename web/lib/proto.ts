@@ -15,6 +15,8 @@ export function protoBadge(p: string): string {
       return "is-teal";
     case "tuic":
       return "is-cyan";
+    case "anytls":
+      return "is-indigo";
     default:
       return "is-slate";
   }

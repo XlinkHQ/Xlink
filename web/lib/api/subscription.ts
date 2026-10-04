@@ -1,5 +1,4 @@
 import { apiFetch } from "./core";
-import { query } from "./internal";
 
 export type SubscriptionRuleResult =
   | "links"
@@ -41,16 +40,6 @@ export function updateSubscriptionSettings(body: Partial<SubscriptionSettings>) 
     method: "PATCH",
     body: JSON.stringify(body),
   });
-}
-
-export function subscriptionFeed(
-  scope: "assignments" | "profiles" | "users",
-  id: string,
-  format = "text",
-) {
-  return apiFetch<{ content: string; etag: string; content_hash: string }>(
-    `/subscriptions/${scope}/${id}/feed${query({ format })}`,
-  );
 }
 
 export function userSubscriptionUrl(userId: string) {
