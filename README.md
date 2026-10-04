@@ -233,6 +233,8 @@ cd web && ./node_modules/.bin/tsc --noEmit     # web type checking
 | -------- | ----------- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and data model, with diagrams |
 | [docs/API.md](docs/API.md) | Complete HTTP API reference |
+| [docs/AUDIT.md](docs/AUDIT.md) | Codebase audit: health, known gaps, cleanup record |
+| [docs/BACKEND_REFACTOR_PLAN.md](docs/BACKEND_REFACTOR_PLAN.md) | Proposed backend restructure (plan only, not executed) |
 | [sdk/python/](sdk/python/) | Official Python SDK and usage examples |
 | [DEPLOY.md](DEPLOY.md) | Panel and node deployment, step by step |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Local setup and contribution workflow |

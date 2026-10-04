@@ -114,7 +114,8 @@ Legend for **Auth** column: `Public` · `User` (CurrentUser) · `Admin` · `Writ
 | PATCH | `/users/me` | User | Update own profile |
 | GET | `/users` | Admin | List users (cursor or offset page) |
 | GET | `/users/export.csv` | Admin | Export users as CSV |
-| POST | `/users` | Write | Create user → `201` |
+| POST | `/users` | Write | Create user → `201` (`profile_ids` max 100) |
+| POST | `/users/bulk` | Write | Bulk action over up to **1000** users (`enable`, `disable`, `delete`, `reset_usage`, `set_data_limit`, `set_expiry`, `extend_expiry`, `set_reset_strategy`) → `{ok, failed}` |
 | GET | `/users/{user_id}` | Admin | Get a user |
 | GET | `/users/{user_id}/devices` | Admin | List user devices |
 | DELETE | `/users/{user_id}/devices` | Write | Clear user devices → `204` |
@@ -128,6 +129,7 @@ Legend for **Auth** column: `Public` · `User` (CurrentUser) · `Admin` · `Writ
 | POST | `/users/{user_id}/demote` | Sudo | Demote admin to user |
 | POST | `/users/admins` | Sudo | Create an admin → `201` |
 | PATCH | `/users/admins/{user_id}` | Sudo | Update an admin |
+| GET | `/users/admins/{user_id}/usage` | Sudo | Usage totals for an admin's users |
 | POST | `/users/admins/{user_id}/enable-users` | Sudo | Bulk-enable an admin's users |
 | POST | `/users/admins/{user_id}/disable-users` | Sudo | Bulk-disable an admin's users |
 
@@ -136,26 +138,29 @@ Legend for **Auth** column: `Public` · `User` (CurrentUser) · `Admin` · `Writ
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/nodes/xray-versions` | Admin | List installable **stable** Xray-core releases (prereleases/drafts filtered, cached 1h) |
-| POST | `/nodes` | Write | Create node → `201` |
+| POST | `/nodes` | Sudo | Create node → `201` |
 | GET | `/nodes` | Admin | List nodes (cursor page) |
 | GET | `/nodes/{node_id}` | Admin | Get node + metadata (incl. `xray_version`, health) |
-| PATCH | `/nodes/{node_id}` | Write | Update node |
-| POST | `/nodes/{node_id}/status` | Write | Set node status |
-| POST | `/nodes/{node_id}/disable` | Write | Disable node |
-| POST | `/nodes/{node_id}/restart-core` | Write | Queue a core restart on the node |
-| POST | `/nodes/{node_id}/heartbeat` | Agent/Write | Node heartbeat |
-| POST | `/nodes/{node_id}/agent-token` | Write | Issue/rotate the node's agent token |
+| PATCH | `/nodes/{node_id}` | Sudo | Update node |
+| POST | `/nodes/{node_id}/status` | Sudo | Set node status |
+| POST | `/nodes/{node_id}/disable` | Sudo | Disable node |
+| POST | `/nodes/{node_id}/restart-core` | Sudo | Queue a core restart on the node |
+| POST | `/nodes/{node_id}/heartbeat` | Sudo | Node heartbeat |
+| POST | `/nodes/{node_id}/agent-token` | Sudo | Issue/rotate the node's agent token |
+| GET | `/nodes/{node_id}/cores` | Admin | Per-core health/status on the node |
+| DELETE | `/nodes/{node_id}` | Sudo | Delete node → `204` |
 
 ### 3.5 Profiles — `/profiles`
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | POST | `/profiles/keys` | Write | Generate provider keys for a profile |
-| POST | `/profiles` | Write | Create profile → `201` |
+| POST | `/profiles` | Sudo | Create profile → `201` |
 | GET | `/profiles` | Admin | List profiles (cursor page) |
 | GET | `/profiles/{profile_id}` | Admin | Get profile |
-| PATCH | `/profiles/{profile_id}` | Write | Update profile |
-| POST | `/profiles/{profile_id}/disable` | Write | Disable profile |
+| PATCH | `/profiles/{profile_id}` | Sudo | Update profile |
+| POST | `/profiles/{profile_id}/disable` | Sudo | Disable profile |
+| DELETE | `/profiles/{profile_id}` | Sudo | Delete profile → `204` |
 
 ### 3.6 Groups — `/groups`
 
@@ -218,21 +223,22 @@ Generates client configs. Public feed authenticates by **signed token in the URL
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| GET | `/traffic/summary` | Admin | Global totals (up/down bytes) — feeds dashboard chart |
-| GET | `/traffic/online` | Admin | Currently online users |
+| GET | `/traffic/summary` | Sudo | Global totals (up/down bytes) — feeds dashboard chart |
+| GET | `/traffic/throughput` | Sudo | Up/down throughput over a trailing window (`window_seconds`, 1–3600) |
+| GET | `/traffic/online` | Sudo | Currently online users |
 | GET | `/traffic/assignments/{assignment_id}` | Admin | Usage for one assignment |
-| GET | `/traffic/nodes` | Admin | Per-node usage |
-| GET | `/traffic/nodes/{node_id}/users` | Admin | Per-user usage on a node |
+| GET | `/traffic/nodes` | Sudo | Per-node usage |
+| GET | `/traffic/nodes/{node_id}/users` | Sudo | Per-user usage on a node |
 | GET | `/traffic/users/{user_id}/nodes` | Admin | Per-node usage for a user |
-| GET | `/traffic/nodes/{node_id}/usage-series` | Admin | Time series for a node |
-| GET | `/traffic/profiles/{profile_id}/usage-series` | Admin | Time series for a profile |
-| GET | `/traffic/profiles/{profile_id}/usage` | Admin | Profile usage total |
+| GET | `/traffic/nodes/{node_id}/usage-series` | Sudo | Time series for a node |
+| GET | `/traffic/profiles/{profile_id}/usage-series` | Sudo | Time series for a profile |
+| GET | `/traffic/profiles/{profile_id}/usage` | Sudo | Profile usage total |
 | GET | `/traffic/users/{user_id}/usage-series` | Admin | Time series for a user |
 | POST | `/traffic/users/usage` | Admin | Batch usage for a set of users |
 | POST | `/traffic/users/last-seen` | Admin | Batch last-seen for a set of users |
 | POST | `/traffic/users/{user_id}/reset` | Write | Reset a user's usage counter |
-| GET | `/traffic/retention` | Admin | Retention policy |
-| POST | `/traffic/cleanup` | Write | Purge old traffic rows |
+| GET | `/traffic/retention` | Sudo | Retention policy |
+| POST | `/traffic/cleanup` | Sudo | Purge old traffic rows |
 
 ### 3.12 Monitoring — `/monitoring`
 
@@ -271,23 +277,30 @@ Generates client configs. Public feed authenticates by **signed token in the URL
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| POST | `/gitops/commit` | Write | Commit current config state to git |
+| POST | `/gitops/commit` | Sudo | Commit current config state to git |
 | POST | `/gitops/diff` | Admin | Diff current state vs git |
+| GET | `/gitops/records` | Admin | List past GitOps commit records |
 
 ### 3.17 Settings — `/settings`
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | GET | `/settings/subscription` | Admin | Subscription page/template settings |
-| PATCH | `/settings/subscription` | Write | Update subscription settings |
+| PATCH | `/settings/subscription` | Sudo | Update subscription settings |
+| GET | `/settings/notifications` | Sudo | Webhook / Discord / Telegram notification settings |
+| PATCH | `/settings/notifications` | Sudo | Update notification settings |
+| POST | `/settings/notifications/test` | Sudo | Send a test notification to the configured channels |
+| GET | `/settings/warp` | Sudo | WARP integration settings |
+| PATCH | `/settings/warp` | Sudo | Update WARP settings |
 | GET | `/settings/core` | Admin | Core config templates (xray/sing-box/…) |
-| PUT | `/settings/core` | Write | Replace core templates |
+| PUT | `/settings/core` | Sudo | Replace core templates |
 
 ### 3.18 Audit — `/audit`
 
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
-| GET | `/audit` | Admin | Audit log entries |
+| GET | `/audit` | Sudo | Audit log entries |
+| GET | `/audit/export.csv` | Sudo | Export the audit log as CSV |
 
 ### 3.19 API Keys — `/api-keys`
 
@@ -304,6 +317,63 @@ Generates client configs. Public feed authenticates by **signed token in the URL
 | Method | Path | Auth | Description |
 | --- | --- | --- | --- |
 | POST | `/cli` | Admin | Execute a CLI-style command, returns structured result |
+
+### 3.21 Certificates — `/certificates`
+
+TLS certificates used by nodes and the subscription host. ACME issuance is
+HTTP-01, served from `/.well-known/acme-challenge/{token}` on the panel itself.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/certificates` | Sudo | List managed certificates (domain, source, validity window) |
+| POST | `/certificates` | Sudo | Import a certificate + private key manually → `201` |
+| POST | `/certificates/acme` | Sudo | Request/renew a certificate over ACME → `201` |
+| DELETE | `/certificates/{cert_id}` | Sudo | Delete a certificate → `204` |
+
+Renewal runs on a scheduled job inside a configurable window; ACME issuance for
+due domains is performed concurrently (bounded), while the resulting DB writes
+stay sequential.
+
+### 3.22 User Templates — `/user-templates`
+
+Reusable defaults (data limit, expiry, reset strategy, profiles) applied when
+creating users.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/user-templates` | Admin | List templates |
+| POST | `/user-templates` | Write | Create template → `201` |
+| PATCH | `/user-templates/{template_id}` | Write | Update template |
+| DELETE | `/user-templates/{template_id}` | Write | Delete template → `204` |
+
+### 3.23 Routing — `/routing`
+
+Routing rules and outbounds for the node cores. Rules are evaluated in priority
+order; outbounds are the targets a rule can send matched traffic to.
+
+**Rules**
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/routing/rules` | Admin | List routing rules (priority order) |
+| POST | `/routing/rules` | Sudo | Create rule → `201` |
+| PATCH | `/routing/rules/{rule_id}` | Sudo | Update rule |
+| DELETE | `/routing/rules/{rule_id}` | Sudo | Delete rule → `204` |
+
+**Outbounds**
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/routing/outbounds` | Sudo | List outbounds |
+| POST | `/routing/outbounds` | Sudo | Create outbound → `201` |
+| PATCH | `/routing/outbounds/{outbound_id}` | Sudo | Update outbound |
+| DELETE | `/routing/outbounds/{outbound_id}` | Sudo | Delete outbound → `204` |
+| POST | `/routing/outbounds/import` | Sudo | Import an outbound from a share link / JSON blob |
+| POST | `/routing/outbounds/ping` | Sudo | Latency-test an arbitrary outbound payload before saving |
+| POST | `/routing/outbounds/{outbound_id}/ping` | Sudo | Latency-test a saved outbound |
+
+Ping spins up a throwaway local core instance against the outbound and reports
+`{ok, latency_ms, detail}` — it never mutates stored state.
 
 ---
 
