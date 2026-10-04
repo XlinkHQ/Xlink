@@ -425,8 +425,12 @@ def _grpc_call(path: str, body: dict | None, known_version: str | None = None):
             batch = pb.LogBatch(
                 node_id=NODE_ID,
                 lines=[
-                    pb.LogLine(level=l["level"], message=l["message"], observed_at_unix_ms=_grpc_ms(l["observed_at"]))
-                    for l in body.get("lines", [])
+                    pb.LogLine(
+                        level=line["level"],
+                        message=line["message"],
+                        observed_at_unix_ms=_grpc_ms(line["observed_at"]),
+                    )
+                    for line in body.get("lines", [])
                 ],
             )
             list(stub.StreamLogs(iter([batch]), metadata=md, timeout=15))
@@ -551,6 +555,53 @@ def _stream_settings(s: dict) -> dict:
     return stream
 
 
+def _default_ss_method(protocol: str) -> str:
+    """Default cipher per shadowsocks family.
+
+    A 2022 inbound given a pre-2022 cipher (or vice versa) is rejected by xray,
+    which fails validation and freezes the node on its previous config.
+    """
+    if protocol == "shadowsocks2022":
+        return "2022-blake3-aes-256-gcm"
+    return "aes-256-gcm"
+
+
+# Keys a raw override may never replace: identity, the listen socket, and the
+# user list the panel manages. Everything else is passed through verbatim.
+_RAW_PROTECTED = frozenset(
+    {"tag", "listen", "port", "listen_port", "users", "clients", "type", "protocol"}
+)
+
+
+def _deep_merge(base: dict, extra: dict) -> dict:
+    for k, v in extra.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v
+    return base
+
+
+def _apply_raw_inbound(ib: dict, s: dict) -> dict:
+    """Deep-merge an operator-supplied `rawInbound` onto a generated inbound.
+
+    This is the escape hatch for core features the panel does not model yet:
+    a new transport option, a sniffing tweak, a fallback, a mux setting. The
+    operator writes the core's own JSON and it lands on the inbound unchanged,
+    so a core upgrade no longer needs a panel release. Protected keys are
+    stripped at every level of `users`/`clients` so the managed user list and
+    the socket identity cannot be clobbered.
+    """
+    raw = s.get("rawInbound")
+    if not isinstance(raw, dict) or not raw:
+        return ib
+    safe = {k: v for k, v in raw.items() if k not in _RAW_PROTECTED}
+    dropped = sorted(set(raw) - set(safe))
+    if dropped:
+        _log(f"rawInbound: ignored protected keys {dropped} on {ib.get('tag')}")
+    return _deep_merge(ib, safe)
+
+
 def _client_entry(protocol: str, cid: str, email: str, s: dict) -> dict:
     if protocol in ("vless",):
         c = {"id": cid, "email": email}
@@ -561,8 +612,14 @@ def _client_entry(protocol: str, cid: str, email: str, s: dict) -> dict:
         return {"id": cid, "email": email, "alterId": int(s.get("alterId", 0) or 0)}
     if protocol in ("trojan",):
         return {"password": cid, "email": email}
-    if protocol in ("shadowsocks",):
-        return {"password": cid, "email": email, "method": s.get("method", "aes-256-gcm")}
+    if protocol in ("shadowsocks", "shadowsocks2022"):
+        # xray has no "shadowsocks2022" protocol — 2022 is just a cipher family
+        # on the shadowsocks inbound, selected via `method`.
+        return {
+            "password": cid,
+            "email": email,
+            "method": s.get("method", _default_ss_method(protocol)),
+        }
     return {"id": cid, "email": email}
 
 
@@ -601,8 +658,8 @@ def build_xray_config(clients: list[dict]) -> dict:
                 settings = {"clients": []}
                 if protocol == "vless":
                     settings["decryption"] = "none"
-                if protocol == "shadowsocks":
-                    settings["method"] = s.get("method", "aes-256-gcm")
+                if protocol in ("shadowsocks", "shadowsocks2022"):
+                    settings["method"] = s.get("method", _default_ss_method(protocol))
                 if isinstance(s.get("fallbacks"), list) and protocol in ("vless", "trojan"):
                     settings["fallbacks"] = s["fallbacks"]
             network = (s.get("network") or "tcp").lower()
@@ -611,15 +668,21 @@ def build_xray_config(clients: list[dict]) -> dict:
                 if protocol == "socks"
                 else _stream_settings(s)
             )
+            # xray implements ss2022 as a cipher family on the shadowsocks
+            # inbound; emitting "shadowsocks2022" as the protocol makes
+            # `xray run -test` reject the file, and a rejected candidate leaves
+            # the node pinned to its previous config for EVERY user on it.
+            xray_protocol = "shadowsocks" if protocol == "shadowsocks2022" else protocol
             inbounds[key] = {
                 "tag": f"in-{port}-{protocol}-{network}-{len(inbounds)}",
                 "listen": "0.0.0.0",
                 "port": port,
-                "protocol": protocol,
+                "protocol": xray_protocol,
                 "settings": settings,
                 "streamSettings": stream,
                 "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
             }
+            _apply_raw_inbound(inbounds[key], s)
         if protocol == "socks":
             merged = {**s, **(cl.get("credentials") or {})}
             user = str(merged.get("username") or email or cid)
@@ -724,17 +787,35 @@ def _singbox_tls(s: dict) -> dict:
 
 
 def _singbox_transport(s: dict) -> dict | None:
+    """Client-visible transport settings for a sing-box inbound.
+
+    These keys must agree byte-for-byte with what the subscription renderers
+    hand the client, so the field names here mirror the panel's (`serviceName`,
+    `host`) rather than guessing from `path`.
+    """
     network = (s.get("network") or "tcp").lower()
+    host = str(s.get("host") or "").strip()
     if network in ("ws", "httpupgrade"):
-        return {"type": network, "path": s.get("path") or "/"}
+        t: dict = {"type": network, "path": s.get("path") or "/"}
+        if host:
+            # The client sends Host; a CDN-fronted inbound that ignores it
+            # cannot match the request.
+            if network == "ws":
+                t["headers"] = {"Host": host}
+            else:
+                # sing-box httpupgrade takes host as a top-level field.
+                t["host"] = host
+        return t
     if network == "grpc":
-        return {"type": "grpc", "service_name": s.get("path") or ""}
+        # `serviceName` is what the panel writes and every client renderer
+        # emits; reading `path` here silently broke every gRPC profile.
+        return {"type": "grpc", "service_name": s.get("serviceName") or s.get("path") or ""}
     return None
 
 
 _SB_TRANSPORT_OK = {"vless", "vmess", "trojan"}
-_SB_TLS_OK = {"vless", "vmess", "trojan", "hysteria2", "tuic"}
-_SB_TLS_MANDATORY = {"hysteria2", "tuic"}
+_SB_TLS_OK = {"vless", "vmess", "trojan", "hysteria2", "tuic", "anytls"}
+_SB_TLS_MANDATORY = {"hysteria2", "tuic", "anytls"}
 
 
 def build_singbox_config(clients: list[dict]) -> dict:
@@ -792,7 +873,7 @@ def build_singbox_config(clients: list[dict]) -> dict:
                 transport = _singbox_transport(s)
                 if transport and protocol in _SB_TRANSPORT_OK:
                     ib["transport"] = transport
-            inbounds[key] = ib
+            inbounds[key] = _apply_raw_inbound(ib, s)
         email = cl.get("assignment_id")
         user_view = {**s, **(cl.get("credentials") or {})}
         inbounds[key]["users"].append(_singbox_user(protocol, cid, email, user_view))
@@ -932,8 +1013,11 @@ def build_wireguard_config(clients: list[dict]) -> str:
         mtu_val = int(mtu) if mtu not in (None, "") else 0
     except (TypeError, ValueError):
         mtu_val = 0
-    if 1280 <= mtu_val <= 1500:
-        lines.append(f"MTU = {mtu_val}")
+    # Clamp rather than omit: silently dropping the line left the server on the
+    # 1420 kernel default while the client config carried the operator's value.
+    # Unset pins the same 1420 default the client renderer emits.
+    mtu_val = max(1280, min(1500, mtu_val)) if mtu_val else 1420
+    lines.append(f"MTU = {mtu_val}")
     lines += [
         f"PostUp = {post_up}",
         f"PostDown = {post_down}",
@@ -1070,6 +1154,7 @@ CORE_PROTOCOLS: dict[str, frozenset[str]] = {
             "shadowtls",
             "hysteria2",
             "tuic",
+            "anytls",
             "naive",
             "socks",
         }
@@ -1857,24 +1942,40 @@ def cycle() -> None:
         _call("POST", "/logs", {"lines": out_lines[:1000]})
 
 
+# A healthy event stream stays open for minutes; one that ends faster than this
+# is treated as a failure for backoff purposes, however cleanly it closed.
+_SSE_HEALTHY_SECONDS = 30.0
+_SSE_BACKOFF_MAX = 60.0
+
+
 def sse_listener() -> None:
     url = f"{BASE}/events"
     _sse_fail = 0
     while True:
+        started = time.monotonic()
         try:
             req = urllib.request.Request(
                 url, headers={"X-Agent-Token": TOKEN, "Accept": "text/event-stream"}
             )
             with _OPENER.open(req, timeout=90) as resp:
-                _sse_fail = 0
                 for raw in resp:
                     if raw.decode("utf-8", "ignore").startswith("data:"):
                         _wake.set()
+            reason = "stream closed"
         except Exception as exc:  # noqa: BLE001
-            _sse_fail += 1
-            if _sse_fail == 1 or _sse_fail % 12 == 0:
-                _log(f"event stream reconnecting: {exc}")
-            time.sleep(5)
+            reason = str(exc)
+        # Back off on EVERY disconnect, not only on exceptions. A server or proxy
+        # that ends the stream cleanly (panel restart, idle timeout, an endpoint
+        # answering with an empty body) used to drop straight back into the loop
+        # with no sleep at all: ~2,900 reconnects per second per node, which
+        # with a fleet of nodes is a self-inflicted DoS on the panel.
+        if time.monotonic() - started >= _SSE_HEALTHY_SECONDS:
+            _sse_fail = 0
+        _sse_fail += 1
+        if _sse_fail == 1 or _sse_fail % 12 == 0:
+            _log(f"event stream reconnecting ({reason})")
+        delay = min(_SSE_BACKOFF_MAX, 2.0 * (2 ** min(_sse_fail - 1, 5)))
+        time.sleep(delay * (0.5 + random.random() / 2))  # jitter: no fleet-wide thundering herd
 
 
 def fast_enforce_loop() -> None:

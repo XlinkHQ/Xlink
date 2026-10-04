@@ -1,7 +1,9 @@
 import importlib.util
 import json
+import os
 
-spec = importlib.util.spec_from_file_location("a", "xlink-agent.py")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+spec = importlib.util.spec_from_file_location("a", os.path.join(_HERE, "xlink-agent.py"))
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
