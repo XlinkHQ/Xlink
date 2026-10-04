@@ -7,6 +7,7 @@ from app.api.v1.routers import (
     client_templates,
     setup,
     reality,
+    asn,
     agent,
     api_keys,
     assignments,
@@ -41,6 +42,7 @@ api_router.include_router(admin_roles.router)
 api_router.include_router(client_templates.router)
 api_router.include_router(setup.router)
 api_router.include_router(reality.router)
+api_router.include_router(asn.router)
 api_router.include_router(nodes.router)
 api_router.include_router(profiles.router)
 api_router.include_router(groups.router)

@@ -62,6 +62,7 @@ export type InboundHostRead = {
   mux: boolean;
   allow_insecure: boolean;
   weight: number;
+  asn_addresses: Record<string, string[]> | null;
   is_universal: boolean;
   is_disabled: boolean;
   chain_target_id: string | null;
@@ -143,4 +144,10 @@ export async function scanRealityOnNode(
     }
   }
   throw new Error("timeout");
+}
+
+export function refreshAsnDataset() {
+  return apiFetch<Record<string, { ranges: number; updated_at: number | null }>>("/asn/refresh", {
+    method: "POST",
+  });
 }

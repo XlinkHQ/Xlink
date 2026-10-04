@@ -39,6 +39,20 @@ from app.subscription.tokens import create_subscription_token, verify_subscripti
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 
+async def _client_asn(request: Request, settings, subscriptions) -> int | None:  # noqa: ANN001
+    """The subscriber's ASN, but only if some host maps it; otherwise None so
+    every unmapped ISP shares one cache entry."""
+    mapped = await subscriptions.mapped_asns()
+    if not mapped:
+        return None
+    from app.middleware.rate_limit import parse_proxy_networks, resolve_client_ip
+    from app.services.asn_lookup import get_db
+
+    ip = resolve_client_ip(request.scope, parse_proxy_networks(settings.trusted_proxy_ips or []))
+    asn = await get_db(settings.asn_data_dir).lookup(ip)
+    return asn if asn in mapped else None
+
+
 def _request(
     scope: FeedScope,
     subject_id: uuid.UUID,
@@ -437,6 +451,7 @@ async def public_subscription(
                 use_cache=not cfg.shuffle_configs,
                 shuffle=cfg.shuffle_configs,
                 activate_first_use=True,
+                client_asn=await _client_asn(request, settings, subscriptions),
             )
         )
 

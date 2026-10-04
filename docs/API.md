@@ -426,6 +426,19 @@ login.
 | POST | `/reality/scan/node/{node_id}` | Sudo | Same checks run by the node agent, from the node's network → `202 {command_id}` |
 | GET | `/reality/scan/commands/{command_id}` | Sudo | `{status, results, error}`; `pending` until the agent's next command poll |
 
+### 3.28 ASN — `/asn`
+
+Per-ISP clean CDN addresses. An inbound host's `asn_addresses`
+(`{"58224": ["104.16.1.1", ...]}`) replaces its address for subscribers whose
+IP belongs to that ASN. Lookups use the local iptoasn.com dataset; the
+subscription cache is split per mapped ASN only.
+
+| Method | Path | Auth | Description |
+| --- | --- | --- | --- |
+| GET | `/asn/status` | Sudo | Loaded ranges per family |
+| POST | `/asn/refresh` | Sudo | Download the dataset (fixed URLs, ~10 MB) |
+| GET | `/asn/lookup?ip=` | Sudo | ASN for an address |
+
 ## 4. Agent protocol — `/agent`
 
 Node agents authenticate with their per-node **agent token**. Pull-based config + SSE wake.

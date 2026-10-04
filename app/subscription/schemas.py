@@ -47,6 +47,9 @@ class FeedRequest(BaseModel):
 
     shuffle: bool = False
     activate_first_use: bool = False
+    # Subscriber's ISP, set only when some host maps this ASN to clean
+    # addresses (so unrelated ASNs share one cache entry).
+    client_asn: int | None = None
 
 
 class ConfigRead(BaseModel):
