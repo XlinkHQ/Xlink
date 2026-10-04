@@ -1213,6 +1213,9 @@ def _mtproto_traffic() -> list[dict]:
         if m:
             slot = cur.setdefault(m.group(2), [0, 0])
             slot[0 if m.group(1) == "from" else 1] = int(m.group(3))
+    # Forget users the proxy no longer reports, so churn cannot grow this map.
+    for gone in set(_mtproto_last) - set(cur):
+        del _mtproto_last[gone]
     ts = _now()
     out = []
     for user, (up, down) in cur.items():
