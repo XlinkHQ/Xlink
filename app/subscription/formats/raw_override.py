@@ -28,7 +28,11 @@ _DEEP_PROTECTED = frozenset(
 
 def _strip(value: Any) -> Any:
     if isinstance(value, dict):
-        return {k: _strip(v) for k, v in value.items() if k not in _DEEP_PROTECTED}
+        # casefold: the clients that consume this JSON are Go, whose
+        # encoding/json matches field names case-insensitively.
+        return {
+            k: _strip(v) for k, v in value.items() if str(k).casefold() not in _DEEP_PROTECTED
+        }
     if isinstance(value, list):
         return [_strip(v) for v in value]
     return value
@@ -47,5 +51,5 @@ def apply(outbound: dict[str, Any], config: ProviderConfig) -> dict[str, Any]:
     raw = config.settings.get("rawClientOutbound")
     if not isinstance(raw, dict) or not raw:
         return outbound
-    top = {k: v for k, v in raw.items() if k not in _PROTECTED}
+    top = {k: v for k, v in raw.items() if str(k).casefold() not in _PROTECTED}
     return _deep_merge(outbound, _strip(top))

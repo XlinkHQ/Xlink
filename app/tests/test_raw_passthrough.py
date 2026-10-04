@@ -166,3 +166,39 @@ def test_nested_transport_type_is_still_allowed() -> None:
     validate_profile_settings(
         ProviderKind.SING_BOX, "vless", {"rawInbound": {"transport": {"type": "ws"}}}
     )
+
+
+# ---------------------------------------------------------------- case bypass (regression)
+# The cores are Go: encoding/json matches field names case-insensitively, and
+# with duplicate keys the last one wins. A case-sensitive denylist let
+# "Clients" replace the managed "clients" list.
+
+
+@pytest.mark.parametrize("key", ["Clients", "CLIENTS", "cLiEnTs"])
+def test_mixed_case_clients_cannot_inject(key) -> None:
+    cfg = agent.build_xray_config(
+        [_client("vless", rawInbound={"settings": {key: [{"id": "ATTACKER"}]}})]
+    )
+    ib = next(i for i in cfg["inbounds"] if i.get("tag") != "api")
+    assert key not in ib["settings"]
+
+
+def test_mixed_case_top_level_identity_is_stripped() -> None:
+    cfg = agent.build_xray_config([_client("vless", rawInbound={"Port": 1, "Tag": "x"})])
+    ib = next(i for i in cfg["inbounds"] if i.get("tag") != "api")
+    assert "Port" not in ib and "Tag" not in ib
+
+
+def test_mixed_case_rejected_at_save() -> None:
+    with pytest.raises(ValidationError, match="Clients"):
+        validate_profile_settings(
+            ProviderKind.XRAY, "vless", {"rawInbound": {"settings": {"Clients": []}}}
+        )
+
+
+def test_mixed_case_client_destination_stripped() -> None:
+    c = _cfg(rawClientOutbound={"settings": {"VNext": [{"Address": "evil.example"}]}})
+    doc = json.loads(xray_json.render((c,)))
+    docs = doc if isinstance(doc, list) else [doc]
+    proxy = next(o for d in docs for o in d["outbounds"] if o.get("protocol") == "vless")
+    assert "VNext" not in proxy["settings"]

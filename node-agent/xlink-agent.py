@@ -583,7 +583,10 @@ def _strip_credentials(value, path=""):
         out = {}
         for k, v in value.items():
             here = f"{path}.{k}" if path else k
-            if k in _RAW_CREDENTIAL_KEYS:
+            # casefold: the cores are Go, and encoding/json matches field names
+            # case-insensitively — "Clients" lands on the same field as
+            # "clients", and with duplicate keys the LAST one wins.
+            if str(k).casefold() in _RAW_CREDENTIAL_KEYS:
                 dropped.append(here)
                 continue
             out[k], sub_dropped = _strip_credentials(v, here)
@@ -622,7 +625,7 @@ def _apply_raw_inbound(ib: dict, s: dict) -> dict:
     raw = s.get("rawInbound")
     if not isinstance(raw, dict) or not raw:
         return ib
-    top = {k: v for k, v in raw.items() if k not in _RAW_PROTECTED}
+    top = {k: v for k, v in raw.items() if str(k).casefold() not in _RAW_PROTECTED}
     safe, cred_dropped = _strip_credentials(top)
     dropped = sorted(set(raw) - set(top)) + cred_dropped
     if dropped:

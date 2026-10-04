@@ -179,8 +179,9 @@ def _validate_raw_overrides(settings: dict[str, Any]) -> None:
                 f"{field} is too large ({size} bytes, max {_RAW_MAX_BYTES}).",
                 code="profile_settings_invalid",
             )
-        clash = sorted(set(raw) & protected)
-        clash += sorted(p for k, p in _deep_keys(raw) if k in deep_protected)
+        # casefold: the consumers are Go (encoding/json matches case-insensitively).
+        clash = sorted(k for k in raw if str(k).casefold() in protected)
+        clash += sorted(p for k, p in _deep_keys(raw) if str(k).casefold() in deep_protected)
         if clash:
             raise ValidationError(
                 f"{field} may not set {', '.join(clash)} — the panel manages those.",
