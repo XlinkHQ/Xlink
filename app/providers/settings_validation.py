@@ -189,10 +189,86 @@ def _validate_raw_overrides(settings: dict[str, Any]) -> None:
             )
 
 
+_ALPN_VALUES = frozenset({"h3", "h2", "http/1.1"})
+_TUIC_CONGESTION = frozenset({"bbr", "cubic", "new_reno"})
+
+
+def _bad(msg: str) -> ValidationError:
+    return ValidationError(msg, code="profile_settings_invalid")
+
+
+def _validate_common(protocol: str, settings: dict[str, Any]) -> None:
+    """Checks that hold whatever core serves the profile. Each of these used
+    to be accepted here and then rejected by the core on the node (freezing
+    the node on its previous config) or by the client at connect time."""
+    from app.providers.base import ss2022
+
+    if protocol in ("shadowsocks", "shadowsocks2022"):
+        method = ss2022.method_for(protocol, settings)
+        if ss2022.is_2022(method):
+            n = ss2022.key_bytes(method)
+            server = settings.get("serverPassword")
+            if not server:
+                raise _bad(
+                    f"{method} needs a serverPassword (base64 of {n} random bytes). "
+                    "Use Generate keys."
+                )
+            if not ss2022.key_ok(server, method):
+                raise _bad(f"serverPassword must be base64 of exactly {n} bytes for {method}.")
+            pw = settings.get("password")
+            if pw and not ss2022.key_ok(pw, method):
+                raise _bad(f"password must be base64 of exactly {n} bytes for {method}.")
+
+    if str(settings.get("security", "")).strip().lower() == "reality":
+        short = str(settings.get("shortId") or "").strip()
+        if short and (
+            len(short) > 16
+            or len(short) % 2
+            or any(c not in "0123456789abcdefABCDEF" for c in short)
+        ):
+            raise _bad("REALITY shortId must be hex, an even length, at most 16 characters.")
+        priv = str(settings.get("privateKey") or "").strip()
+        pub = str(settings.get("publicKey") or settings.get("pbk") or "").strip()
+        if priv and pub:
+            try:
+                raw = base64.urlsafe_b64decode(priv + "=" * (-len(priv) % 4))
+                derived = (
+                    base64.urlsafe_b64encode(
+                        x25519.X25519PrivateKey.from_private_bytes(raw)
+                        .public_key()
+                        .public_bytes(
+                            serialization.Encoding.Raw, serialization.PublicFormat.Raw
+                        )
+                    )
+                    .rstrip(b"=")
+                    .decode()
+                )
+            except (binascii.Error, ValueError):
+                raise _bad("REALITY privateKey is not a valid X25519 key.") from None
+            if derived != pub.rstrip("="):
+                raise _bad(
+                    "REALITY publicKey does not match privateKey — every client would "
+                    "fail the handshake. Regenerate the pair."
+                )
+
+    alpn = settings.get("alpn")
+    if alpn:
+        items = alpn if isinstance(alpn, list) else str(alpn).split(",")
+        unknown = [a for a in (str(x).strip() for x in items) if a and a not in _ALPN_VALUES]
+        if unknown:
+            raise _bad(f"Unknown ALPN value(s): {', '.join(unknown)} (use h3, h2, http/1.1).")
+
+    if protocol == "tuic":
+        cc = str(settings.get("congestionControl") or "bbr").strip().lower()
+        if cc not in _TUIC_CONGESTION:
+            raise _bad("TUIC congestionControl must be bbr, cubic or new_reno.")
+
+
 def validate_profile_settings(
     kind: ProviderKind, protocol: str, settings: dict[str, Any] | None
 ) -> None:
     _validate_raw_overrides(settings or {})
+    _validate_common(str(protocol or "").strip().lower(), settings or {})
     validator = _VALIDATORS.get(kind)
     if validator is None:
         return

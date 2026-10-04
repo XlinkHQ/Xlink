@@ -147,7 +147,8 @@ export function transportFields(protocol: string, s: Record<string, string>): TF
           "2022-blake3-chacha20-poly1305",
         ],
       },
-      { key: "password", label: "Password (base64 PSK)", type: "password" },
+      // Server PSK. Each user gets their own key; clients send "server:user".
+      { key: "serverPassword", label: "Server key (base64 PSK)", type: "password" },
     ];
   }
 

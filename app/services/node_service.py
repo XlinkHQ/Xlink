@@ -11,12 +11,18 @@ from app.domain.node import Node, NodeStatus
 from app.repositories.node import NodeRepository
 from app.schemas.node import NodeCreate, NodeUpdate
 from app.schemas.pagination import CursorParams
-from app.services._shared import save_or_conflict
+from app.services._shared import invalidate_subscription_cache, save_or_conflict
 
 
 class NodeService:
-    def __init__(self, repo: NodeRepository) -> None:
+    def __init__(self, repo: NodeRepository, subscription_service=None) -> None:  # noqa: ANN001
         self._repo = repo
+        # Host, port and status all change what feeds contain; without this a
+        # disabled or moved node stayed in cached subscriptions until expiry.
+        self._subscription_service = subscription_service
+
+    async def _changed(self, node_id: uuid.UUID) -> None:
+        await invalidate_subscription_cache(self._subscription_service, node_id)
 
     async def create(self, data: NodeCreate) -> Node:
         node = Node(
@@ -63,12 +69,18 @@ class NodeService:
         if data.socks_password is not None:
             node.socks_password = data.socks_password or None
 
-        return await self._flush(node)
+        flushed = await self._flush(node)
+        await self._changed(node_id)
+        return flushed
 
     async def set_status(self, node_id: uuid.UUID, status: NodeStatus) -> Node:
         node = await self.get(node_id)
+        previous = node.status
         node.status = status
-        return await self._flush(node)
+        flushed = await self._flush(node)
+        if previous != status:
+            await self._changed(node_id)
+        return flushed
 
     async def disable(self, node_id: uuid.UUID) -> Node:
         return await self.set_status(node_id, NodeStatus.DISABLED)
@@ -105,6 +117,8 @@ class NodeService:
                 .execution_options(synchronize_session=False)
             )
             await session.flush()
+        if self._subscription_service is not None:
+            await self._subscription_service.invalidate_cache()
 
     async def heartbeat(
         self,

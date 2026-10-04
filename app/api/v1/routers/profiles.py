@@ -54,6 +54,10 @@ async def generate_profile_keys(payload: KeyGenRequest, _admin: AdminUser) -> di
     if payload.security == "reality":
         priv, pub = _x25519(urlsafe=True)
         return {"privateKey": priv, "publicKey": pub, "shortId": secrets.token_hex(8)}
+    if payload.protocol == "shadowsocks2022":
+        from app.providers.base import ss2022
+
+        return {"serverPassword": ss2022.new_key(), "method": ss2022.DEFAULT_METHOD}
     if payload.protocol == "wireguard":
         priv, pub = _x25519(urlsafe=False)
         return {

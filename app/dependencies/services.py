@@ -168,8 +168,10 @@ def get_token_service(
     return TokenService(repo, settings, cache=cache)
 
 
-def get_node_service(repo: NodeRepoDep) -> NodeService:
-    return NodeService(repo)
+def get_node_service(
+    repo: NodeRepoDep, subscription_service: SubscriptionServiceDep
+) -> NodeService:
+    return NodeService(repo, subscription_service)
 
 
 def get_profile_service(

@@ -502,6 +502,19 @@ def _write_cert(sni: str, cert_pem: str, key_pem: str) -> tuple[str, str]:
     return cert_path, key_path
 
 
+def _alpn_list(s: dict, default: list | None = None) -> list:
+    """ALPN the server offers. Must match what the subscription hands the
+    client; an inbound with none negotiates whatever, which breaks h2-only
+    and ALPN-routed setups."""
+    raw = s.get("alpn")
+    if isinstance(raw, list):
+        items = [str(a).strip() for a in raw]
+    else:
+        items = [a.strip() for a in str(raw or "").split(",")]
+    items = [a for a in items if a in ("h3", "h2", "http/1.1")]
+    return items or list(default or [])
+
+
 def _stream_settings(s: dict) -> dict:
     network = (s.get("network") or "tcp").lower()
     security = (s.get("security") or "none").lower()
@@ -532,6 +545,8 @@ def _stream_settings(s: dict) -> dict:
             tls["serverName"] = s["sni"]
         if str(s.get("allowInsecure", "")).lower() in ("1", "true"):
             tls["allowInsecure"] = True
+        if _alpn_list(s):
+            tls["alpn"] = _alpn_list(s)
         cert_pem = s.get("cert_pem")
         key_pem = s.get("key_pem")
         if cert_pem and key_pem:
@@ -691,6 +706,13 @@ def build_xray_config(clients: list[dict]) -> dict:
                     settings["decryption"] = "none"
                 if protocol in ("shadowsocks", "shadowsocks2022"):
                     settings["method"] = s.get("method", _default_ss_method(protocol))
+                    if str(settings["method"]).startswith("2022-"):
+                        # Multi-user 2022 needs the server PSK at inbound level;
+                        # without it xray rejects the file.
+                        if s.get("serverPassword"):
+                            settings["password"] = s["serverPassword"]
+                        else:
+                            _log(f"ss2022_missing_server_password port={port}")
                 if isinstance(s.get("fallbacks"), list) and protocol in ("vless", "trojan"):
                     settings["fallbacks"] = s["fallbacks"]
             network = (s.get("network") or "tcp").lower()
@@ -805,6 +827,9 @@ def _singbox_tls(s: dict) -> dict:
     tls: dict = {"enabled": True}
     if s.get("sni"):
         tls["server_name"] = s["sni"]
+    alpn = _alpn_list(s, default=["h3"] if s.get("_quic") else None)
+    if alpn:
+        tls["alpn"] = alpn
     cert_pem, key_pem = s.get("cert_pem"), s.get("key_pem")
     if cert_pem and key_pem:
         try:
@@ -879,10 +904,21 @@ def build_singbox_config(clients: list[dict]) -> dict:
                     "2022-blake3-aes-256-gcm" if protocol == "shadowsocks2022" else "aes-256-gcm"
                 )
                 ib["method"] = s.get("method", default_method)
+                if str(ib["method"]).startswith("2022-"):
+                    if s.get("serverPassword"):
+                        ib["password"] = s["serverPassword"]
+                    else:
+                        _log(f"ss2022_missing_server_password port={port}")
             elif protocol == "shadowtls":
                 sni = s.get("sni") or s.get("handshake") or "www.microsoft.com"
                 ss_tag = f"sstls-ss-{port}-{len(inbounds)}"
-                detour_port = 40000 + len(detours)
+                # Derived from the public port, not from position: a positional
+                # port moved every time a profile was added or reordered,
+                # restarting unrelated inbounds.
+                used = {d["listen_port"] for d in detours.values()}
+                detour_port = 40000 + port % 20000
+                while detour_port in used or detour_port == port:
+                    detour_port = 40000 + (detour_port - 40000 + 1) % 20000
                 ib["version"] = 3
                 ib["handshake"] = {"server": sni, "server_port": 443}
                 ib["detour"] = ss_tag
@@ -900,7 +936,13 @@ def build_singbox_config(clients: list[dict]) -> dict:
             else:
                 tls_required = protocol in _SB_TLS_MANDATORY
                 if (secure or tls_required) and protocol in _SB_TLS_OK:
-                    ib["tls"] = _singbox_tls(s)
+                    quic = protocol in ("hysteria2", "tuic")
+                    ib["tls"] = _singbox_tls({**s, "_quic": quic} if quic else s)
+                if protocol == "tuic":
+                    # Server default is cubic; the client is told bbr unless set.
+                    ib["congestion_control"] = str(
+                        s.get("congestionControl") or "bbr"
+                    ).lower()
                 transport = _singbox_transport(s)
                 if transport and protocol in _SB_TRANSPORT_OK:
                     ib["transport"] = transport
@@ -1124,12 +1166,17 @@ def build_hysteria_config(clients: list[dict]) -> dict:
         "auth": {"type": "userpass", "userpass": userpass},
         "trafficStats": {"listen": HYSTERIA_API_ADDR, "secret": HYSTERIA_API_SECRET},
     }
+    obfs_seen: set = set()
     for c in clients:
         cs = {**(c.get("settings") or {}), **(c.get("credentials") or {})}
         obfs_pw = cs.get("obfsPassword") or cs.get("obfs_password")
-        if cs.get("obfs") and obfs_pw:
+        obfs_seen.add(str(obfs_pw) if cs.get("obfs") and obfs_pw else "")
+        if cs.get("obfs") and obfs_pw and "obfs" not in config:
             config["obfs"] = {"type": "salamander", "salamander": {"password": str(obfs_pw)}}
-            break
+    if len(obfs_seen) > 1:
+        # One daemon, one obfs password: profiles that disagree cannot all
+        # work. The panel refuses this at save time; log it if it slips in.
+        _log(f"hysteria2_obfs_conflict profiles={len(obfs_seen)} using=first")
     for key_name in ("acl", "outbounds", "bandwidth", "masquerade", "log", "resolver", "sniff"):
         if core.get(key_name):
             config[key_name] = core[key_name]

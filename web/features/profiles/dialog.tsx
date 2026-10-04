@@ -37,6 +37,7 @@ const SECURITY_KEYS = new Set([
   "flow",
   "obfs",
   "obfsPassword",
+  "serverPassword",
   "shadowtls_version",
   "shadowtls_password",
 ]);
@@ -250,7 +251,8 @@ export function ProfileDialog({
     ...mux.map((f) => f.key),
   ]);
   const network = fields.filter((f) => !used.has(f.key));
-  const showGenerate = cfg.security === "reality" || protocol === "wireguard";
+  const showGenerate =
+    cfg.security === "reality" || protocol === "wireguard" || protocol === "shadowsocks2022";
 
   const Shell = variant === "inline" ? InlineEditPanel : Modal;
   return (
