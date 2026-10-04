@@ -12,6 +12,7 @@ import {
   createProfile,
   generateProfileKeys,
   listProviders,
+  scanRealityTargets,
   type NodeRead,
   type ProfileRead,
   updateProfile,
@@ -111,6 +112,28 @@ export function ProfileDialog({
       toast("error", e instanceof ApiError ? e.message : t("profiles.keysGenerateFailed"));
     } finally {
       setGenBusy(false);
+    }
+  };
+
+  const [scanBusy, setScanBusy] = useState(false);
+  const scanTarget = async () => {
+    const target = (cfg.dest || cfg.sni || "").split(",")[0].trim();
+    if (!target) {
+      toast("error", t("profiles.realityScanEmpty"));
+      return;
+    }
+    setScanBusy(true);
+    try {
+      const [r] = await scanRealityTargets([target]);
+      if (r?.ok) {
+        toast("success", t("profiles.realityScanOk", { ms: Math.round(r.latency_ms ?? 0) }));
+      } else {
+        toast("error", t("profiles.realityScanBad", { problems: r?.problems.join(", ") ?? "" }));
+      }
+    } catch (e) {
+      toast("error", e instanceof ApiError ? e.message : t("profiles.realityScanBad", { problems: "" }));
+    } finally {
+      setScanBusy(false);
     }
   };
 
@@ -348,16 +371,28 @@ export function ProfileDialog({
           <div className="warp-dlg-divider" />
           <div className="flex items-center justify-between gap-3">
             <p className="warp-dlg-section-title">{t("profiles.securitySettings")}</p>
-            {showGenerate ? (
-              <button
-                type="button"
-                onClick={generate}
-                disabled={genBusy}
-                className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
-              >
-                {genBusy ? t("profiles.generating") : t("profiles.generateKeys")}
-              </button>
-            ) : null}
+            <div className="flex items-center gap-3">
+              {cfg.security === "reality" ? (
+                <button
+                  type="button"
+                  onClick={scanTarget}
+                  disabled={scanBusy}
+                  className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  {scanBusy ? t("profiles.realityScanning") : t("profiles.realityScan")}
+                </button>
+              ) : null}
+              {showGenerate ? (
+                <button
+                  type="button"
+                  onClick={generate}
+                  disabled={genBusy}
+                  className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  {genBusy ? t("profiles.generating") : t("profiles.generateKeys")}
+                </button>
+              ) : null}
+            </div>
           </div>
           <Grid fields={security} cfg={cfg} setField={setField} />
         </>
