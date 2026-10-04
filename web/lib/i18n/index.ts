@@ -39,5 +39,5 @@ export function useT(): TranslateFn {
   return (key, vars) => translate(locale, key, vars);
 }
 
-export { useLocale, setLocale, getLocale, LOCALES, LOCALE_LABELS } from "./locale";
+export { useLocale, setLocale, getLocale, isRtl, LOCALES, LOCALE_LABELS } from "./locale";
 export type { Locale } from "./locale";

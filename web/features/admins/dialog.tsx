@@ -4,12 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Eye, EyeOff, RefreshCw } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import {
+  type AdminRole,
   adminUsage,
   ApiError,
+  listAdminRoles,
   createAdmin,
   type GroupRead,
   listGroups,
@@ -71,6 +73,9 @@ export function AdminDialog({
   const editing = !!admin;
   const groupsQ = useQuery({ queryKey: ["groups"], queryFn: () => listGroups() });
   const groups = (groupsQ.data ?? []) as GroupRead[];
+  const rolesQ = useQuery({ queryKey: ["admin-roles"], queryFn: () => listAdminRoles() });
+  const roles = (rolesQ.data ?? []) as AdminRole[];
+  const [roleId, setRoleId] = useState(admin?.admin_role_id ?? "");
   const usageQ = useQuery({
     queryKey: ["admin-usage", admin?.id],
     queryFn: () => adminUsage(admin!.id),
@@ -109,11 +114,18 @@ export function AdminDialog({
             ? null
             : fromGiB(Number(trafficLimitGib)),
       };
+      const admin_role_id = sudo || !roleId ? null : roleId;
       if (editing && admin) {
-        await updateAdmin(admin.id, { ...(password ? { password } : {}), ...shared });
+        await updateAdmin(admin.id, {
+          ...(password ? { password } : {}),
+          ...shared,
+          admin_role_id,
+        });
         toast("success", t("admins.updatedToast", { username: admin.username }));
       } else {
-        await createAdmin({ username: username.trim(), password, ...shared });
+        const created = await createAdmin({ username: username.trim(), password, ...shared });
+        // The role is assigned on update only (sudo-gated on the API side).
+        if (admin_role_id) await updateAdmin(created.id, { admin_role_id });
         toast("success", t("admins.createdToast", { username: username.trim() }));
       }
       onSaved();
@@ -262,6 +274,18 @@ export function AdminDialog({
       />
       {!sudo ? (
         <SwitchRow label={t("admins.modifyUsersAccess")} checked={canModify} onChange={setCanModify} />
+      ) : null}
+      {!sudo ? (
+        <Field label={t("roles.role")} hint={t("roles.roleHint")}>
+          <Select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
+            <option value="">{t("roles.none")}</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
       ) : null}
       <SwitchRow label={t("admins.allServicesAccess")} checked={allServices} onChange={setAllServices} />
 

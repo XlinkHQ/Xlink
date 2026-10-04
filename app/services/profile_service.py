@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -43,6 +44,7 @@ class ProfileService:
         self._validate_protocol(data.provider_kind, data.protocol)
         validate_profile_settings(data.provider_kind, data.protocol, data.settings)
         await self._validate_node(data.node_id)
+        await self._check_hysteria_obfs(data.provider_kind, data.node_id, data.settings, None)
 
         if data.provider_kind == ProviderKind.WIREGUARD:
             from sqlalchemy import func, select
@@ -75,11 +77,53 @@ class ProfileService:
         await self._invalidate_subscription_cache(created.node_id)
         return created
 
+    async def _check_hysteria_obfs(
+        self,
+        kind: ProviderKind,
+        node_id: uuid.UUID | None,
+        settings: dict | None,
+        exclude: uuid.UUID | None,
+    ) -> None:
+        """A node runs one Hysteria daemon with one obfs password. Profiles that
+        disagree would leave every user of all but one of them unable to
+        connect, with nothing but packet loss to show for it."""
+        if kind != ProviderKind.HYSTERIA or node_id is None:
+            return
+        from sqlalchemy import select
+
+        def obfs_of(s: dict | None) -> str:
+            s = s or {}
+            return str(s.get("obfsPassword") or "") if s.get("obfs") else ""
+
+        mine = obfs_of(settings)
+        stmt = select(Profile.name, Profile.settings).where(
+            Profile.node_id == node_id, Profile.provider_kind == ProviderKind.HYSTERIA
+        )
+        if exclude is not None:
+            stmt = stmt.where(Profile.id != exclude)
+        for name, other in (await self._repo.session.execute(stmt)).all():
+            if obfs_of(other) != mine:
+                raise ValidationError(
+                    f"Hysteria obfs must match profile '{name}' on this node: one "
+                    "daemon serves them all with a single obfs password.",
+                    code="hysteria_obfs_conflict",
+                )
+
     async def get(self, profile_id: uuid.UUID) -> Profile:
         profile = await self._repo.get(profile_id)
         if profile is None:
             raise NotFoundError("Profile not found.", code="profile_not_found")
         return profile
+
+    async def list_by_ids(self, profile_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, Profile]:
+        """Resolve many profile ids in one query, keyed by id. Raises the same
+        NotFoundError as get() if any requested id is missing, so callers keep
+        identical behaviour to calling get() per id."""
+        found = {p.id: p for p in await self._repo.list_by_ids(profile_ids)}
+        for pid in profile_ids:
+            if pid not in found:
+                raise NotFoundError("Profile not found.", code="profile_not_found")
+        return found
 
     async def update(self, profile_id: uuid.UUID, data: ProfileUpdate) -> Profile:
         profile = await self.get(profile_id)
@@ -96,6 +140,9 @@ class ProfileService:
 
             validate_profile_settings(
                 profile.provider_kind, data.protocol or profile.protocol, data.settings
+            )
+            await self._check_hysteria_obfs(
+                profile.provider_kind, profile.node_id, data.settings, profile.id
             )
             profile.settings = data.settings
         reenabled = False

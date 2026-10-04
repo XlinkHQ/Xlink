@@ -13,6 +13,7 @@ export type UserRead = {
   expire_at: string | null;
   data_reset_strategy: string;
   on_hold: boolean;
+  on_hold_duration_seconds: number | null;
   expire_strategy: string;
   activation_deadline: string | null;
   device_limit: number | null;
@@ -27,6 +28,7 @@ export type UserRead = {
   subscription_url_prefix: string | null;
   admin_user_limit?: number | null;
   admin_traffic_limit_bytes?: number | null;
+  admin_role_id?: string | null;
   sub_updated_at: string | null;
   sub_last_user_agent: string | null;
   created_at: string;
@@ -78,13 +80,6 @@ export function listUserTemplates() {
 export function createUserTemplate(body: Partial<UserTemplateRead>) {
   return apiFetch<UserTemplateRead>("/user-templates", {
     method: "POST",
-    body: JSON.stringify(body),
-  });
-}
-
-export function updateUserTemplate(id: string, body: Partial<UserTemplateRead>) {
-  return apiFetch<UserTemplateRead>(`/user-templates/${id}`, {
-    method: "PATCH",
     body: JSON.stringify(body),
   });
 }
@@ -173,6 +168,7 @@ export function updateAdmin(
     subscription_url_prefix?: string | null;
     admin_user_limit?: number | null;
     admin_traffic_limit_bytes?: number | null;
+    admin_role_id?: string | null;
   },
 ) {
   return apiFetch<UserRead>(`/users/admins/${id}`, {
@@ -231,10 +227,6 @@ export function listUserDevices(userId: string) {
 
 export function resetUserDevices(userId: string) {
   return apiFetch<void>(`/users/${userId}/devices`, { method: "DELETE" });
-}
-
-export function promoteUser(id: string) {
-  return apiFetch<UserRead>(`/users/${id}/promote`, { method: "POST" });
 }
 
 export function demoteUser(id: string) {

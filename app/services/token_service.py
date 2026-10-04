@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hmac
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -57,7 +58,7 @@ class TokenService:
         payload = decode_token(refresh_token, self._settings, TokenType.REFRESH)
         jti = payload.get("jti", "")
         if self._cache is not None and jti:
-            with __import__("contextlib").suppress(Exception):
+            with contextlib.suppress(Exception):
                 cached = await self._cache.get_json(self._grace_key(jti))
                 if cached:
                     return TokenPair(**cached)
@@ -67,7 +68,7 @@ class TokenService:
             raise AuthenticationError("Token does not belong to user.", code="token_invalid")
         pair = await self.issue_pair(user)
         if self._cache is not None and jti:
-            with __import__("contextlib").suppress(Exception):
+            with contextlib.suppress(Exception):
                 await self._cache.set_json(
                     self._grace_key(jti),
                     {
@@ -84,10 +85,24 @@ class TokenService:
             payload = decode_token(refresh_token, self._settings, TokenType.REFRESH)
         except AuthenticationError:
             return
-        await self._repo.revoke_by_jti(payload["jti"])
+        jti = payload["jti"]
+        await self._repo.revoke_by_jti(jti)
+        # rotate() answers from the grace cache BEFORE it reads the database, so
+        # the revoked flags above are invisible while the cached successor
+        # survives. Drop it or logout does not actually log the session out.
+        await self._drop_grace(jti)
 
     async def revoke_all(self, user_id: uuid.UUID) -> None:
+        jtis = await self._repo.recent_jtis_for_user(user_id)
         await self._repo.revoke_all_for_user(user_id)
+        for jti in jtis:
+            await self._drop_grace(jti)
+
+    async def _drop_grace(self, jti: str) -> None:
+        if self._cache is None or not jti:
+            return
+        with contextlib.suppress(Exception):
+            await self._cache.delete(self._grace_key(jti))
 
     def subject_id(self, refresh_token: str) -> uuid.UUID:
         payload = decode_token(refresh_token, self._settings, TokenType.REFRESH)

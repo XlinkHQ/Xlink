@@ -50,6 +50,38 @@ services:
       retries: 5
       start_period: 20s
 
+  # Background jobs only: no port is bound, so this scales independently of the
+  # API. The leader lock still guards against two workers doing the same work.
+  # Omit this service entirely to keep the historical single-process deployment
+  # (the api container defaults to XLINK_INSTANCE_ROLE=all).
+  worker:
+    image: ghcr.io/${XLINK_IMAGE_OWNER:-xlinkhq}/xlink-api:${XLINK_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      XLINK_INSTANCE_ROLE: worker
+      XLINK_POSTGRES_HOST: postgres
+      XLINK_POSTGRES_PORT: 5432
+      XLINK_POSTGRES_USER: ${XLINK_POSTGRES_USER:-xlink}
+      XLINK_POSTGRES_PASSWORD: ${XLINK_POSTGRES_PASSWORD:?set XLINK_POSTGRES_PASSWORD in .env (run xlink install)}
+      XLINK_POSTGRES_DB: ${XLINK_POSTGRES_DB:-xlink}
+      XLINK_REDIS_HOST: redis
+      XLINK_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   web:
     image: ghcr.io/${XLINK_IMAGE_OWNER:-xlinkhq}/xlink-web:${XLINK_IMAGE_TAG:-latest}
     build:

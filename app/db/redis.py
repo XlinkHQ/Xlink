@@ -70,6 +70,22 @@ class RedisCache:
     async def incr(self, key: str) -> int:
         return int(await self._client.incr(key))
 
+    _INVALIDATED_SET = "subscription:invalidated"
+
+    async def mark_invalidated(self, subject_id: object) -> None:
+        """Durably record that this subject has been invalidated at least once.
+
+        Revision counters are INCR'd with no TTL, but Redis runs `allkeys-lru`,
+        so an evicted counter reads back as absent — indistinguishable from
+        "never invalidated", which silently resurrects the pre-revocation cache
+        generation. This set is the durable witness that lets the read path
+        tell the two apart.
+        """
+        await self._client.sadd(self._INVALIDATED_SET, str(subject_id))
+
+    async def invalidation_seen(self, subject_id: object) -> bool:
+        return bool(await self._client.sismember(self._INVALIDATED_SET, str(subject_id)))
+
     async def mget_int(self, keys: list[str]) -> list[int | None]:
         if not keys:
             return []

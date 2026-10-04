@@ -141,7 +141,7 @@ function ResourceCard({
 export function DashboardScreen() {
   const t = useT();
   const dark = useTheme() === "dark";
-  const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 1000, refetchIntervalInBackground: false });
+  const q = useQuery({ queryKey: ["system"], queryFn: () => systemStats(), refetchInterval: 3000, refetchIntervalInBackground: false });
   const nodesQ = useQuery({ queryKey: ["nodes"], queryFn: () => listNodes(), refetchInterval: 10000, refetchIntervalInBackground: false });
   const trafficQ = useQuery({ queryKey: ["traffic"], queryFn: () => trafficSummary(), refetchInterval: 10000, refetchIntervalInBackground: false });
 

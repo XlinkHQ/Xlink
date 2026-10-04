@@ -21,15 +21,36 @@ class AutoFailoverHandler:
         *,
         cooldown_seconds: float,
         clock: Clock = monotonic,
+        cache=None,  # noqa: ANN001
     ) -> None:
         self._service = service
         self._cooldown = cooldown_seconds
         self._clock = clock
         self._recent: dict[uuid.UUID, float] = {}
+        # With several replicas (or after a leader handover) a process-local
+        # cooldown lets the same outage trigger failover more than once. A
+        # Redis SET NX makes the cooldown cluster-wide.
+        self._cache = cache
 
     async def __call__(self, event: DomainEvent) -> None:
         if not isinstance(event, NodeOffline):
             return
+        if self._cache is not None:
+            try:
+                # redis-py returns None (not False) when NX loses.
+                claimed = bool(
+                    await self._cache.client.set(
+                        f"failover:cooldown:{event.node_id}",
+                        "1",
+                        nx=True,
+                        ex=max(1, int(self._cooldown)),
+                    )
+                )
+            except Exception:
+                claimed = True  # Redis down: fall back to the local cooldown
+            if not claimed:
+                logger.info("auto_failover_skipped_cooldown", node_id=str(event.node_id))
+                return
         now = self._clock()
         expired = [nid for nid, t in self._recent.items() if now - t >= self._cooldown]
         for nid in expired:

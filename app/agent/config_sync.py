@@ -205,13 +205,72 @@ def _build_outbound(tag: str, type_: str, settings: dict[str, Any]) -> dict[str,
             "peers": [peer],
         }
         if str(settings.get("mtu", "")).strip().isdigit():
-            wg["mtu"] = int(settings["mtu"])
+            # Clamp to the same window the agent and the client renderer use,
+            # so an out-of-range value cannot reach a node that would silently
+            # drop it while the client was told to use it.
+            wg["mtu"] = max(1280, min(1500, int(settings["mtu"])))
         if settings.get("reserved"):
             wg["reserved"] = [
                 int(x) for x in str(settings["reserved"]).split(",") if x.strip().isdigit()
             ]
         return {"tag": tag, "protocol": "wireguard", "settings": wg}
     return None
+
+
+_SB_RULESET_URLS = {
+    "geosite": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-{name}.srs",
+    "geoip": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-{name}.srs",
+}
+
+
+def _singbox_geo_rule(
+    values: list[str], outbound: str
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[str]]:
+    """Translate xray ``geosite:X`` / ``geoip:X`` selectors to sing-box remote
+    rule-sets (SagerNet's compiled .srs). sing-box 1.12 removed the legacy
+    geosite/geoip database, so rule-sets are the only equivalent.
+
+    Returns (rule, rule_set definitions, untranslatable selectors).
+    """
+    tags: list[str] = []
+    defs: list[dict[str, Any]] = []
+    private = False
+    dropped: list[str] = []
+    for v in values:
+        kind, _, name = v.partition(":")
+        name = name.strip().lower()
+        if kind == "geoip" and name == "private":
+            private = True  # sing-geoip has no "private"; sing-box has a field
+            continue
+        if kind not in _SB_RULESET_URLS or not name or not all(
+            c.isalnum() or c in "-_" for c in name
+        ):
+            # ext:file.dat, negations and attribute filters have no rule-set form
+            dropped.append(v)
+            continue
+        tag = f"{kind}-{name}"
+        tags.append(tag)
+        defs.append(
+            {
+                "tag": tag,
+                "type": "remote",
+                "format": "binary",
+                "url": _SB_RULESET_URLS[kind].format(name=name),
+                "download_detour": "direct",
+            }
+        )
+    rule: dict[str, Any] | None = None
+    if tags or private:
+        rule = {"outbound": outbound}
+        if tags:
+            rule["rule_set"] = tags
+        if private and not tags:
+            rule["ip_is_private"] = True
+        elif private:
+            # rule_set and ip_is_private would AND; keep private as its own rule
+            # by letting the caller add a second rule.
+            rule["_also_private"] = True
+    return rule, defs, dropped
 
 
 def _singbox_route_rule(
@@ -783,10 +842,27 @@ class ConfigSyncService:
         }
         db_built: list[dict[str, Any]] = []
         dropped_selectors: dict[str, list[str]] = {}
+        rule_sets: dict[str, dict[str, Any]] = {
+            rs["tag"]: rs for rs in route.get("rule_set") or [] if isinstance(rs, dict)
+        }
         for rr in db_rules:
             values = [v.strip() for v in rr.match_values.split(",") if v.strip()]
             if not values:
                 continue
+            geo = [v for v in values if v.startswith(("geosite:", "geoip:"))]
+            if geo:
+                values = [v for v in values if v not in geo]
+                geo_rule, defs, geo_dropped = _singbox_geo_rule(geo, rr.outbound)
+                if geo_dropped:
+                    dropped_selectors.setdefault(rr.match_type, []).extend(geo_dropped)
+                for d in defs:
+                    rule_sets.setdefault(d["tag"], d)
+                if geo_rule is not None:
+                    if geo_rule.pop("_also_private", False):
+                        db_built.append({"outbound": rr.outbound, "ip_is_private": True})
+                    db_built.append(geo_rule)
+                if not values:
+                    continue
             rule, dropped = _singbox_route_rule(rr.match_type, values, rr.outbound)
             if dropped:
                 dropped_selectors.setdefault(rr.match_type, []).extend(dropped)
@@ -854,6 +930,15 @@ class ConfigSyncService:
                 present.add("socks-out")
                 route["final"] = "socks-out"
                 changed = True
+
+        if rule_sets:
+            route["rule_set"] = list(rule_sets.values())
+            changed = True
+            if "direct" not in present:  # download_detour target
+                direct = _build_singbox_outbound("direct", "direct", {})
+                if direct is not None:
+                    outbounds.insert(0, direct)
+                    present.add("direct")
 
         if changed:
             route["rules"] = rules

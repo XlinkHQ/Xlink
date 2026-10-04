@@ -10,6 +10,7 @@ import {
   ApiError,
   createInboundHost,
   type InboundHostRead,
+  refreshAsnDataset,
   updateInboundHost,
 } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -67,6 +68,12 @@ export function HostDialog({
   const [alpn, setAlpn] = useState(host?.alpn ?? "");
   const [fingerprint, setFingerprint] = useState(host?.fingerprint ?? "");
   const [allowInsecure, setAllowInsecure] = useState(host?.allow_insecure ?? false);
+  const [asnText, setAsnText] = useState(() =>
+    Object.entries(host?.asn_addresses ?? {})
+      .map(([asn, ips]) => `${asn}: ${ips.join(", ")}`)
+      .join("\n"),
+  );
+  const [asnBusy, setAsnBusy] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const extraSecurity = ["tls", "reality", "inbound_default"].includes(security);
@@ -90,6 +97,7 @@ export function HostDialog({
         allow_insecure: extraSecurity ? allowInsecure : false,
         fragment: fragment.trim() || null,
         noise: noise.trim() || null,
+        asn_addresses: parseAsnMap(asnText),
         mux,
         is_universal: isUniversal,
         is_disabled: !enabled,
@@ -188,6 +196,35 @@ export function HostDialog({
               <Input value={noise} onChange={(e) => setNoise(e.target.value)} placeholder="rand:10-20,10-20" />
             </Field>
           </div>
+        </Section>
+
+        <Section title={t("profiles.asnTitle")}>
+          <Field label={t("profiles.asnLabel")} hint={t("profiles.asnHint")}>
+            <textarea
+              value={asnText}
+              onChange={(e) => setAsnText(e.target.value)}
+              placeholder={"58224: 104.16.10.1, 104.17.20.2\n197207: 172.67.1.1"}
+              className="h-24 w-full resize-y rounded border border-hairline bg-transparent p-2.5 font-mono text-[11px] text-fg outline-none focus:border-primary"
+            />
+          </Field>
+          <button
+            type="button"
+            className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+            disabled={asnBusy}
+            onClick={async () => {
+              setAsnBusy(true);
+              try {
+                const s = await refreshAsnDataset();
+                toast("success", t("profiles.asnRefreshed", { n: s.v4?.ranges ?? 0 }));
+              } catch (e) {
+                toast("error", e instanceof ApiError ? e.message : t("common.saveFailed"));
+              } finally {
+                setAsnBusy(false);
+              }
+            }}
+          >
+            {asnBusy ? t("common.loading") : t("profiles.asnRefresh")}
+          </button>
         </Section>
 
         <Section title={t("profiles.muxSettings")}>
@@ -300,4 +337,17 @@ function Toggle({
       {label}
     </label>
   );
+}
+
+/** "58224: 1.1.1.1, 2.2.2.2" per line → {"58224": ["1.1.1.1", "2.2.2.2"]}.
+ * The panel validates and normalises; this only splits. */
+function parseAsnMap(text: string): Record<string, string[]> | null {
+  const out: Record<string, string[]> = {};
+  for (const line of text.split("\n")) {
+    const [asn, rest] = line.split(":", 2);
+    if (!asn?.trim() || rest === undefined) continue;
+    const ips = rest.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
+    if (ips.length) out[asn.trim()] = ips;
+  }
+  return Object.keys(out).length ? out : null;
 }

@@ -168,8 +168,10 @@ def get_token_service(
     return TokenService(repo, settings, cache=cache)
 
 
-def get_node_service(repo: NodeRepoDep) -> NodeService:
-    return NodeService(repo)
+def get_node_service(
+    repo: NodeRepoDep, subscription_service: SubscriptionServiceDep
+) -> NodeService:
+    return NodeService(repo, subscription_service)
 
 
 def get_profile_service(
@@ -277,8 +279,10 @@ def get_inbound_host_repo(session: SessionDep) -> InboundHostRepository:
 InboundHostRepoDep = Annotated[InboundHostRepository, Depends(get_inbound_host_repo)]
 
 
-def get_inbound_host_service(repo: InboundHostRepoDep) -> InboundHostService:
-    return InboundHostService(repo)
+def get_inbound_host_service(
+    repo: InboundHostRepoDep, subscription_service: SubscriptionServiceDep
+) -> InboundHostService:
+    return InboundHostService(repo, subscription_service)
 
 
 InboundHostServiceDep = Annotated[InboundHostService, Depends(get_inbound_host_service)]

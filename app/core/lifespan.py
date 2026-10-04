@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 
 from fastapi import FastAPI
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +10,8 @@ from app.agent.commands import CommandSigner
 from app.agent.reconcile import AgentReconcileJob
 from app.agent.scheduler import NodeAgentScheduler
 from app.backup.scheduler import BackupJob
-from app.core.config import Settings, get_settings
+from app.core.app_state import AppState
+from app.core.config import get_settings
 from app.core.jobs import AssignmentExpirationJob, TokenCleanupJob
 from app.core.logging import configure_logging, get_logger
 from app.db.redis import RedisCache
@@ -32,35 +32,14 @@ from app.middleware.audit_writer import AuditWriter
 from app.monitoring.summary import MetricsRefreshJob
 from app.notifications.job import NotificationJob
 from app.observability.collector import DomainMetricsCollector
-from app.providers.base.registry import ProviderRegistry
 from app.providers.discovery import build_registry
 from app.services.cert_renewal import CertRenewalJob
 from app.traffic.scheduler import TrafficRetentionJob, TrafficRollupJob
 from app.webhooks.dispatcher import WebhookDispatcher
 
+__all__ = ["AppState", "lifespan"]
+
 logger = get_logger("xlink.lifespan")
-
-
-@dataclass(slots=True)
-class AppState:
-    settings: Settings
-    db: Database
-    cache: RedisCache
-    providers: ProviderRegistry
-    events: EventBus
-    dispatcher: WebhookDispatcher | None = None
-    cleanup_job: TokenCleanupJob | None = None
-    metrics_job: MetricsRefreshJob | None = None
-    traffic_retention_job: TrafficRetentionJob | None = None
-    traffic_rollup_job: TrafficRollupJob | None = None
-    agent_reconcile_job: AgentReconcileJob | None = None
-    assignment_expiration_job: AssignmentExpirationJob | None = None
-    notification_job: NotificationJob | None = None
-    node_agent_scheduler: NodeAgentScheduler | None = None
-    backup_job: BackupJob | None = None
-    cert_renewal_job: CertRenewalJob | None = None
-    audit_writer: AuditWriter | None = None
-    domain_metrics_collector: DomainMetricsCollector | None = None
 
 
 @asynccontextmanager
@@ -90,23 +69,32 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         auto_failover = AutoFailoverHandler(
             FailoverService(db, providers, events, cache=cache),
             cooldown_seconds=settings.auto_failover_cooldown_seconds,
+            cache=cache,
         )
         event_registry.subscribe(NodeOffline, auto_failover)
 
     from app.core.leader import LeaderElector
 
-    leader = LeaderElector(cache)
-    leader.start()
+    # Background jobs run only on a process whose role owns them. `all` (the
+    # default) keeps the historical single-process behaviour; `api` serves HTTP
+    # and gRPC only; `worker` runs the jobs and no listener.
+    role = settings.instance_role
+    run_jobs = role.runs_jobs
+    logger.info("instance_role", role=role.value, runs_jobs=run_jobs, serves_http=role.serves_http)
+
+    leader = LeaderElector(cache) if run_jobs else None
+    if leader is not None:
+        leader.start()
 
     cleanup_job: TokenCleanupJob | None = None
-    if settings.token_cleanup_enabled:
+    if run_jobs and settings.token_cleanup_enabled:
         cleanup_job = TokenCleanupJob(
             db, interval_seconds=settings.token_cleanup_interval_seconds, leader=leader
         )
         cleanup_job.start()
 
     metrics_job: MetricsRefreshJob | None = None
-    if settings.metrics_summary_enabled:
+    if run_jobs and settings.metrics_summary_enabled:
         metrics_job = MetricsRefreshJob(
             db,
             cache,
@@ -119,7 +107,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     domain_metrics_collector: DomainMetricsCollector | None = None
     prometheus = getattr(app.state, "prometheus", None)
-    if settings.metrics_token is not None and prometheus is not None:
+    if run_jobs and settings.metrics_token is not None and prometheus is not None:
         domain_metrics_collector = DomainMetricsCollector(
             db,
             prometheus,
@@ -129,7 +117,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         domain_metrics_collector.start()
 
     traffic_retention_job: TrafficRetentionJob | None = None
-    if settings.traffic_retention_enabled:
+    if run_jobs and settings.traffic_retention_enabled:
         traffic_retention_job = TrafficRetentionJob(
             db,
             interval_seconds=settings.traffic_retention_interval_seconds,
@@ -140,7 +128,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         traffic_retention_job.start()
 
     traffic_rollup_job: TrafficRollupJob | None = None
-    if settings.traffic_rollup_enabled:
+    if run_jobs and settings.traffic_rollup_enabled:
         traffic_rollup_job = TrafficRollupJob(
             db,
             interval_seconds=settings.traffic_rollup_interval_seconds,
@@ -150,8 +138,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     dispatcher = WebhookDispatcher(settings)
 
+    # Durable delivery: any role may ENQUEUE (an API request that disables a user
+    # notifies), but only job-running roles CONSUME. Consumer groups give each
+    # message to exactly one worker, so several workers are safe.
+    from app.core.queue import DurableQueue
+
+    queue: DurableQueue | None = None
+    if settings.durable_queue_enabled:
+        queue = DurableQueue(cache.client)
+        dispatcher.attach_queue(queue)
+        if run_jobs:
+            queue.start()
+
     agent_reconcile_job: AgentReconcileJob | None = None
-    if settings.agent_reconcile_enabled:
+    if run_jobs and settings.agent_reconcile_enabled:
         agent_reconcile_job = AgentReconcileJob(
             db,
             signer=CommandSigner(settings.agent_signing_secret),
@@ -166,7 +166,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         agent_reconcile_job.start()
 
     assignment_expiration_job: AssignmentExpirationJob | None = None
-    if settings.assignment_expiration_enabled:
+    if run_jobs and settings.assignment_expiration_enabled:
         assignment_expiration_job = AssignmentExpirationJob(
             db,
             events,
@@ -176,19 +176,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         assignment_expiration_job.start()
 
-    notification_job = NotificationJob(
-        db,
-        dispatcher,
-        cache,
-        interval_seconds=settings.notification_interval_seconds,
-        expiring_days=settings.notify_expiring_days,
-        usage_percent=settings.notify_usage_percent,
-        leader=leader,
-    )
-    notification_job.start()
+    notification_job: NotificationJob | None = None
+    if run_jobs:
+        notification_job = NotificationJob(
+            db,
+            dispatcher,
+            cache,
+            interval_seconds=settings.notification_interval_seconds,
+            expiring_days=settings.notify_expiring_days,
+            usage_percent=settings.notify_usage_percent,
+            leader=leader,
+        )
+        notification_job.start()
 
     node_agent_scheduler: NodeAgentScheduler | None = None
-    if settings.agent_reconcile_enabled:
+    if run_jobs and settings.agent_reconcile_enabled:
         node_agent_scheduler = NodeAgentScheduler(
             db,
             events=events,
@@ -200,7 +202,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         node_agent_scheduler.start()
 
     backup_job: BackupJob | None = None
-    if settings.auto_backup_enabled:
+    if run_jobs and settings.auto_backup_enabled:
         backup_job = BackupJob(
             db,
             interval_seconds=settings.auto_backup_interval_seconds,
@@ -211,7 +213,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         backup_job.start()
 
     cert_renewal_job: CertRenewalJob | None = None
-    if settings.acme_email:
+    if run_jobs and settings.acme_email:
         cert_renewal_job = CertRenewalJob(
             db,
             cache,
@@ -223,16 +225,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         cert_renewal_job.start()
 
-    audit_writer: AuditWriter | None = AuditWriter(db)
-    audit_writer.start()
+    # The audit outbox is filled by request handlers, so it is drained by the
+    # role that serves them.
+    audit_writer: AuditWriter | None = None
+    if role.serves_http:
+        audit_writer = AuditWriter(db)
+        audit_writer.start()
 
-    from app.agent.grpc.server import GrpcServer
+    # gRPC binds a port, so only the HTTP-serving role may start it — two
+    # processes would otherwise fight over it.
+    grpc_server = None
+    if role.serves_http:
+        from app.agent.grpc.server import GrpcServer
 
-    grpc_server = GrpcServer(db, cache, events, settings)
-    try:
-        await grpc_server.start()
-    except Exception:
-        logger.exception("grpc_start_failed")
+        grpc_server = GrpcServer(db, cache, events, settings)
+        try:
+            await grpc_server.start()
+        except Exception:
+            logger.exception("grpc_start_failed")
 
     if settings.admin_username and settings.admin_password:
         try:
@@ -272,6 +282,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception:
             logger.exception("admin_bootstrap_failed", username=settings.admin_username)
 
+    if role.serves_http:
+        await _announce_setup_token(db, cache)
+
     app.state.xlink = AppState(
         settings=settings,
         db=db,
@@ -291,6 +304,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         cert_renewal_job=cert_renewal_job,
         audit_writer=audit_writer,
         domain_metrics_collector=domain_metrics_collector,
+        queue=queue,
     )
     logger.info("startup_complete")
 
@@ -298,8 +312,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         logger.info("shutdown_begin")
-        await leader.stop()
-        await grpc_server.stop()
+        if leader is not None:
+            await leader.stop()
+        if grpc_server is not None:
+            await grpc_server.stop()
         if cleanup_job is not None:
             await cleanup_job.stop()
         if metrics_job is not None:
@@ -325,7 +341,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if audit_writer is not None:
             await audit_writer.stop()
         await events.drain()
+        if queue is not None:
+            await queue.stop()
         await dispatcher.drain()
         await cache.close()
         await db.dispose()
         logger.info("shutdown_complete")
+
+
+async def _announce_setup_token(db, cache) -> None:  # noqa: ANN001
+    """On a panel with no admin yet, log the one-time token the setup wizard
+    asks for. Without it, whoever reaches a fresh install first owns it."""
+    from app.services import setup_service
+
+    try:
+        async with db.session() as session:
+            if not await setup_service.needs_setup(session):
+                return
+        token = await setup_service.ensure_token(cache)
+    except Exception:
+        logger.exception("setup_token_unavailable")
+        return
+    logger.warning(
+        "setup_required",
+        hint="open the panel and complete setup with this token",
+        setup_token=token,
+    )

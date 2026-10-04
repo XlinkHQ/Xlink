@@ -5,6 +5,8 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundError, ValidationError
+from app.core.logging import get_logger
 from app.domain.client_assignment import AssignmentStatus, ClientAssignment
 from app.domain.node import Node
 from app.domain.user import User
@@ -12,6 +14,8 @@ from app.failover.models import FailoverPlan, FailoverPlanItem
 from app.providers.base.registry import ProviderRegistry
 from app.scheduler.models import SchedulerPolicyName, SchedulerRequest
 from app.scheduler.service import SmartSchedulerService
+
+logger = get_logger("xlink.failover.planner")
 
 
 class FailoverPlanner:
@@ -55,13 +59,28 @@ class FailoverPlanner:
 
         items: list[FailoverPlanItem] = []
         for assignment, pinned_node_ids in rows:
-            decision = await scheduler.choose_node(
-                SchedulerRequest(
-                    profile_id=assignment.profile_id,
-                    policy=policy,
-                    dry_run=True,
+            try:
+                decision = await scheduler.choose_node(
+                    SchedulerRequest(
+                        profile_id=assignment.profile_id,
+                        policy=policy,
+                        dry_run=True,
+                    )
                 )
-            )
+            except (NotFoundError, ValidationError) as exc:
+                # choose_node raises on ordinary conditions — a disabled
+                # profile, or no compatible node with headroom. Letting that
+                # escape aborted the WHOLE evacuation, so a single unplaceable
+                # user stranded every other user on a dead node. Worse, the
+                # auto path records its cooldown before planning, so the
+                # outage never retried. Skip this one, evacuate the rest.
+                logger.warning(
+                    "failover_assignment_unplaceable",
+                    assignment_id=str(assignment.id),
+                    profile_id=str(assignment.profile_id),
+                    reason=getattr(exc, "code", None) or type(exc).__name__,
+                )
+                continue
             ordered = [c.node_id for c in decision.candidates] or [decision.node_id]
             pinned = {str(n) for n in (pinned_node_ids or [])}
             if pinned:

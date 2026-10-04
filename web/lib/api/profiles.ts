@@ -25,10 +25,10 @@ export function createProfile(body: Record<string, unknown>) {
   return apiFetch<ProfileRead>("/profiles", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function generateProfileKeys(protocol: string, security: string) {
+export function generateProfileKeys(protocol: string, security: string, amnezia = false) {
   return apiFetch<Record<string, string>>("/profiles/keys", {
     method: "POST",
-    body: JSON.stringify({ protocol, security }),
+    body: JSON.stringify({ protocol, security, amnezia }),
   });
 }
 
@@ -62,6 +62,7 @@ export type InboundHostRead = {
   mux: boolean;
   allow_insecure: boolean;
   weight: number;
+  asn_addresses: Record<string, string[]> | null;
   is_universal: boolean;
   is_disabled: boolean;
   chain_target_id: string | null;
@@ -89,4 +90,64 @@ export function updateInboundHost(id: string, body: Record<string, unknown>) {
 
 export function deleteInboundHost(id: string) {
   return apiFetch<void>(`/inbound-hosts/${id}`, { method: "DELETE" });
+}
+
+export type RealityScanItem = {
+  target: string;
+  port: number;
+  ip: string | null;
+  ok: boolean;
+  tls13: boolean;
+  h2: boolean;
+  x25519: boolean | null;
+  cert_valid: boolean;
+  latency_ms: number | null;
+  issuer: string | null;
+  problems: string[];
+};
+
+export function scanRealityTargets(targets: string[]) {
+  return apiFetch<RealityScanItem[]>("/reality/scan", {
+    method: "POST",
+    body: JSON.stringify({ targets }),
+  });
+}
+
+export function scanRealityFromNode(nodeId: string, targets: string[]) {
+  return apiFetch<{ command_id: string }>(`/reality/scan/node/${nodeId}`, {
+    method: "POST",
+    body: JSON.stringify({ targets }),
+  });
+}
+
+export function realityNodeScanStatus(commandId: string) {
+  return apiFetch<{ status: string; results: RealityScanItem[]; error: string | null }>(
+    `/reality/scan/commands/${commandId}`,
+  );
+}
+
+/** Queue a scan on the node and wait for the agent to report (it picks
+ * commands up on its next poll). */
+export async function scanRealityOnNode(
+  nodeId: string,
+  targets: string[],
+  { timeoutMs = 90_000, intervalMs = 2_000 } = {},
+): Promise<RealityScanItem[]> {
+  const { command_id } = await scanRealityFromNode(nodeId, targets);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const s = await realityNodeScanStatus(command_id);
+    if (s.status === "succeeded") return s.results;
+    if (s.status === "failed" || s.status === "expired" || s.status === "cancelled") {
+      throw new Error(s.error || s.status);
+    }
+  }
+  throw new Error("timeout");
+}
+
+export function refreshAsnDataset() {
+  return apiFetch<Record<string, { ranges: number; updated_at: number | null }>>("/asn/refresh", {
+    method: "POST",
+  });
 }

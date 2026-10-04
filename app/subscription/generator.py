@@ -49,7 +49,9 @@ _PROTO_NAMES = {
     "shadowtls": "ShadowTLS",
     "hysteria2": "Hysteria2",
     "tuic": "TUIC",
+    "anytls": "AnyTLS",
     "wireguard": "WireGuard",
+    "mtproto": "MTProto",
 }
 
 

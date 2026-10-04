@@ -6,7 +6,7 @@ from datetime import datetime
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.dependencies.auth import AdminUser, SudoAdminUser, WriteAdminUser
+from app.dependencies.auth import AdminUser, SudoAdminUser, WriteAdminUser, role_action
 from app.dependencies.core import DatabaseDep, SettingsDep
 from app.dependencies.services import (
     AdminServiceDep,
@@ -14,6 +14,7 @@ from app.dependencies.services import (
     TrafficServiceDep,
     UserServiceDep,
 )
+from app.domain.user import User
 from app.traffic.scheduler import run_retention
 from app.traffic.schemas import TrafficTotals, TrafficUsage
 
@@ -248,6 +249,7 @@ async def reset_user_usage(
     admin: WriteAdminUser,
     traffic: TrafficServiceDep,
     users: UserServiceDep,
+    _role: User = role_action("users", "reset_usage"),
 ) -> ResetUsageResult:
     users.assert_can_manage(admin, await users.get(user_id))
     count = await traffic.reset_user(user_id)

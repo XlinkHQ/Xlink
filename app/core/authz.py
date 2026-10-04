@@ -25,10 +25,28 @@ def has_permission(actor: User, permission: Permission, *, target: User | None =
     if permission is Permission.MANAGE_INFRA:
         return actor.is_sudo
     if permission is Permission.WRITE_USERS:
+        if getattr(actor, "rbac_policy", None) is not None:
+            # Coarse gate only: open if the role allows ANY write. The exact
+            # action is enforced per endpoint by `role_action`, so tying this
+            # to one action (it was `update`) wrongly blocked e.g. a create-only
+            # role from creating users.
+            from app.core.rbac import WRITE_ACTIONS, Scope, effective_scope
+
+            return any(
+                effective_scope(actor, "users", a) is not Scope.NONE for a in WRITE_ACTIONS
+            )
         return actor.is_sudo or actor.modify_users_access
     if permission is Permission.MANAGE_USER:
         if actor.is_sudo:
             return True
+        if getattr(actor, "rbac_policy", None) is not None:
+            from app.core.rbac import Scope, effective_scope
+
+            scope = effective_scope(actor, "users", getattr(actor, "rbac_action", "update"))
+            if scope is Scope.ALL:
+                return True
+            if scope is Scope.NONE:
+                return False
         if target is not None:
             return target.owner_id == actor.id
         return False
@@ -56,7 +74,15 @@ def authorize(actor: User, permission: Permission, *, target: User | None = None
 
 
 def owner_scope(actor: User) -> uuid.UUID | None:
-    return None if actor.is_sudo else actor.id
+    """Owner filter for user listings: None means every user is visible."""
+    if actor.is_sudo:
+        return None
+    if getattr(actor, "rbac_policy", None) is not None:
+        from app.core.rbac import Scope, effective_scope
+
+        if effective_scope(actor, "users", "read") is Scope.ALL:
+            return None
+    return actor.id
 
 
 _SECRET_SETTING_MARKERS = (

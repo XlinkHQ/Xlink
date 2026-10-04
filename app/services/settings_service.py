@@ -11,7 +11,7 @@ from app.schemas.settings import (
     WarpSettingsUpdate,
 )
 
-CORE_KINDS = ("xray", "sing-box", "hysteria", "wireguard")
+CORE_KINDS = ("xray", "sing-box", "hysteria", "wireguard", "mtproto")
 
 
 class SettingsService:

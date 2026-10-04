@@ -38,6 +38,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "Users", labelKey: "nav.users", icon: DgUsers },
       { key: "Admins", labelKey: "nav.admins", icon: DgGroups },
+      { key: "Roles", labelKey: "nav.roles", icon: DgAccessSettings },
       { key: "Activity", labelKey: "nav.activity", icon: DgActivity },
     ],
   },
@@ -45,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
     titleKey: "navgroup.system",
     items: [
       { key: "ApiKeys", labelKey: "nav.apiKeys", icon: DgKeyIcon },
+      { key: "ClientTemplates", labelKey: "nav.clientTemplates", icon: DgRules },
       { key: "Settings", labelKey: "nav.settings", icon: DgSettings },
     ],
   },

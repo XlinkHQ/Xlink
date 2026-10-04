@@ -26,6 +26,8 @@ export function Sidebar({
     <aside className={cn("warp-sb", open && "is-open")}>
       <div className="warp-sb-inner">
         <div className="warp-sb-top">
+          {/* eslint-disable-next-line @next/next/no-img-element -- branding logo is a
+              user-supplied URL; next/image would require whitelisting arbitrary hosts. */}
           <img src={brand.logo} alt={brand.name} className="warp-sb-logo" draggable={false} />
           {onClose ? (
             <button

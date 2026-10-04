@@ -121,10 +121,10 @@ def test_matrix_covers_every_format():
 def test_derived_module_constants_track_matrix():
     """The back-compat allow-sets left in the renderers are sourced from the
     matrix, not redefined — so they can never drift again."""
-    assert CLASH_PROTOCOLS == FORMAT_PROTOCOLS[SubscriptionFormat.CLASH_YAML]
-    assert MIHOMO_PROTOCOLS == FORMAT_PROTOCOLS[SubscriptionFormat.MIHOMO_YAML]
-    assert URI_PROTOCOLS == FORMAT_PROTOCOLS[SubscriptionFormat.TEXT]
-    assert URI_PROTOCOLS == FORMAT_PROTOCOLS[SubscriptionFormat.BASE64]
+    assert FORMAT_PROTOCOLS[SubscriptionFormat.CLASH_YAML] == CLASH_PROTOCOLS
+    assert FORMAT_PROTOCOLS[SubscriptionFormat.MIHOMO_YAML] == MIHOMO_PROTOCOLS
+    assert FORMAT_PROTOCOLS[SubscriptionFormat.TEXT] == URI_PROTOCOLS
+    assert FORMAT_PROTOCOLS[SubscriptionFormat.BASE64] == URI_PROTOCOLS
 
 
 def test_dropped_protocol_is_logged():

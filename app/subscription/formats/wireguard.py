@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.providers.base import amneziawg
 from app.subscription.formats.base import (
     FormatRenderError,
     require_fields,
@@ -10,6 +11,11 @@ from app.subscription.formats.base import (
 from app.subscription.models import ProviderConfig
 
 PROTOCOL = "wireguard"
+
+
+WG_MTU_MIN = 1280
+WG_MTU_MAX = 1500
+WG_MTU_DEFAULT = 1420
 
 
 def _ini_value(raw: object) -> str:
@@ -82,8 +88,20 @@ def _interface_block(config: ProviderConfig) -> str:
     dns = _ini_value(setting(config, "dns", ""))
     if dns:
         lines.append(f"DNS = {dns}")
-    mtu = _int_setting(config, "mtu", 1280, 1280, 65535)
+    # One MTU contract across all three layers (panel store, node agent,
+    # client config): 1280..1500, default 1420. The renderer used to allow
+    # up to 65535 and default to 1280 while the agent silently omitted
+    # anything over 1500, so a blank setting meant the client got 1280 and
+    # the server kept its 1420 kernel default — a 140-byte mismatch.
+    mtu = _int_setting(config, "mtu", WG_MTU_DEFAULT, WG_MTU_MIN, WG_MTU_MAX)
     lines.append(f"MTU = {mtu}")
+    if amneziawg.enabled(dict(config.settings)):
+        # AmneziaVPN / AmneziaWG clients read these from [Interface]; a plain
+        # WireGuard client would reject them, so they only appear for AWG.
+        for key in amneziawg.PARAMS:
+            val = _ini_value(setting(config, key, ""))
+            if val.isdigit():
+                lines.append(f"{key} = {val}")
     return "\n".join(lines)
 
 

@@ -95,7 +95,7 @@ async def test_singbox_gets_route_rules(app_state: AppState) -> None:
         assert block_ob["type"] == "block"
 
 
-async def test_singbox_geosite_selector_dropped(app_state: AppState) -> None:
+async def test_singbox_geo_selectors_become_rule_sets(app_state: AppState) -> None:
     async with app_state.db.session() as session:
         node = await _node(session)
         await _set_template(session, {"sing-box": {"inbounds": []}})
@@ -103,16 +103,16 @@ async def test_singbox_geosite_selector_dropped(app_state: AppState) -> None:
             RoutingRule(
                 name="mixed",
                 match_type="domain",
-                match_values="geosite:google, real.example.com",
+                match_values="geosite:google, real.example.com, ext:custom.dat:foo",
                 outbound="direct",
                 enabled=True,
             )
         )
         session.add(
             RoutingRule(
-                name="only-geo",
-                match_type="domain",
-                match_values="geosite:netflix",
+                name="ir-direct",
+                match_type="ip",
+                match_values="geoip:ir, geoip:private",
                 outbound="direct",
                 enabled=True,
                 priority=5,
@@ -122,9 +122,15 @@ async def test_singbox_geosite_selector_dropped(app_state: AppState) -> None:
 
         sb = (await _templates(session, node))["sing-box"]
         rules = sb["route"]["rules"]
-        assert len(rules) == 1
-        assert rules[0]["domain_suffix"] == ["real.example.com"]
-        assert "geosite:google" not in json.dumps(rules)
+        assert {"outbound": "direct", "rule_set": ["geosite-google"]} in rules
+        assert {"outbound": "direct", "domain_suffix": ["real.example.com"]} in rules
+        assert {"outbound": "direct", "ip_is_private": True} in rules
+        assert {"outbound": "direct", "rule_set": ["geoip-ir"]} in rules
+        sets = {rs["tag"]: rs for rs in sb["route"]["rule_set"]}
+        assert sets["geoip-ir"]["url"].endswith("/geoip-ir.srs")
+        assert sets["geosite-google"]["download_detour"] == "direct"
+        assert any(o["tag"] == "direct" for o in sb["outbounds"])
+        assert "ext:custom.dat" not in json.dumps(sb)
 
 
 async def test_singbox_dangling_outbound_rule_dropped(app_state: AppState) -> None:

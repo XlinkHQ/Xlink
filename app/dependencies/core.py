@@ -6,12 +6,13 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.app_state import AppState
 from app.core.config import Settings
-from app.core.lifespan import AppState
 from app.db.redis import RedisCache
 from app.db.session import Database
 from app.events.bus import EventBus
 from app.providers.base.registry import ProviderRegistry
+from app.webhooks.dispatcher import WebhookDispatcher
 
 
 def get_state(request: Request) -> AppState:
@@ -38,7 +39,9 @@ def get_database(state: Annotated[AppState, Depends(get_state)]) -> Database:
     return state.db
 
 
-def get_dispatcher(state: Annotated[AppState, Depends(get_state)]):
+def get_dispatcher(
+    state: Annotated[AppState, Depends(get_state)],
+) -> WebhookDispatcher | None:
     return state.dispatcher
 
 
@@ -63,4 +66,4 @@ ReaderSessionDep = Annotated[AsyncSession, Depends(get_reader_session)]
 ProvidersDep = Annotated[ProviderRegistry, Depends(get_providers)]
 EventsDep = Annotated[EventBus, Depends(get_events)]
 DatabaseDep = Annotated[Database, Depends(get_database)]
-DispatcherDep = Annotated[object, Depends(get_dispatcher)]
+DispatcherDep = Annotated[WebhookDispatcher | None, Depends(get_dispatcher)]

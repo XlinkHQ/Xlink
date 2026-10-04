@@ -24,6 +24,7 @@ class CommandKind(StrEnum):
     UPDATE_GEO = "update_geo"
     COLLECT_DIAGNOSTICS = "collect_diagnostics"
     PROVIDER_HEALTHCHECK = "provider_healthcheck"
+    REALITY_SCAN = "reality_scan"
 
 
 class CommandStatus(StrEnum):

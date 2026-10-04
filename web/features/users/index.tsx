@@ -426,8 +426,11 @@ export function UsersScreen() {
                 <span className="warp-tb-cell text-fg-muted">{relTimeShort(lastSeenMap.get(u.id))}</span>
                 <span className="warp-tb-cell">
                   <WarpRadial
-                    tone={reached ? "green" : "blue"}
-                    pct={limit ? (used / limit) * 100 : maxUsed > 0 ? (used / maxUsed) * 100 : 0}
+                    tone={reached ? "red" : "blue"}
+                    pct={Math.min(
+                      100,
+                      limit ? (used / limit) * 100 : maxUsed > 0 ? (used / maxUsed) * 100 : 0,
+                    )}
                     label={limit ? `${bytes(used)} / ${bytes(limit)}` : bytes(used)}
                   />
                 </span>

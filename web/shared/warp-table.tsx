@@ -227,7 +227,7 @@ export function WarpRadial({
 }: {
   pct: number;
   label: ReactNode;
-  tone?: "blue" | "green";
+  tone?: "blue" | "green" | "red";
 }) {
   const p = Math.min(100, Math.max(0, pct));
   const r = 9;

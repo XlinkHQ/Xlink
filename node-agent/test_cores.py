@@ -4,7 +4,8 @@ import os
 import subprocess
 import tempfile
 
-spec = importlib.util.spec_from_file_location("a", "xlink-agent.py")
+_HERE = os.path.dirname(os.path.abspath(__file__))
+spec = importlib.util.spec_from_file_location("a", os.path.join(_HERE, "xlink-agent.py"))
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)
 
@@ -33,7 +34,7 @@ def validate_xray():
                         "settings": s,
                     }
                 )
-                combos.append("{}/{}/{}".format(proto, net, sec))
+                combos.append(f"{proto}/{net}/{sec}")
     keys = subprocess.run(["xray", "x25519"], capture_output=True, text=True).stdout
     priv = ""
     for line in keys.splitlines():
@@ -58,7 +59,7 @@ def validate_xray():
                     "settings": s,
                 }
             )
-            combos.append("{}/{}/reality".format(proto, net))
+            combos.append(f"{proto}/{net}/reality")
     cfg = m.build_xray_config(clients)
     inbound_count = len(cfg["inbounds"]) - 1
     print("XRAY: built %d inbounds for %d combos" % (inbound_count, len(combos)))
@@ -99,7 +100,7 @@ def validate_singbox():
                     "settings": s,
                 }
             )
-            combos.append("{}/{}".format(proto, net))
+            combos.append(f"{proto}/{net}")
     cfg = m.build_singbox_config(clients)
     print("\nSING-BOX: built %d inbounds for %d combos" % (len(cfg["inbounds"]), len(combos)))
     f = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)

@@ -45,6 +45,31 @@ class SubscriptionRepository:
             "remark": row.config_remark,
         }
 
+    async def default_client_templates(self) -> dict[str, str]:
+        from app.domain.client_template import ClientTemplate
+
+        rows = await self._reader.execute(
+            select(ClientTemplate.format, ClientTemplate.content).where(
+                ClientTemplate.is_default.is_(True)
+            )
+        )
+        return dict(rows.all())
+
+    async def mapped_asns(self) -> set[int]:
+        from app.domain.inbound_host import InboundHost
+
+        rows = await self._reader.execute(
+            select(InboundHost.asn_addresses).where(
+                InboundHost.asn_addresses.is_not(None), InboundHost.is_disabled.is_(False)
+            )
+        )
+        found: set[int] = set()
+        for (mapping,) in rows.all():
+            for key in (mapping or {}):
+                if str(key).isdigit():
+                    found.add(int(key))
+        return found
+
     async def host_overrides(self, profile_ids):
         from app.repositories.inbound_host import InboundHostRepository
 

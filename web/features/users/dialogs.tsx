@@ -42,7 +42,11 @@ export function EditUserDialog({
   const [reset, setReset] = useState(user.data_reset_strategy ?? "no_reset");
   const [devices, setDevices] = useState(user.device_limit?.toString() ?? "");
   const [onHold, setOnHold] = useState(user.on_hold ?? false);
-  const [holdDays, setHoldDays] = useState("");
+  // Seed from the server value: submitting an unseeded empty string sent
+  // on_hold_duration_seconds: null on every edit, wiping the hold window.
+  const [holdDays, setHoldDays] = useState(
+    user.on_hold_duration_seconds ? String(Math.round(user.on_hold_duration_seconds / 86400)) : "",
+  );
   const [activationDeadline, setActivationDeadline] = useState(
     user.activation_deadline ? user.activation_deadline.slice(0, 10) : "",
   );

@@ -14,12 +14,34 @@ from app.agent.ingest_limit import enforce_ingest_quota
 from app.core.authz import Permission, authorize
 from app.core.exceptions import AuthenticationError
 from app.core.security import TokenType, decode_token
+from app.db.session import Database
 from app.dependencies.core import CacheDep, DatabaseDep, SettingsDep
 from app.dependencies.services import AuthServiceDep, NodeAgentServiceDep
 
 AgentServiceForQuota = NodeAgentServiceDep
 from app.domain.api_key import ApiKey
 from app.domain.user import User
+
+
+async def _attach_role(user: User, database: Database) -> None:
+    """Resolve the admin's RBAC role once per request and hang it on the actor.
+
+    Relationships are lazy="noload", so this is an explicit lookup; role-less
+    admins skip it entirely and keep the legacy rules.
+    """
+    if not user.is_admin or user.is_sudo or user.admin_role_id is None:
+        return
+    from app.core.rbac import RolePolicy
+    from app.domain.admin_role import AdminRole
+
+    async with database.session() as session:
+        role = await session.get(AdminRole, user.admin_role_id)
+    if role is not None:
+        user.rbac_policy = RolePolicy(  # type: ignore[attr-defined]
+            name=role.name,
+            permissions=dict(role.permissions or {}),
+            limits={k: v for k, v in (role.limits or {}).items() if v is not None},
+        )
 
 
 def _set_actor(request: Request, user: User) -> None:
@@ -78,6 +100,7 @@ async def get_current_user(
     if credentials is None:
         if x_api_key:
             user = await _user_from_api_key(x_api_key, database, auth_service)
+            await _attach_role(user, database)
             _set_actor(request, user)
             return user
         raise AuthenticationError("Missing bearer token.", code="missing_token")
@@ -92,6 +115,7 @@ async def get_current_user(
     user = await auth_service.get_authenticated_user(
         user_id, token_issued_at=issued_at if isinstance(issued_at, int) else None
     )
+    await _attach_role(user, database)
     _set_actor(request, user)
     return user
 
@@ -135,3 +159,20 @@ async def enforce_agent_ingest_quota(
 
 
 AgentIngestQuota = Annotated[None, Depends(enforce_agent_ingest_quota)]
+
+
+def role_action(resource: str, action: str):  # noqa: ANN201 - FastAPI dependency factory
+    """Gate an endpoint on an RBAC action and record it on the actor.
+
+    The recorded action is what the later ownership check (`assert_can_manage`)
+    scopes against, so `users.delete: OWN` with `users.update: ALL` behaves as
+    written instead of borrowing the update scope.
+    """
+    from app.core.rbac import require
+
+    async def _dep(actor: AdminUser) -> User:
+        require(actor, resource, action)
+        actor.rbac_action = action  # type: ignore[attr-defined]
+        return actor
+
+    return Depends(_dep)

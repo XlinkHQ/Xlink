@@ -155,6 +155,14 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     admin_user_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     admin_traffic_limit_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Optional RBAC role. NULL keeps the legacy sudo / owner-scope behaviour, so
+    # existing deployments are unaffected until a role is assigned.
+    admin_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("admin_roles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     users_data_usage: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
 

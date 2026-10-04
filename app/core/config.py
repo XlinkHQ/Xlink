@@ -33,6 +33,28 @@ class Environment(StrEnum):
     TESTING = "testing"
 
 
+class InstanceRole(StrEnum):
+    """Which half of the system this process runs.
+
+    ``all`` keeps the historical single-process behaviour: HTTP + gRPC + every
+    background job in one container. Splitting into ``api`` and ``worker`` lets
+    the API scale horizontally without each replica also racing for the job
+    leader lock, and keeps a heavy rollup off the request-serving event loop.
+    """
+
+    ALL = "all"
+    API = "api"
+    WORKER = "worker"
+
+    @property
+    def serves_http(self) -> bool:
+        return self is not InstanceRole.WORKER
+
+    @property
+    def runs_jobs(self) -> bool:
+        return self is not InstanceRole.API
+
+
 def _split_csv(value: str | list[str]) -> list[str]:
     if isinstance(value, str):
         raw = value.strip()
@@ -175,6 +197,8 @@ class Settings(BaseSettings):
     auto_backup_enabled: bool = True
     auto_backup_interval_seconds: int = 86400
     auto_backup_dir: str = "backups"
+    # iptoasn.com dataset for per-ISP clean CDN addresses (inbound host asn_addresses).
+    asn_data_dir: str = "data/asn"
     auto_backup_keep: int = 7
 
     admin_username: str | None = None
@@ -193,6 +217,14 @@ class Settings(BaseSettings):
     node_offline_after_seconds: int = 120
 
     provider_plugins_dir: str = ""
+
+    # Default keeps existing deployments single-process; set XLINK_INSTANCE_ROLE
+    # to api/worker to split them.
+    instance_role: InstanceRole = InstanceRole.ALL
+    # Route webhook / Discord / Telegram delivery through the Redis-Streams
+    # queue (retry, backoff, dead-letter, crash recovery). Off falls back to
+    # best-effort in-process delivery.
+    durable_queue_enabled: bool = True
 
     grpc_enabled: bool = True
     grpc_host: str = "0.0.0.0"

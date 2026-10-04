@@ -100,6 +100,38 @@ async def backup_export_db(_admin: SudoAdminUser, settings: SettingsDep) -> Resp
     )
 
 
+# Hard caps: the dump is held in memory, and a few-KB gzip bomb would
+# otherwise inflate to gigabytes and take the API process down.
+_MAX_UPLOAD_BYTES = 512 * 1024 * 1024
+_MAX_RESTORED_BYTES = 2 * 1024 * 1024 * 1024
+
+
+def _bounded_gunzip(data: bytes, limit: int) -> bytes:
+    import zlib
+
+    d = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    out = bytearray()
+    chunk = data
+    while chunk:
+        out += d.decompress(chunk, limit + 1 - len(out))
+        if len(out) > limit:
+            raise ValueError("decompressed backup exceeds the size limit")
+        chunk = d.unconsumed_tail
+    out += d.flush()
+    if len(out) > limit:
+        raise ValueError("decompressed backup exceeds the size limit")
+    return bytes(out)
+
+
+async def _read_capped(file: UploadFile, limit: int) -> bytes:
+    buf = bytearray()
+    while chunk := await file.read(1024 * 1024):
+        buf += chunk
+        if len(buf) > limit:
+            raise HTTPException(status_code=413, detail="Backup file is too large.")
+    return bytes(buf)
+
+
 @router.post("/import-db", status_code=204)
 async def backup_import_db(
     _admin: SudoAdminUser,
@@ -107,11 +139,14 @@ async def backup_import_db(
     file: UploadFile,
 ) -> Response:
     url = settings.database_url
-    data = await file.read()
+    data = await _read_capped(file, _MAX_UPLOAD_BYTES)
     if not data:
         raise HTTPException(status_code=400, detail="Empty file.")
     if data[:2] == b"\x1f\x8b":
-        data = await anyio.to_thread.run_sync(gzip.decompress, data)
+        try:
+            data = await anyio.to_thread.run_sync(_bounded_gunzip, data, _MAX_RESTORED_BYTES)
+        except (ValueError, OSError, EOFError) as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
 
     if url.startswith("sqlite"):
         path = url.split("///", 1)[-1]

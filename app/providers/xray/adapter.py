@@ -3,6 +3,7 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
+from app.providers.base import ss2022
 from app.providers.base.models import ClientResult, ClientSpec
 from app.providers.xray.exceptions import XrayPayloadError
 from app.providers.xray.payloads import (
@@ -32,15 +33,17 @@ def _build_client(spec: ClientSpec, protocol: str) -> dict[str, Any]:
         cipher = str(attrs.get("cipher", "auto")).strip().lower()
         client["security"] = cipher if cipher in _VMESS_CIPHERS else "auto"
     if protocol in PASSWORD_PROTOCOLS:
-        password = attrs.get("password")
-        client["password"] = (
-            str(password).strip()
-            if isinstance(password, str) and password.strip()
-            else secrets.token_urlsafe(16)
-        )
         valid = methods_for(protocol)
         method = str(attrs.get("method", default_method_for(protocol))).strip().lower()
         client["method"] = method if method in valid else default_method_for(protocol)
+        password = attrs.get("password")
+        if isinstance(password, str) and password.strip():
+            client["password"] = password.strip()
+        elif ss2022.is_2022(client["method"]):
+            # 2022 ciphers take a raw key of fixed length, not a password.
+            client["password"] = ss2022.new_key(client["method"])
+        else:
+            client["password"] = secrets.token_urlsafe(16)
     if protocol in SOCKS_PROTOCOLS:
         password = attrs.get("password")
         client["password"] = (

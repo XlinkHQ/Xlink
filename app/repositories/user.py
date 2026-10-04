@@ -109,7 +109,7 @@ class UserRepository(BaseRepository[User]):
         "expiring": (User.expire_at, False, "expire_at"),
     }
 
-    def _order_by(self, sort: str | None):
+    def _order_by(self, sort: str | None) -> tuple[Any, Any]:
         return self._SORTS.get(sort or "newest", self._SORTS["newest"])
 
     async def list_paginated(
@@ -141,7 +141,7 @@ class UserRepository(BaseRepository[User]):
         self,
         *,
         limit: int,
-        cursor: tuple[object, uuid.UUID] | None = None,
+        cursor: tuple[Any, uuid.UUID] | None = None,
         role: UserRole | None = None,
         is_active: bool | None = None,
         include_removed: bool = False,
@@ -155,7 +155,12 @@ class UserRepository(BaseRepository[User]):
         for cond in self._filter_conditions(role, is_active, include_removed, owner_id, search):
             stmt = stmt.where(cond)
 
-        col, desc, _ = self._KEYSET.get(sort or "newest", self._KEYSET["newest"])
+        # NOTE: indexed access rather than tuple unpacking — unpacking a
+        # dict.get() result with a default crashes mypy 2.1.0 (internal
+        # assertion in check_multi_assignment_from_tuple), which silently
+        # left this whole file unchecked.
+        _keyset = self._KEYSET.get(sort or "newest", self._KEYSET["newest"])
+        col, desc = _keyset[0], _keyset[1]
         if cursor is not None:
             cval, cid = cursor
             if sort == "expiring":
@@ -170,9 +175,13 @@ class UserRepository(BaseRepository[User]):
                         )
                     )
             elif desc:
-                stmt = stmt.where(tuple_(col, User.id) < tuple_(cval, cid))
+                stmt = stmt.where(
+                    tuple_(col, User.id) < tuple_(cval, cid)  # type: ignore[arg-type]  # SQLAlchemy coerces cursor values to bind params
+                )
             else:
-                stmt = stmt.where(tuple_(col, User.id) > tuple_(cval, cid))
+                stmt = stmt.where(
+                    tuple_(col, User.id) > tuple_(cval, cid)  # type: ignore[arg-type]  # SQLAlchemy coerces cursor values to bind params
+                )
 
         stmt = stmt.order_by(*self._order_by(sort)).limit(limit)
         return (await self.session.execute(stmt)).scalars().all()

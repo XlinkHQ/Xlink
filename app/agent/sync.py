@@ -32,7 +32,7 @@ class NodeSyncService:
         if cursor is not None:
             stmt = stmt.where(
                 tuple_(ClientAssignment.updated_at, ClientAssignment.id)
-                > tuple_(cursor.updated_at, cursor.assignment_id)
+                > tuple_(cursor.updated_at, cursor.assignment_id)  # type: ignore[arg-type]  # SQLAlchemy coerces cursor values to bind params
             )
         stmt = stmt.order_by(ClientAssignment.updated_at.asc(), ClientAssignment.id.asc()).limit(
             fetch_limit

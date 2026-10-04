@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
 from app.dependencies.auth import AdminUser, SudoAdminUser
@@ -81,7 +83,10 @@ def _validate_match_values(match_type: str, match_values: str) -> None:
 
 
 async def _validate(
-    match_type: str, outbound: str, session, match_values: str | None = None
+    match_type: str,
+    outbound: str,
+    session: AsyncSession,
+    match_values: str | None = None,
 ) -> None:
     from app.core.exceptions import ValidationError
     from app.domain.outbound import Outbound
@@ -204,28 +209,30 @@ class OutboundRead(APIModel):
     id: uuid.UUID
     tag: str
     type: str
-    settings: dict
+    settings: dict[str, Any]
     enabled: bool
 
 
 class OutboundCreate(InputModel):
     tag: str = Field(min_length=1, max_length=64)
     type: str = Field(default="direct")
-    settings: dict = Field(default_factory=dict)
+    settings: dict[str, Any] = Field(default_factory=dict)
     enabled: bool = Field(default=True)
 
 
 class OutboundUpdate(InputModel):
     tag: str | None = Field(default=None, max_length=64)
     type: str | None = None
-    settings: dict | None = None
+    settings: dict[str, Any] | None = None
     enabled: bool | None = None
 
 
 _RESERVED_TAGS = {"direct", "block", "warp", "proxy", "socks-out"}
 
 
-def _validate_outbound(type_: str, settings: dict, tag: str | None = None) -> None:
+def _validate_outbound(
+    type_: str, settings: dict[str, Any], tag: str | None = None
+) -> None:
     from app.agent.config_sync import _parse_host_port
     from app.core.exceptions import ValidationError
 
@@ -282,7 +289,7 @@ class OutboundImportRequest(InputModel):
 
 class OutboundImportResult(APIModel):
     type: str
-    settings: dict
+    settings: dict[str, Any]
 
 
 @router.post("/outbounds/import", response_model=OutboundImportResult)
@@ -295,7 +302,8 @@ async def import_outbound(
     parsed = parse_import(payload.text)
     if parsed is None:
         raise ValidationError(
-            "Could not detect an outbound — paste a vless/vmess/trojan/ss link or an Xray config JSON.",
+            "Could not detect an outbound — paste a vless/vmess/trojan/ss link "
+            "or an Xray config JSON.",
             code="outbound_import_failed",
         )
     return OutboundImportResult(type=parsed["type"], settings=parsed["settings"])

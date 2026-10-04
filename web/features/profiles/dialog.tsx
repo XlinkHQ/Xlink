@@ -12,6 +12,8 @@ import {
   createProfile,
   generateProfileKeys,
   listProviders,
+  scanRealityOnNode,
+  scanRealityTargets,
   type NodeRead,
   type ProfileRead,
   updateProfile,
@@ -36,6 +38,7 @@ const SECURITY_KEYS = new Set([
   "flow",
   "obfs",
   "obfsPassword",
+  "serverPassword",
   "shadowtls_version",
   "shadowtls_password",
 ]);
@@ -104,13 +107,50 @@ export function ProfileDialog({
   const generate = async () => {
     setGenBusy(true);
     try {
-      const keys = await generateProfileKeys(protocol, cfg.security || "none");
+      const keys = await generateProfileKeys(
+        protocol,
+        cfg.security || "none",
+        cfg.amnezia === "true",
+      );
       setCfg((c) => ({ ...c, ...keys }));
       toast("success", t("profiles.keysGenerated"));
     } catch (e) {
       toast("error", e instanceof ApiError ? e.message : t("profiles.keysGenerateFailed"));
     } finally {
       setGenBusy(false);
+    }
+  };
+
+  const [scanBusy, setScanBusy] = useState(false);
+  const scanTarget = async () => {
+    const target = (cfg.dest || cfg.sni || "").split(",")[0].trim();
+    if (!target) {
+      toast("error", t("profiles.realityScanEmpty"));
+      return;
+    }
+    setScanBusy(true);
+    try {
+      // From the node when one is chosen: reachability and latency from the
+      // node's network are what matter. Fall back to the panel otherwise.
+      const [r] = nodeId
+        ? await scanRealityOnNode(nodeId, [target])
+        : await scanRealityTargets([target]);
+      if (r?.ok) {
+        toast("success", t("profiles.realityScanOk", { ms: Math.round(r.latency_ms ?? 0) }));
+      } else {
+        toast("error", t("profiles.realityScanBad", { problems: r?.problems.join(", ") ?? "" }));
+      }
+    } catch (e) {
+      toast(
+        "error",
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error && e.message === "timeout"
+            ? t("profiles.realityScanTimeout")
+            : t("profiles.realityScanBad", { problems: "" }),
+      );
+    } finally {
+      setScanBusy(false);
     }
   };
 
@@ -227,7 +267,8 @@ export function ProfileDialog({
     ...mux.map((f) => f.key),
   ]);
   const network = fields.filter((f) => !used.has(f.key));
-  const showGenerate = cfg.security === "reality" || protocol === "wireguard";
+  const showGenerate =
+    cfg.security === "reality" || protocol === "wireguard" || protocol === "shadowsocks2022";
 
   const Shell = variant === "inline" ? InlineEditPanel : Modal;
   return (
@@ -348,16 +389,28 @@ export function ProfileDialog({
           <div className="warp-dlg-divider" />
           <div className="flex items-center justify-between gap-3">
             <p className="warp-dlg-section-title">{t("profiles.securitySettings")}</p>
-            {showGenerate ? (
-              <button
-                type="button"
-                onClick={generate}
-                disabled={genBusy}
-                className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
-              >
-                {genBusy ? t("profiles.generating") : t("profiles.generateKeys")}
-              </button>
-            ) : null}
+            <div className="flex items-center gap-3">
+              {cfg.security === "reality" ? (
+                <button
+                  type="button"
+                  onClick={scanTarget}
+                  disabled={scanBusy}
+                  className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  {scanBusy ? t("profiles.realityScanning") : t("profiles.realityScan")}
+                </button>
+              ) : null}
+              {showGenerate ? (
+                <button
+                  type="button"
+                  onClick={generate}
+                  disabled={genBusy}
+                  className="text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                >
+                  {genBusy ? t("profiles.generating") : t("profiles.generateKeys")}
+                </button>
+              ) : null}
+            </div>
           </div>
           <Grid fields={security} cfg={cfg} setField={setField} />
         </>

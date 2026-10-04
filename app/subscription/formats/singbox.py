@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.subscription import templates as client_templates
+from app.subscription.formats import raw_override
 from app.subscription.formats.base import (
     FormatRenderError,
     normalize_alpn,
     setting,
     setting_int,
+    ss_password,
     validate_node,
 )
 from app.subscription.models import ProviderConfig
@@ -27,10 +30,13 @@ def _tls_block(config: ProviderConfig) -> dict[str, Any] | None:
     if security == "reality":
         public_key = str(setting(config, "publicKey", setting(config, "pbk", "")) or "").strip()
         short_id = str(setting(config, "shortId", setting(config, "sid", "")) or "").strip()
-        missing = [n for n, v in (("publicKey", public_key), ("shortId", short_id)) if not v]
+        # An empty shortId is valid: the node then lists "" (xray/sing-box
+        # treat it as the empty short id). Refusing it hid working REALITY
+        # nodes from every sing-box user while v2rayNG connected fine.
+        missing = ["publicKey"] if not public_key else []
         if missing:
             raise FormatRenderError(
-                "REALITY requires a public key and short id.",
+                "REALITY requires a public key.",
                 code="subscription_missing_fields",
                 details={"missing": missing},
             )
@@ -141,13 +147,18 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
     elif protocol in ("shadowsocks", "shadowsocks2022"):
         base["type"] = "shadowsocks"
         base["method"] = str(setting(config, "method", _default_ss_method(protocol)))
-        base["password"] = str(setting(config, "password", config.resolved_password))
+        base["password"] = ss_password(config, base["method"])
     elif protocol == "hysteria2":
         base["type"] = "hysteria2"
-        base["password"] = config.resolved_password
+        # Matches the server's `auth: userpass` map, which is keyed on the
+        # assignment id (see the URI renderer for why it cannot change).
+        base["password"] = f"{config.assignment_id}:{config.resolved_password}"
     elif protocol == "tuic":
         base["type"] = "tuic"
         base["uuid"] = config.resolved_uuid
+        base["password"] = str(setting(config, "password", "") or config.resolved_password)
+    elif protocol == "anytls":
+        base["type"] = "anytls"
         base["password"] = str(setting(config, "password", "") or config.resolved_password)
     elif protocol in ("socks", "http"):
         base["type"] = protocol
@@ -161,7 +172,7 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
             details={"protocol": protocol},
         )
     tls = _tls_block(config)
-    if tls is None and protocol in ("hysteria2", "tuic"):
+    if tls is None and protocol in ("hysteria2", "tuic", "anytls"):
         tls = {
             "enabled": True,
             "server_name": str(setting(config, "sni", "") or config.host),
@@ -176,7 +187,7 @@ def _outbounds(config: ProviderConfig) -> list[dict[str, Any]]:
     transport = _transport_block(config)
     if transport is not None:
         base["transport"] = transport
-    return [base]
+    return [raw_override.apply(base, config)]
 
 
 def render(configs: tuple[ProviderConfig, ...]) -> str:
@@ -187,5 +198,9 @@ def render(configs: tuple[ProviderConfig, ...]) -> str:
             outbounds.extend(_outbounds(config))
         except FormatRenderError:
             continue
+    template = client_templates.active("singbox")
+    if template is not None:
+        document = client_templates.apply_singbox(template, outbounds)
+        return json.dumps(document, indent=2, ensure_ascii=False)
     document = {"outbounds": outbounds}
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False)

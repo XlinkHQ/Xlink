@@ -18,6 +18,7 @@ class ProviderKind(StrEnum):
     SING_BOX = "sing-box"
     HYSTERIA = "hysteria"
     WIREGUARD = "wireguard"
+    MTPROTO = "mtproto"
 
 
 def protocols_for(kind: ProviderKind) -> frozenset[str]:
