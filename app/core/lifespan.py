@@ -69,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         auto_failover = AutoFailoverHandler(
             FailoverService(db, providers, events, cache=cache),
             cooldown_seconds=settings.auto_failover_cooldown_seconds,
+            cache=cache,
         )
         event_registry.subscribe(NodeOffline, auto_failover)
 
