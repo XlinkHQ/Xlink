@@ -45,6 +45,16 @@ class SubscriptionRepository:
             "remark": row.config_remark,
         }
 
+    async def default_client_templates(self) -> dict[str, str]:
+        from app.domain.client_template import ClientTemplate
+
+        rows = await self._reader.execute(
+            select(ClientTemplate.format, ClientTemplate.content).where(
+                ClientTemplate.is_default.is_(True)
+            )
+        )
+        return dict(rows.all())
+
     async def host_overrides(self, profile_ids):
         from app.repositories.inbound_host import InboundHostRepository
 

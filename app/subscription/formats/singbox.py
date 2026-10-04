@@ -11,6 +11,7 @@ from app.subscription.formats.base import (
     setting_int,
     validate_node,
 )
+from app.subscription import templates as client_templates
 from app.subscription.models import ProviderConfig
 
 
@@ -193,5 +194,9 @@ def render(configs: tuple[ProviderConfig, ...]) -> str:
             outbounds.extend(_outbounds(config))
         except FormatRenderError:
             continue
+    template = client_templates.active("singbox")
+    if template is not None:
+        document = client_templates.apply_singbox(template, outbounds)
+        return json.dumps(document, indent=2, ensure_ascii=False)
     document = {"outbounds": outbounds}
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False)

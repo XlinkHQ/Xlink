@@ -12,6 +12,7 @@ from app.subscription.formats.base import (
     validate_node,
 )
 from app.subscription.formats.capabilities import supported_protocols
+from app.subscription import templates as client_templates
 from app.subscription.models import ProviderConfig
 from app.subscription.schemas import SubscriptionFormat
 
@@ -164,6 +165,12 @@ def build_clash_document(configs: tuple[ProviderConfig, ...], *, allowed: frozen
     if configs and not proxies:
         raise FormatRenderError("No CLASH-compatible proxies in feed.")
     names = [proxy["name"] for proxy in proxies]
+    template = client_templates.active(
+        "mihomo" if allowed is not CLASH_PROTOCOLS else "clash"
+    )
+    if template is not None:
+        document = client_templates.apply_clash(template, proxies)
+        return yaml.safe_dump(document, sort_keys=False, allow_unicode=True, default_flow_style=False)
     document = {
         "proxies": proxies,
         "proxy-groups": [

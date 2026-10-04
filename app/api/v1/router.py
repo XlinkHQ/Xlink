@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1.routers import (
     admin_roles,
+    client_templates,
     agent,
     api_keys,
     assignments,
@@ -35,6 +36,7 @@ api_router.include_router(health.router)
 api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(admin_roles.router)
+api_router.include_router(client_templates.router)
 api_router.include_router(nodes.router)
 api_router.include_router(profiles.router)
 api_router.include_router(groups.router)

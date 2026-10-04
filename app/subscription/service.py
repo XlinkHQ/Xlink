@@ -11,6 +11,7 @@ from app.core.cache import CacheProtocol
 from app.core.exceptions import NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.providers.base.models import ProviderKind
+from app.subscription import templates as client_templates
 from app.subscription.generator import SubscriptionGenerator
 from app.subscription.models import ProviderConfig, RenderedFeed
 from app.subscription.renderer import SubscriptionRenderer
@@ -116,12 +117,27 @@ class SubscriptionService:
         configs = await self._generate_feed_configs(request)
         if request.shuffle:
             configs = tuple(random.sample(configs, len(configs)))
-        rendered = self._renderer.render_feed(
-            configs,
-            version=request.version,
-            feed_format=request.format,
-        )
+        with client_templates.use(await self._load_templates()):
+            rendered = self._renderer.render_feed(
+                configs,
+                version=request.version,
+                feed_format=request.format,
+            )
         return self._feed_read(rendered)
+
+    async def _load_templates(self) -> dict[str, dict]:
+        loader = getattr(self._repository, "default_client_templates", None)
+        if loader is None:
+            return {}
+        parsed: dict[str, dict] = {}
+        for fmt, content in (await loader()).items():
+            try:
+                parsed[fmt] = client_templates.parse(fmt, content)
+            except ValidationError:
+                # Validated on save; a row that no longer parses (manual DB
+                # edit) must not take every subscription down with it.
+                logger.warning("client_template_unparseable", format=fmt)
+        return parsed
 
     async def placeholder_feed(
         self,
