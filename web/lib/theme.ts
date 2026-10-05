@@ -7,7 +7,13 @@ const KEY = "xlink-theme";
 
 function getTheme(): Theme {
   if (typeof window === "undefined") return "dark";
-  return window.localStorage.getItem(KEY) === "light" ? "light" : "dark";
+  let saved: string | null = null;
+  try {
+    saved = window.localStorage.getItem(KEY);
+  } catch {}
+  if (saved === "light" || saved === "dark") return saved;
+  // No explicit choice yet: follow the OS instead of forcing dark.
+  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
 export function setTheme(theme: Theme) {

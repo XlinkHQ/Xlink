@@ -6530,3 +6530,9 @@ input.switch:focus-visible {
   direction: ltr;
   text-align: start;
 }
+
+/* The bundled logo has dark lettering; flip it on dark surfaces. The blue mark
+   survives (invert + 180deg hue rotation). Custom branding logos are untouched. */
+.xlink-dark img[src$="/xlink-logo.png"] {
+  filter: invert(1) hue-rotate(180deg) brightness(1.15);
+}
